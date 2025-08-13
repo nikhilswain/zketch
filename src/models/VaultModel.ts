@@ -1,6 +1,28 @@
 import { types, type Instance, type SnapshotIn } from "mobx-state-tree";
-import { DexieService } from "@/services/dexie-service";
-import { Stroke } from "./canvas-model";
+import { DexieService } from "@/services/DexieService";
+import { Stroke } from "./CanvasModel";
+
+// Plain data interfaces for persistence
+export interface ISavedDrawingData {
+  id: string;
+  name: string;
+  strokes: Array<{
+    id: string;
+    points: Array<{
+      x: number;
+      y: number;
+      pressure: number;
+    }>;
+    color: string;
+    size: number;
+    brushStyle: string;
+    timestamp: number;
+  }>;
+  thumbnail: string;
+  createdAt: Date;
+  updatedAt: Date;
+  background: string;
+}
 
 export const SavedDrawing = types.model("SavedDrawing", {
   id: types.identifier,
@@ -81,6 +103,12 @@ export const VaultModel = types
         drawing.updatedAt = new Date();
       }
     },
+    loadDrawing(id: string) {
+      return self.drawings.find((d) => d.id === id) || null;
+    },
+    getDrawingById(id: string) {
+      return self.drawings.find((d) => d.id === id) || null;
+    },
   }))
   .actions((self) => ({
     async updateStorageInfo() {
@@ -107,31 +135,35 @@ export const VaultModel = types
     },
     async persistToDB() {
       try {
-        const drawingsData = self.drawings.map((drawing) => ({
-          id: drawing.id,
-          name: drawing.name,
-          strokes: drawing.strokes.map((stroke) => ({
-            id: stroke.id,
-            points: stroke.points.map((p) => ({
-              x: p.x,
-              y: p.y,
-              pressure: p.pressure,
+        const drawingsData: ISavedDrawingData[] = self.drawings.map(
+          (drawing) => ({
+            id: drawing.id,
+            name: drawing.name,
+            strokes: drawing.strokes.map((stroke) => ({
+              id: stroke.id,
+              points: stroke.points.map((p) => ({
+                x: p.x,
+                y: p.y,
+                pressure: p.pressure,
+              })),
+              color: stroke.color,
+              size: stroke.size,
+              brushStyle: stroke.brushStyle,
+              timestamp: stroke.timestamp,
             })),
-            color: stroke.color,
-            size: stroke.size,
-            brushStyle: stroke.brushStyle,
-            timestamp: stroke.timestamp,
-          })),
-          thumbnail: drawing.thumbnail,
-          createdAt: drawing.createdAt,
-          updatedAt: drawing.updatedAt,
-          background: drawing.background,
-        }));
+            thumbnail: drawing.thumbnail,
+            createdAt: new Date(drawing.createdAt),
+            updatedAt: new Date(drawing.updatedAt),
+            background: drawing.background,
+          })
+        );
         await DexieService.saveAllDrawings(drawingsData);
       } catch (error) {
         console.error("Failed to persist to Dexie:", error);
       }
     },
+  }))
+  .actions((self) => ({
     async addDrawing(
       name: string,
       strokes: SnapshotIn<typeof Stroke>[],
@@ -183,8 +215,8 @@ export const VaultModel = types
               timestamp: stroke.timestamp,
             })),
             thumbnail: drawing.thumbnail,
-            createdAt: drawing.createdAt,
-            updatedAt: drawing.updatedAt,
+            createdAt: new Date(drawing.createdAt),
+            updatedAt: new Date(drawing.updatedAt),
             background: drawing.background,
           });
           await self.updateStorageInfo();
@@ -219,8 +251,8 @@ export const VaultModel = types
               timestamp: stroke.timestamp,
             })),
             thumbnail: drawing.thumbnail,
-            createdAt: drawing.createdAt,
-            updatedAt: drawing.updatedAt,
+            createdAt: new Date(drawing.createdAt),
+            updatedAt: new Date(drawing.updatedAt),
             background: drawing.background,
           });
           await self.updateStorageInfo();

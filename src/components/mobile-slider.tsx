@@ -24,7 +24,7 @@ import {
   SquareDot,
   X,
 } from "lucide-react";
-import type { BrushStyle, BackgroundType } from "../models/canvas-model";
+import type { BrushStyle, BackgroundType } from "../models/CanvasModel";
 
 interface MobileSidebarProps {
   onSave: () => void;

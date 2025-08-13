@@ -8,7 +8,7 @@ import { Button } from "./ui/button";
 import { Separator } from "./ui/separator";
 import { Move, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
 import { Pen, Highlighter, Paintbrush, PenTool, Pencil } from "lucide-react";
-import type { BrushStyle } from "@/models/canvas-model";
+import type { BrushStyle } from "@/models/CanvasModel";
 
 interface FloatingDockProps {
   isDrawingMode: boolean;
