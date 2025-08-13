@@ -1,0 +1,222 @@
+"use client";
+
+import type React from "react";
+import { useState, useEffect } from "react";
+import { observer } from "mobx-react-lite";
+import {
+  useCanvasStore,
+  useVaultStore,
+  useSettingsStore,
+} from "@/hooks/useStores";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import Sidebar from "./slider";
+import DrawingCanvas from "./drawing-canvas";
+import FloatingDock from "./floating-dock";
+import { ExportService } from "@/services/export-service";
+import { ThumbnailService } from "@/services/thumbnail-service";
+import { Button } from "./ui/button";
+import { ArrowLeft, ChevronRight } from "lucide-react";
+import type { ExportFormat } from "@/models/settings-model";
+
+interface CanvasViewProps {
+  editingDrawingId: string | null;
+  onBackToVault: () => void;
+}
+
+const CanvasView: React.FC<CanvasViewProps> = observer(
+  ({ editingDrawingId, onBackToVault }) => {
+    const canvasStore = useCanvasStore();
+    const vaultStore = useVaultStore();
+    const settingsStore = useSettingsStore();
+    const [drawingName, setDrawingName] = useState("Untitled Drawing");
+    const [isDrawingMode, setIsDrawingMode] = useState(true);
+    const [showExportDialog, setShowExportDialog] = useState(false);
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+    // Load drawing if editing existing one
+    useEffect(() => {
+      if (editingDrawingId) {
+        const drawing = vaultStore.loadDrawing(editingDrawingId);
+        if (drawing) {
+          canvasStore.replaceStrokes(drawing.strokes);
+          setDrawingName(drawing.name);
+          canvasStore.setBackground(drawing.background as any);
+        }
+      } else {
+        canvasStore.clear();
+        setDrawingName("Untitled Drawing");
+      }
+    }, [editingDrawingId, canvasStore, vaultStore]);
+
+    const handleSave = async () => {
+      if (canvasStore.isEmpty) return;
+
+      const thumbnail = ThumbnailService.generateThumbnail(
+        canvasStore.strokes,
+        canvasStore.background,
+        200,
+        150
+      );
+
+      if (editingDrawingId) {
+        await vaultStore.updateDrawing(
+          editingDrawingId,
+          canvasStore.strokes,
+          thumbnail,
+          canvasStore.background
+        );
+      } else {
+        await vaultStore.addDrawing(
+          drawingName,
+          canvasStore.strokes,
+          thumbnail,
+          canvasStore.background
+        );
+      }
+
+      onBackToVault();
+    };
+
+    const handleExport = async (format: ExportFormat) => {
+      if (canvasStore.isEmpty) return;
+
+      try {
+        let dataUrl: string;
+        const exportSize = { width: 1920, height: 1080 };
+
+        switch (format) {
+          case "png":
+            dataUrl = await ExportService.exportToPNG(
+              canvasStore.strokes,
+              canvasStore.background,
+              exportSize.width,
+              exportSize.height,
+              settingsStore.exportSettings
+            );
+            break;
+          case "jpg":
+            dataUrl = await ExportService.exportToJPG(
+              canvasStore.strokes,
+              canvasStore.background,
+              exportSize.width,
+              exportSize.height,
+              settingsStore.exportSettings
+            );
+            break;
+          case "svg":
+            dataUrl = await ExportService.exportToSVG(
+              canvasStore.strokes,
+              canvasStore.background,
+              exportSize.width,
+              exportSize.height,
+              settingsStore.exportSettings
+            );
+            break;
+          default:
+            throw new Error(`Unsupported format: ${format}`);
+        }
+
+        const filename = `${drawingName
+          .replace(/[^a-z0-9]/gi, "_")
+          .toLowerCase()}.${format}`;
+        ExportService.downloadFile(dataUrl, filename);
+      } catch (error) {
+        console.error("Export failed:", error);
+        alert("Export failed. Please try again.");
+      }
+    };
+
+    const handleToggleDrawingMode = () => {
+      setIsDrawingMode(!isDrawingMode);
+    };
+
+    const handleShowExportDialog = () => {
+      setShowExportDialog(true);
+    };
+
+    // Add keyboard shortcuts
+    useKeyboardShortcuts(handleSave, handleShowExportDialog);
+
+    return (
+      <div className="fixed inset-0 bg-gray-100">
+        {/* Full-screen canvas */}
+        <DrawingCanvas isDrawingMode={isDrawingMode} />
+
+        {/* Floating sidebar */}
+        <div
+          className={`fixed top-0 left-0 h-full transition-all duration-300 z-10 ${
+            sidebarCollapsed ? "w-12" : "w-80"
+          }`}
+        >
+          {sidebarCollapsed ? (
+            <div className="w-12 bg-white/90 backdrop-blur-sm border-r border-gray-200 flex flex-col items-center py-4 h-full">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSidebarCollapsed(false)}
+                className="p-2"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="bg-white/90 backdrop-blur-sm border-r border-gray-200 h-full">
+              <Sidebar
+                onSave={handleSave}
+                onExport={handleShowExportDialog}
+                onCollapse={() => setSidebarCollapsed(true)}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Floating header */}
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-white/90 backdrop-blur-sm border border-gray-200 rounded-lg px-4 py-2 flex items-center gap-4 z-10">
+          <Button
+            variant="ghost"
+            onClick={onBackToVault}
+            className="flex items-center gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Vault
+          </Button>
+          <input
+            type="text"
+            value={drawingName}
+            onChange={(e) => setDrawingName(e.target.value)}
+            className="text-lg font-semibold bg-transparent border-none outline-none focus:bg-gray-50 px-2 py-1 rounded"
+          />
+        </div>
+
+        {/* Floating dock */}
+        <FloatingDock
+          isDrawingMode={isDrawingMode}
+          onToggleDrawingMode={handleToggleDrawingMode}
+        />
+
+        {/* Export Dialog */}
+        {showExportDialog && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-lg">
+              <h2 className="text-lg font-semibold mb-4">Export Drawing</h2>
+              <div className="flex gap-4">
+                <Button onClick={() => handleExport("png")}>PNG</Button>
+                <Button onClick={() => handleExport("jpg")}>JPG</Button>
+                <Button onClick={() => handleExport("svg")}>SVG</Button>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => setShowExportDialog(false)}
+                className="mt-4"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+);
+
+export default CanvasView;
