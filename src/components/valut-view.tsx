@@ -22,8 +22,8 @@ import {
   Palette,
   HardDrive,
 } from "lucide-react";
-import { IndexedDBService } from "@/services/indexed-db-service";
-import type { ISavedDrawing } from "@/models/vault-model";
+import { IndexedDBService } from "@/services/IndexedDBService";
+import type { ISavedDrawing } from "@/models/VaultModel";
 
 type SortOrder = "name" | "created" | "updated";
 

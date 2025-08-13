@@ -1,0 +1,8 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import DrawByIdPage from "@/page-components/draw-pages.tsx/draw-by-id";
+---
+
+<Layout>
+	<DrawByIdPage client:only="react" />
+</Layout>

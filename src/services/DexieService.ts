@@ -1,8 +1,8 @@
 import Dexie, { type Table } from "dexie";
-import type { ISavedDrawing } from "@/models/vault-model";
+import { type ISavedDrawingData } from "@/models/VaultModel";
 
 export class DrawingDatabase extends Dexie {
-  drawings!: Table<ISavedDrawing>;
+  drawings!: Table<ISavedDrawingData>;
 
   constructor() {
     super("DrawingVault");
@@ -15,18 +15,18 @@ export class DrawingDatabase extends Dexie {
 export class DexieService {
   private static db = new DrawingDatabase();
 
-  static async saveDrawing(drawing: ISavedDrawing): Promise<void> {
+  static async saveDrawing(drawing: ISavedDrawingData): Promise<void> {
     await this.db.drawings.put(drawing);
   }
 
-  static async saveAllDrawings(drawings: ISavedDrawing[]): Promise<void> {
+  static async saveAllDrawings(drawings: ISavedDrawingData[]): Promise<void> {
     await this.db.transaction("rw", this.db.drawings, async () => {
       await this.db.drawings.clear();
       await this.db.drawings.bulkAdd(drawings);
     });
   }
 
-  static async loadAllDrawings(): Promise<ISavedDrawing[]> {
+  static async loadAllDrawings(): Promise<ISavedDrawingData[]> {
     return await this.db.drawings.orderBy("updatedAt").reverse().toArray();
   }
 
@@ -34,7 +34,7 @@ export class DexieService {
     await this.db.drawings.delete(id);
   }
 
-  static async getDrawing(id: string): Promise<ISavedDrawing | undefined> {
+  static async getDrawing(id: string): Promise<ISavedDrawingData | undefined> {
     return await this.db.drawings.get(id);
   }
 

@@ -17,7 +17,7 @@ import {
   SquareDot,
   ChevronLeft,
 } from "lucide-react";
-import type { BackgroundType } from "@/models/canvas-model";
+import type { BackgroundType } from "@/models/CanvasModel";
 
 interface SidebarProps {
   onSave: () => void;
@@ -125,7 +125,7 @@ const Sidebar: React.FC<SidebarProps> = observer(
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+        <div className="h-[100vh] overflow-y-auto p-4 space-y-6">
           {/* Pen Size */}
           <Card>
             <CardHeader className="pb-3">

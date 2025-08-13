@@ -23,7 +23,7 @@ import {
 import { Slider } from "./ui/slider";
 import { Checkbox } from "./ui/checkbox";
 import { Download } from "lucide-react";
-import type { ExportFormat } from "@/models/settings-model";
+import type { ExportFormat } from "@/models/SettingsModel";
 
 interface ExportDialogProps {
   isOpen: boolean;

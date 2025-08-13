@@ -12,12 +12,12 @@ import DrawingCanvas from "./drawing-canvas";
 import MobileSidebar from "./mobile-slider";
 import FloatingDock from "./floating-dock";
 import ExportDialog from "./export-dialog";
-import { ExportService } from "@/services/export-service";
-import { ThumbnailService } from "@/services/thumbnail-service";
+import { ExportService } from "@/services/ExportService";
+import { ThumbnailService } from "@/services/ThumbnailService";
 import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
 import { ArrowLeft, Menu, Save } from "lucide-react";
-import type { ExportFormat } from "@/models/settings-model";
+import type { ExportFormat } from "@/models/SettingsModel";
 
 interface MobileCanvasViewProps {
   editingDrawingId: string | null;

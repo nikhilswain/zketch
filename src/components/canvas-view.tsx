@@ -12,11 +12,11 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import Sidebar from "./slider";
 import DrawingCanvas from "./drawing-canvas";
 import FloatingDock from "./floating-dock";
-import { ExportService } from "@/services/export-service";
-import { ThumbnailService } from "@/services/thumbnail-service";
+import { ExportService } from "@/services/ExportService";
+import { ThumbnailService } from "@/services/ThumbnailService";
 import { Button } from "./ui/button";
 import { ArrowLeft, ChevronRight } from "lucide-react";
-import type { ExportFormat } from "@/models/settings-model";
+import type { ExportFormat } from "@/models/SettingsModel";
 
 interface CanvasViewProps {
   editingDrawingId: string | null;

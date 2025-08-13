@@ -1,7 +1,7 @@
-import { types, type Instance } from "mobx-state-tree"
-import { CanvasModel } from "../models/CanvasModel"
-import { VaultModel } from "../models/VaultModel"
-import { SettingsModel } from "../models/SettingsModel"
+import { types, type Instance } from "mobx-state-tree";
+import { CanvasModel } from "../models/CanvasModel";
+import { VaultModel } from "../models/VaultModel";
+import { SettingsModel } from "../models/SettingsModel";
 
 export const RootStore = types
   .model("RootStore", {
@@ -12,13 +12,13 @@ export const RootStore = types
   .actions((self) => ({
     afterCreate() {
       // Initialize vault drawings on startup
-      self.vaultModel.loadDrawings()
+      self.vaultModel.loadDrawings();
     },
-  }))
+  }));
 
 export interface IRootStore extends Instance<typeof RootStore> {}
 
 // Create a singleton instance
-export const rootStore = RootStore.create({})
+export const rootStore = RootStore.create({});
 
-export default RootStore
+export default rootStore;

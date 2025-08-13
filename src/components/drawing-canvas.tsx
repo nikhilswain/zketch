@@ -3,7 +3,7 @@ import { useRef, useEffect, useState, useCallback } from "react";
 import { observer } from "mobx-react-lite";
 import { getStroke } from "perfect-freehand";
 import { useCanvasStore } from "../hooks/useStores";
-import type { IPoint, IStroke, Stroke } from "@/models/canvas-model";
+import type { IPoint, IStroke } from "@/models/CanvasModel";
 
 interface DrawingCanvasProps {
   isDrawingMode: boolean;
