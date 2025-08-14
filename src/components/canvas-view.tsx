@@ -61,16 +61,38 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
       if (editingDrawingId) {
         await vaultStore.updateDrawing(
           editingDrawingId,
-          canvasStore.strokes,
+          canvasStore.strokes.map((stroke) => ({
+            id: stroke.id,
+            points: stroke.points.map((p) => ({
+              x: p.x,
+              y: p.y,
+              pressure: p.pressure,
+            })),
+            color: stroke.color,
+            size: stroke.size,
+            brushStyle: stroke.brushStyle,
+            timestamp: stroke.timestamp,
+          })),
           thumbnail,
-          canvasStore.background
+          canvasStore.background as any
         );
       } else {
         await vaultStore.addDrawing(
           drawingName,
-          canvasStore.strokes,
+          canvasStore.strokes.map((stroke) => ({
+            id: stroke.id,
+            points: stroke.points.map((p) => ({
+              x: p.x,
+              y: p.y,
+              pressure: p.pressure,
+            })),
+            color: stroke.color,
+            size: stroke.size,
+            brushStyle: stroke.brushStyle,
+            timestamp: stroke.timestamp,
+          })),
           thumbnail,
-          canvasStore.background
+          canvasStore.background as any
         );
       }
 

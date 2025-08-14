@@ -1,6 +1,14 @@
 ---
 import Layout from "@/layouts/Layout.astro";
 import DrawByIdPage from "@/page-components/draw-pages.tsx/draw-by-id";
+
+export const prerender = false;
+
+// Alternative: If you want to keep it static, uncomment this instead of using prerender = false
+// export async function getStaticPaths() {
+//   // Return empty array since we want to generate pages on-demand
+//   return [];
+// }
 ---
 
 <Layout>

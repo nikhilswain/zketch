@@ -34,6 +34,11 @@ const DrawByIdPage: React.FC = observer(() => {
       }
 
       try {
+        // Wait for vault store to be ready
+        if (vaultStore.isLoading) {
+          return; // Wait for loading to complete
+        }
+
         const drawing = await vaultStore.getDrawingById(drawingId);
         setDrawingExists(!!drawing);
       } catch (error) {
@@ -43,7 +48,7 @@ const DrawByIdPage: React.FC = observer(() => {
     };
 
     checkDrawingExists();
-  }, [drawingId, vaultStore]);
+  }, [drawingId, vaultStore, vaultStore.isLoading]);
 
   const handleBackToVault = () => {
     window.location.href = "/";

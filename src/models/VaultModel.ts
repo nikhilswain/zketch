@@ -264,8 +264,26 @@ export const VaultModel = types
     loadDrawing(id: string) {
       return self.drawings.find((d) => d.id === id) || null;
     },
-    getDrawingById(id: string) {
-      return self.drawings.find((d) => d.id === id) || null;
+    async getDrawingById(id: string) {
+      // First check if it's already loaded in memory
+      const existingDrawing = self.drawings.find((d) => d.id === id);
+      if (existingDrawing) {
+        return existingDrawing;
+      }
+
+      // If not in memory, try to load from database
+      try {
+        const drawingData = await DexieService.getDrawing(id);
+        if (drawingData) {
+          // Add to memory for future access
+          self.addDrawingToList(drawingData);
+          return self.drawings.find((d) => d.id === id) || null;
+        }
+        return null;
+      } catch (error) {
+        console.error("Failed to load drawing from database:", error);
+        return null;
+      }
     },
     loadDrawings() {
       return self.loadFromDB();

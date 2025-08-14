@@ -1,11 +1,11 @@
 export interface KeyBinding {
-  key: string
-  ctrlKey?: boolean
-  shiftKey?: boolean
-  altKey?: boolean
-  metaKey?: boolean
-  description: string
-  action: string
+  key: string;
+  ctrlKey?: boolean;
+  shiftKey?: boolean;
+  altKey?: boolean;
+  metaKey?: boolean;
+  description: string;
+  action: string;
 }
 
 export const KEY_BINDINGS: Record<string, KeyBinding> = {
@@ -155,66 +155,73 @@ export const KEY_BINDINGS: Record<string, KeyBinding> = {
     description: "Decrease brush size",
     action: "decreaseBrushSize",
   },
-}
+};
 
 export class KeyBindingManager {
-  private static handlers: Map<string, () => void> = new Map()
+  private static handlers: Map<string, () => void> = new Map();
 
   static registerHandler(action: string, handler: () => void) {
-    this.handlers.set(action, handler)
+    this.handlers.set(action, handler);
   }
 
   static unregisterHandler(action: string) {
-    this.handlers.delete(action)
+    this.handlers.delete(action);
   }
 
   static handleKeyEvent(event: KeyboardEvent): boolean {
-    const binding = this.findMatchingBinding(event)
+    const binding = this.findMatchingBinding(event);
     if (binding) {
-      const handler = this.handlers.get(binding.action)
+      const handler = this.handlers.get(binding.action);
       if (handler) {
-        event.preventDefault()
-        handler()
-        return true
+        event.preventDefault();
+        handler();
+        return true;
       }
     }
-    return false
+    return false;
   }
 
   private static findMatchingBinding(event: KeyboardEvent): KeyBinding | null {
     for (const binding of Object.values(KEY_BINDINGS)) {
       if (this.matchesBinding(event, binding)) {
-        return binding
+        return binding;
       }
     }
-    return null
+    return null;
   }
 
-  private static matchesBinding(event: KeyboardEvent, binding: KeyBinding): boolean {
+  private static matchesBinding(
+    event: KeyboardEvent,
+    binding: KeyBinding
+  ): boolean {
     return (
       event.key.toLowerCase() === binding.key.toLowerCase() &&
       !!event.ctrlKey === !!binding.ctrlKey &&
       !!event.shiftKey === !!binding.shiftKey &&
       !!event.altKey === !!binding.altKey &&
       !!event.metaKey === !!binding.metaKey
-    )
+    );
   }
 
   static getBindingDescription(action: string): string {
-    const binding = Object.values(KEY_BINDINGS).find((b) => b.action === action)
-    if (!binding) return ""
+    const binding = Object.values(KEY_BINDINGS).find(
+      (b) => b.action === action
+    );
+    if (!binding) return "";
 
-    const modifiers = []
-    if (binding.ctrlKey) modifiers.push("Ctrl")
-    if (binding.shiftKey) modifiers.push("Shift")
-    if (binding.altKey) modifiers.push("Alt")
-    if (binding.metaKey) modifiers.push("Cmd")
+    const modifiers = [];
+    if (binding.ctrlKey) modifiers.push("Ctrl");
+    if (binding.shiftKey) modifiers.push("Shift");
+    if (binding.altKey) modifiers.push("Alt");
+    if (binding.metaKey) modifiers.push("Cmd");
 
-    const keyDisplay = binding.key === " " ? "Space" : binding.key
-    return modifiers.length > 0 ? `${modifiers.join("+")}+${keyDisplay}` : keyDisplay
+    const keyDisplay = binding.key === " " ? "Space" : binding.key;
+    return modifiers.length > 0
+      ? `${modifiers.join("+")}+${keyDisplay}`
+      : keyDisplay;
   }
 
   static getAllBindings(): KeyBinding[] {
-    return Object.values(KEY_BINDINGS)
+    return Object.values(KEY_BINDINGS);
   }
 }

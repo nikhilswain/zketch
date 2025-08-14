@@ -3,6 +3,8 @@ import {
   type Instance,
   type SnapshotIn,
   type SnapshotOut,
+  getSnapshot,
+  isStateTreeNode,
 } from "mobx-state-tree";
 
 export const Point = types.model("Point", {
@@ -144,8 +146,18 @@ export const CanvasModel = types
       self.strokes.clear();
     };
 
-    const addStrokeToModel = (strokeData: SnapshotIn<typeof Stroke>) => {
-      self.strokes.push(Stroke.create(strokeData));
+    const addStrokeToModel = (strokeData: SnapshotIn<typeof Stroke> | any) => {
+      // If strokeData is already an MST instance, convert it to a snapshot first
+      if (isStateTreeNode(strokeData)) {
+        // It's already an MST instance, get its snapshot
+        const snapshot = getSnapshot(strokeData as any);
+        self.strokes.push(Stroke.create(snapshot as SnapshotIn<typeof Stroke>));
+      } else {
+        // It's a plain snapshot, create normally
+        self.strokes.push(
+          Stroke.create(strokeData as SnapshotIn<typeof Stroke>)
+        );
+      }
     };
 
     const updateState = (state: SnapshotOut<typeof CanvasState>) => {
@@ -187,6 +199,7 @@ export const CanvasModel = types
       addStroke(strokeData: SnapshotIn<typeof Stroke>) {
         self.addStrokeToModel(strokeData);
         self.saveToHistory();
+        self.renderVersion++; // Force re-render
       },
       replaceStrokes(strokes: SnapshotIn<typeof Stroke>[]) {
         self.clearStrokes();
@@ -194,6 +207,7 @@ export const CanvasModel = types
           self.addStrokeToModel(strokeData);
         });
         self.saveToHistory();
+        self.renderVersion++; // Force re-render
       },
       setBrushStyle(
         style: "ink" | "marker" | "brush" | "calligraphy" | "pencil"
@@ -233,6 +247,7 @@ export const CanvasModel = types
       clear() {
         self.clearStrokes();
         self.saveToHistory();
+        self.renderVersion++; // Force re-render
       },
       undo() {
         if (self.historyIndex > 0) {
