@@ -1,7 +1,7 @@
-import type { Stroke } from "../models/CanvasModel"
+import type { IStroke } from "../models/CanvasModel"
 
 export class ThumbnailService {
-  static generateThumbnail(strokes: Stroke[], background: string, width = 200, height = 150): string {
+  static generateThumbnail(strokes: IStroke[], background: string, width = 200, height = 150): string {
     const canvas = document.createElement("canvas")
     canvas.width = width
     canvas.height = height

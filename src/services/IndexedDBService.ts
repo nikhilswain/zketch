@@ -1,4 +1,4 @@
-import type { SavedDrawing } from "../models/VaultModel"
+import type { ISavedDrawing } from "../models/VaultModel"
 
 export class IndexedDBService {
   private static readonly DB_NAME = "DrawingVault"
@@ -29,7 +29,7 @@ export class IndexedDBService {
     })
   }
 
-  static async saveDrawing(drawing: SavedDrawing): Promise<void> {
+  static async saveDrawing(drawing: ISavedDrawing): Promise<void> {
     const db = await this.openDB()
     const transaction = db.transaction([this.STORE_NAME], "readwrite")
     const store = transaction.objectStore(this.STORE_NAME)
@@ -41,7 +41,7 @@ export class IndexedDBService {
     })
   }
 
-  static async saveAllDrawings(drawings: SavedDrawing[]): Promise<void> {
+  static async saveAllDrawings(drawings: ISavedDrawing[]): Promise<void> {
     const db = await this.openDB()
     const transaction = db.transaction([this.STORE_NAME], "readwrite")
     const store = transaction.objectStore(this.STORE_NAME)
@@ -66,7 +66,7 @@ export class IndexedDBService {
     await Promise.all(promises)
   }
 
-  static async loadAllDrawings(): Promise<SavedDrawing[]> {
+  static async loadAllDrawings(): Promise<ISavedDrawing[]> {
     const db = await this.openDB()
     const transaction = db.transaction([this.STORE_NAME], "readonly")
     const store = transaction.objectStore(this.STORE_NAME)
@@ -97,7 +97,7 @@ export class IndexedDBService {
     })
   }
 
-  static async getDrawing(id: string): Promise<SavedDrawing | null> {
+  static async getDrawing(id: string): Promise<ISavedDrawing | null> {
     const db = await this.openDB()
     const transaction = db.transaction([this.STORE_NAME], "readonly")
     const store = transaction.objectStore(this.STORE_NAME)

@@ -18,7 +18,6 @@ export const RootStore = types
 
 export interface IRootStore extends Instance<typeof RootStore> {}
 
-// Create a singleton instance
 export const rootStore = RootStore.create({});
 
 export default rootStore;

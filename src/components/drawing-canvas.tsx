@@ -240,6 +240,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       canvasStore.zoom,
       canvasStore.panX,
       canvasStore.panY,
+      canvasStore.renderVersion, // Add this to force re-renders on undo/redo
       currentPoints,
       drawGrid,
       renderStroke,
