@@ -20,7 +20,7 @@ A simple drawing app where you can sketch anything you want. Supports multiple b
 - MobX State Tree
 - IndexedDB/Dexie.js
 - Tailwind CSS
-- Radix UI
+- Radix UI / Shadcn
 - Perfect Freehand
 
 ## Installation
