@@ -259,15 +259,15 @@ const VaultView: React.FC<VaultViewProps> = observer(
             <div
               className={
                 viewMode === "grid"
-                  ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-6"
+                  ? "grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-6"
                   : "space-y-3"
               }
             >
               {filteredDrawings.map((drawing: ISavedDrawing) => (
                 <Card
                   key={drawing.id}
-                  className={`cursor-pointer hover:shadow-lg transition-all duration-200 group ${
-                    viewMode === "list" ? "flex items-center p-3 sm:p-4" : ""
+                  className={`cursor-pointer hover:shadow-lg transition-all duration-200 group py-0  ${
+                    viewMode === "list" ? "flex p-3 sm:p-4" : ""
                   }`}
                   onClick={() => onEditDrawing(drawing.id)}
                 >
@@ -333,13 +333,19 @@ const VaultView: React.FC<VaultViewProps> = observer(
                           )}
 
                           <div className="flex items-center gap-2 sm:gap-3 mt-1 text-xs text-gray-500">
-                            <span>{formatDate(drawing.updatedAt)}</span>
+                            <span className="meta-info inline-block whitespace-nowrap">
+                              {formatDate(drawing.updatedAt)}
+                            </span>
                             <span>•</span>
-                            <span>{getStrokeCount(drawing)} strokes</span>
+                            <span className="meta-info inline-block whitespace-nowrap">
+                              {getStrokeCount(drawing)} strokes
+                            </span>
                             {viewMode === "grid" && (
                               <>
                                 <span>•</span>
-                                <span>{getColorCount(drawing)} colors</span>
+                                <span className="meta-info inline-block whitespace-nowrap">
+                                  {getColorCount(drawing)} colors
+                                </span>
                               </>
                             )}
                           </div>

@@ -17,6 +17,7 @@ import { ThumbnailService } from "@/services/ThumbnailService";
 import { Button } from "./ui/button";
 import { ArrowLeft, ChevronRight } from "lucide-react";
 import type { ExportFormat } from "@/models/SettingsModel";
+import type { BackgroundType } from "@/models/CanvasModel";
 
 interface CanvasViewProps {
   editingDrawingId: string | null;
@@ -110,7 +111,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           case "png":
             dataUrl = await ExportService.exportToPNG(
               canvasStore.strokes,
-              canvasStore.background,
+              canvasStore.background as BackgroundType,
               exportSize.width,
               exportSize.height,
               settingsStore.exportSettings
@@ -119,7 +120,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           case "jpg":
             dataUrl = await ExportService.exportToJPG(
               canvasStore.strokes,
-              canvasStore.background,
+              canvasStore.background as BackgroundType,
               exportSize.width,
               exportSize.height,
               settingsStore.exportSettings
@@ -128,7 +129,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           case "svg":
             dataUrl = await ExportService.exportToSVG(
               canvasStore.strokes,
-              canvasStore.background,
+              canvasStore.background as BackgroundType,
               exportSize.width,
               exportSize.height,
               settingsStore.exportSettings
