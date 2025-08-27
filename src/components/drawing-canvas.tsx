@@ -263,11 +263,55 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         }
       };
 
+      // Prevent browser zoom when canvas is focused
+      const handleGlobalWheel = (e: WheelEvent) => {
+        const canvas = canvasRef.current;
+        if (
+          canvas &&
+          (e.target === canvas || canvas.contains(e.target as Node))
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+        }
+      };
+
+      // Additional prevention for touchstart to prevent pinch gestures
+      const handleTouchStart = (e: TouchEvent) => {
+        const canvas = canvasRef.current;
+        if (
+          canvas &&
+          canvas.contains(e.target as Node) &&
+          e.touches.length > 1
+        ) {
+          e.preventDefault();
+        }
+      };
+
+      // Prevent gesturestart which can trigger zoom
+      const handleGestureStart = (e: Event) => {
+        const canvas = canvasRef.current;
+        if (canvas && canvas.contains(e.target as Node)) {
+          e.preventDefault();
+        }
+      };
+
       window.addEventListener("keydown", handleKeyDown);
       window.addEventListener("keyup", handleKeyUp);
+      window.addEventListener("wheel", handleGlobalWheel, { passive: false });
+      window.addEventListener("touchstart", handleTouchStart, {
+        passive: false,
+      });
+      window.addEventListener("gesturestart", handleGestureStart, {
+        passive: false,
+      });
+
       return () => {
         window.removeEventListener("keydown", handleKeyDown);
         window.removeEventListener("keyup", handleKeyUp);
+        window.removeEventListener("wheel", handleGlobalWheel);
+        window.removeEventListener("touchstart", handleTouchStart);
+        window.removeEventListener("gesturestart", handleGestureStart);
       };
     }, []);
 
@@ -360,27 +404,35 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
     const handleWheel = useCallback(
       (e: React.WheelEvent) => {
-        // Only zoom if Ctrl key is pressed
-        if (!e.ctrlKey) return;
-
         e.preventDefault();
-        const delta = e.deltaY > 0 ? 0.9 : 1.1;
-        const newZoom = Math.max(0.1, Math.min(5, canvasStore.zoom * delta));
+        e.stopPropagation();
 
-        // Zoom towards mouse position
-        const rect = canvasRef.current?.getBoundingClientRect();
-        if (rect) {
-          const mouseX = e.clientX - rect.left;
-          const mouseY = e.clientY - rect.top;
+        // Handle touchpad pinch zoom (ctrlKey) or regular zoom
+        if (e.ctrlKey || Math.abs(e.deltaY) > 50) {
+          const delta = e.deltaY > 0 ? 0.9 : 1.1;
+          const newZoom = Math.max(0.1, Math.min(5, canvasStore.zoom * delta));
 
-          const worldX = (mouseX - canvasStore.panX) / canvasStore.zoom;
-          const worldY = (mouseY - canvasStore.panY) / canvasStore.zoom;
+          // Zoom towards mouse position
+          const rect = canvasRef.current?.getBoundingClientRect();
+          if (rect) {
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
 
-          const newPanX = mouseX - worldX * newZoom;
-          const newPanY = mouseY - worldY * newZoom;
+            const worldX = (mouseX - canvasStore.panX) / canvasStore.zoom;
+            const worldY = (mouseY - canvasStore.panY) / canvasStore.zoom;
 
-          canvasStore.setZoom(newZoom);
-          canvasStore.setPan(newPanX, newPanY);
+            const newPanX = mouseX - worldX * newZoom;
+            const newPanY = mouseY - worldY * newZoom;
+
+            canvasStore.setZoom(newZoom);
+            canvasStore.setPan(newPanX, newPanY);
+          }
+        } else {
+          // Handle touchpad pan
+          canvasStore.setPan(
+            canvasStore.panX - e.deltaX * 0.5,
+            canvasStore.panY - e.deltaY * 0.5
+          );
         }
       },
       [canvasStore]
@@ -407,7 +459,19 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         onPointerLeave={handlePointerUp}
         onWheel={handleWheel}
         onContextMenu={(e) => e.preventDefault()}
-        style={{ outline: "none" }}
+        style={{
+          outline: "none",
+          touchAction: "none",
+          userSelect: "none",
+          WebkitUserSelect: "none",
+          MozUserSelect: "none",
+          msUserSelect: "none",
+          WebkitTouchCallout: "none",
+          WebkitTapHighlightColor: "transparent",
+          // Prevent zoom and pan gestures
+          msContentZooming: "none",
+          KhtmlUserSelect: "none",
+        }}
       />
     );
   }
