@@ -88,6 +88,8 @@ export const CanvasModel = types
     panX: types.optional(types.number, 0),
     panY: types.optional(types.number, 0),
     brushSettings: types.optional(BrushSettings, {}),
+    // Eraser configuration - use optimized advanced eraser for all backgrounds
+    useAdvancedEraserForAllBackgrounds: types.optional(types.boolean, true),
   })
   .volatile((self) => ({
     history: [] as SnapshotOut<typeof CanvasState>[],
@@ -104,6 +106,23 @@ export const CanvasModel = types
     },
     get isEmpty() {
       return self.strokes.length === 0;
+    },
+    // Always use optimized advanced eraser for consistency
+    get eraserMode(): "advanced" | "composite" {
+      return "advanced"; // Always use advanced for all backgrounds
+    },
+    // Get the composite operation for composite eraser mode
+    get eraserCompositeOperation(): "source-over" | "destination-out" {
+      return self.background === "transparent"
+        ? "destination-out"
+        : "source-over";
+    },
+    // Get the eraser color for composite mode
+    get eraserColor(): string {
+      if (self.background === "transparent") {
+        return "#000000"; // Color doesn't matter for destination-out
+      }
+      return "white"; // White paint for white/grid backgrounds
     },
   }))
   .actions((self) => {
@@ -289,6 +308,209 @@ export const CanvasModel = types
             self.updateState(state);
           }
         }
+      },
+      eraseStrokes(
+        eraserPath: { x: number; y: number; pressure: number }[],
+        eraserSize: number
+      ) {
+        const modifiedStrokes: SnapshotIn<typeof Stroke>[] = [];
+
+        self.strokes.forEach((stroke) => {
+          const strokeSnapshot = getSnapshot(stroke);
+          const segments = this.splitStrokeByEraser(
+            strokeSnapshot,
+            eraserPath,
+            eraserSize
+          );
+          modifiedStrokes.push(...segments);
+        });
+
+        this.replaceStrokes(modifiedStrokes);
+      },
+      eraseAtPoint(x: number, y: number, eraserSize: number) {
+        // Optimized real-time erasing for better performance
+        const eraserRadius = eraserSize / 2;
+        const modifiedStrokes: SnapshotIn<typeof Stroke>[] = [];
+        let hasChanges = false;
+
+        self.strokes.forEach((stroke) => {
+          const strokeSnapshot = getSnapshot(stroke);
+
+          // Quick bounding box check first for performance
+          const strokeBounds = this.getStrokeBounds(strokeSnapshot.points);
+          if (!this.intersectsCircle(strokeBounds, x, y, eraserRadius)) {
+            // No intersection, keep stroke as-is
+            modifiedStrokes.push(strokeSnapshot);
+            return;
+          }
+
+          // Detailed intersection check and splitting
+          const segments = this.splitStrokeByPoint(
+            strokeSnapshot,
+            x,
+            y,
+            eraserRadius
+          );
+
+          // Check if anything changed by counting total points
+          const originalPoints = strokeSnapshot.points.length;
+          const newPoints = segments.reduce(
+            (sum, seg) => sum + (seg.points?.length || 0),
+            0
+          );
+
+          if (originalPoints !== newPoints || segments.length !== 1) {
+            hasChanges = true;
+          }
+          modifiedStrokes.push(...segments);
+        });
+
+        // Only update if there were actual changes
+        if (hasChanges) {
+          self.strokes.replace(
+            modifiedStrokes.map((strokeData) => Stroke.create(strokeData))
+          );
+          self.renderVersion++; // Force immediate re-render
+        }
+      },
+      getStrokeBounds(points: { x: number; y: number; pressure: number }[]) {
+        if (points.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+
+        let minX = points[0].x,
+          maxX = points[0].x;
+        let minY = points[0].y,
+          maxY = points[0].y;
+
+        for (const point of points) {
+          minX = Math.min(minX, point.x);
+          maxX = Math.max(maxX, point.x);
+          minY = Math.min(minY, point.y);
+          maxY = Math.max(maxY, point.y);
+        }
+
+        return { minX, minY, maxX, maxY };
+      },
+      intersectsCircle(
+        bounds: { minX: number; minY: number; maxX: number; maxY: number },
+        circleX: number,
+        circleY: number,
+        radius: number
+      ): boolean {
+        // Quick bounding box vs circle intersection test
+        const closestX = Math.max(bounds.minX, Math.min(circleX, bounds.maxX));
+        const closestY = Math.max(bounds.minY, Math.min(circleY, bounds.maxY));
+        const distance = Math.sqrt(
+          (circleX - closestX) ** 2 + (circleY - closestY) ** 2
+        );
+        return distance <= radius;
+      },
+      splitStrokeByPoint(
+        stroke: SnapshotOut<typeof Stroke>,
+        x: number,
+        y: number,
+        eraserRadius: number
+      ): SnapshotIn<typeof Stroke>[] {
+        const segments: SnapshotIn<typeof Stroke>[] = [];
+        let currentSegment: { x: number; y: number; pressure: number }[] = [];
+
+        for (const point of stroke.points) {
+          const distance = Math.sqrt((point.x - x) ** 2 + (point.y - y) ** 2);
+
+          if (distance <= eraserRadius) {
+            // Point is erased - end current segment
+            if (currentSegment.length > 1) {
+              segments.push({
+                id: crypto.randomUUID(),
+                points: [...currentSegment],
+                color: stroke.color,
+                size: stroke.size,
+                brushStyle: stroke.brushStyle,
+                timestamp: stroke.timestamp,
+              });
+            }
+            currentSegment = [];
+          } else {
+            // Point survives - add to current segment
+            currentSegment.push(point);
+          }
+        }
+
+        // Add final segment if it has points
+        if (currentSegment.length > 1) {
+          segments.push({
+            id: crypto.randomUUID(),
+            points: [...currentSegment],
+            color: stroke.color,
+            size: stroke.size,
+            brushStyle: stroke.brushStyle,
+            timestamp: stroke.timestamp,
+          });
+        }
+
+        return segments;
+      },
+      splitStrokeByEraser(
+        stroke: SnapshotOut<typeof Stroke>,
+        eraserPath: { x: number; y: number; pressure: number }[],
+        eraserSize: number
+      ): SnapshotIn<typeof Stroke>[] {
+        const segments: SnapshotIn<typeof Stroke>[] = [];
+        let currentSegment: { x: number; y: number; pressure: number }[] = [];
+
+        for (let i = 0; i < stroke.points.length; i++) {
+          const point = stroke.points[i];
+          let isErased = false;
+
+          // Check if this point intersects with any point in the eraser path
+          for (const eraserPoint of eraserPath) {
+            const distance = Math.sqrt(
+              Math.pow(point.x - eraserPoint.x, 2) +
+                Math.pow(point.y - eraserPoint.y, 2)
+            );
+            if (distance <= eraserSize / 2) {
+              isErased = true;
+              break;
+            }
+          }
+
+          if (isErased) {
+            // End current segment if it has points
+            if (currentSegment.length > 1) {
+              segments.push({
+                id: crypto.randomUUID(),
+                points: [...currentSegment],
+                color: stroke.color,
+                size: stroke.size,
+                brushStyle: stroke.brushStyle,
+                timestamp: stroke.timestamp,
+              });
+            }
+            currentSegment = [];
+          } else {
+            // Add point to current segment
+            currentSegment.push(point);
+          }
+        }
+
+        // Add final segment if it has points
+        if (currentSegment.length > 1) {
+          segments.push({
+            id: crypto.randomUUID(),
+            points: [...currentSegment],
+            color: stroke.color,
+            size: stroke.size,
+            brushStyle: stroke.brushStyle,
+            timestamp: stroke.timestamp,
+          });
+        }
+
+        return segments;
+      },
+      saveCurrentStateToHistory() {
+        self.saveToHistory();
+      },
+      setEraserMode(useAdvancedForAll: boolean) {
+        self.useAdvancedEraserForAllBackgrounds = useAdvancedForAll;
       },
     };
   });
