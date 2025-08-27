@@ -180,9 +180,6 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
 
     return (
       <div className="fixed inset-0 bg-gray-100">
-        {/* Full-screen canvas */}
-        <DrawingCanvas isDrawingMode={isDrawingMode} />
-
         {/* Floating sidebar */}
         <div
           className={`fixed top-0 left-0 h-full transition-all duration-300 z-10 ${
@@ -228,6 +225,9 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             className="text-lg font-semibold bg-transparent border-none outline-none focus:bg-gray-50 px-2 py-1 rounded"
           />
         </div>
+
+        {/* Full-screen canvas */}
+        <DrawingCanvas isDrawingMode={isDrawingMode} />
 
         {/* Floating dock */}
         <FloatingDock

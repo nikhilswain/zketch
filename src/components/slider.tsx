@@ -122,7 +122,7 @@ const Sidebar: React.FC<SidebarProps> = observer(
           )}
         </div>
 
-        <div className="h-[85vh] overflow-y-auto p-4 space-y-6">
+        <div className="h-[88vh] overflow-y-auto p-4 space-y-6">
           {/* Pen Size */}
           <Card>
             <CardHeader className="pb-3">

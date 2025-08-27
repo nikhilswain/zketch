@@ -117,4 +117,22 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Prevent zoom and pan gestures globally */
+  html,
+  body {
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+
+  /* Specifically for canvas areas */
+  canvas {
+    touch-action: none !important;
+    -webkit-touch-callout: none !important;
+    -webkit-user-select: none !important;
+    user-select: none !important;
+  }
 }
