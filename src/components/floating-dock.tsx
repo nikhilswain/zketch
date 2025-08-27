@@ -7,7 +7,16 @@ import { useCanvasStore, useSettingsStore } from "../hooks/useStores";
 import { Button } from "./ui/button";
 import { Separator } from "./ui/separator";
 import { Move, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
-import { Pen, Highlighter, Paintbrush, PenTool, Pencil } from "lucide-react";
+import {
+  Pen,
+  Highlighter,
+  Paintbrush,
+  PenTool,
+  Pencil,
+  Eraser,
+  Sparkles,
+  Blend,
+} from "lucide-react";
 import type { BrushStyle } from "@/models/CanvasModel";
 
 interface FloatingDockProps {
@@ -40,6 +49,9 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
       brush: <Paintbrush className="w-4 h-4" />,
       calligraphy: <PenTool className="w-4 h-4" />,
       pencil: <Pencil className="w-4 h-4" />,
+      eraser: <Eraser className="w-4 h-4" />,
+      spray: <Sparkles className="w-4 h-4" />,
+      texture: <Blend className="w-4 h-4" />,
     };
 
     const brushStyles: BrushStyle[] = [
@@ -48,6 +60,9 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
       "brush",
       "calligraphy",
       "pencil",
+      "eraser",
+      "spray",
+      "texture",
     ];
 
     // Auto-hide functionality

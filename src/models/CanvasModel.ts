@@ -24,6 +24,9 @@ export const Stroke = types.model("Stroke", {
     "brush",
     "calligraphy",
     "pencil",
+    "eraser",
+    "spray",
+    "texture",
   ]),
   timestamp: types.number,
 });
@@ -44,6 +47,9 @@ export const CanvasState = types.model("CanvasState", {
     "brush",
     "calligraphy",
     "pencil",
+    "eraser",
+    "spray",
+    "texture",
   ]),
   background: types.enumeration("BackgroundType", [
     "white",
@@ -68,6 +74,9 @@ export const CanvasModel = types
         "brush",
         "calligraphy",
         "pencil",
+        "eraser",
+        "spray",
+        "texture",
       ]),
       "ink"
     ),
@@ -216,7 +225,15 @@ export const CanvasModel = types
         self.renderVersion++; // Force re-render
       },
       setBrushStyle(
-        style: "ink" | "marker" | "brush" | "calligraphy" | "pencil"
+        style:
+          | "ink"
+          | "marker"
+          | "brush"
+          | "calligraphy"
+          | "pencil"
+          | "eraser"
+          | "spray"
+          | "texture"
       ) {
         self.currentBrushStyle = style;
       },
@@ -277,7 +294,15 @@ export const CanvasModel = types
   });
 
 // Export type aliases for backward compatibility
-export type BrushStyle = "ink" | "marker" | "brush" | "calligraphy" | "pencil";
+export type BrushStyle =
+  | "ink"
+  | "marker"
+  | "brush"
+  | "calligraphy"
+  | "pencil"
+  | "eraser"
+  | "spray"
+  | "texture";
 export type BackgroundType = "white" | "transparent" | "grid";
 
 export interface ICanvasModel extends Instance<typeof CanvasModel> {}

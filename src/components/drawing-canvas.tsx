@@ -24,6 +24,10 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       y: number;
     } | null>(null);
     const [spacePressed, setSpacePressed] = useState(false);
+    const [mousePosition, setMousePosition] = useState<{
+      x: number;
+      y: number;
+    } | null>(null);
 
     useEffect(() => {
       const updateCanvasSize = () => {
@@ -118,11 +122,132 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               start: { cap: true, taper: 5 },
               end: { cap: true, taper: 5 },
             };
+          case "eraser":
+            return {
+              ...baseOptions,
+              thinning: 0.3,
+              smoothing: 0.6,
+              streamline: 0.6,
+              start: { cap: true, taper: 0 },
+              end: { cap: true, taper: 0 },
+            };
+          case "spray":
+            return {
+              ...baseOptions,
+              thinning: 0.8,
+              smoothing: 0.3,
+              streamline: 0.3,
+              start: { cap: false, taper: 0 },
+              end: { cap: false, taper: 0 },
+            };
+          case "texture":
+            return {
+              ...baseOptions,
+              thinning: 0.7,
+              smoothing: 0.5,
+              streamline: 0.5,
+              start: { cap: false, taper: 10 },
+              end: { cap: false, taper: 10 },
+            };
           default:
             return baseOptions;
         }
       },
       [canvasStore.brushSettings]
+    );
+
+    // Specialized brush rendering functions
+    // Deterministic pseudo-random function to prevent texture vibration
+    const seededRandom = (seed: number) => {
+      const x = Math.sin(seed) * 10000;
+      return x - Math.floor(x);
+    };
+
+    const renderSprayBrush = useCallback(
+      (ctx: CanvasRenderingContext2D, inputPoints: number[][], stroke: any) => {
+        const size = stroke.size;
+        const color = stroke.color; // Use stroke color directly (composite operation handles erasing)
+
+        ctx.fillStyle = color;
+
+        for (let i = 0; i < inputPoints.length; i++) {
+          const [x, y, pressure] = inputPoints[i];
+          const currentSize = size * (pressure || 0.5);
+          const density = Math.max(3, currentSize * 0.3);
+
+          for (let j = 0; j < density; j++) {
+            // Use deterministic random based on point position and spray index
+            const seed1 = x * 1000 + y * 100 + j * 10 + i;
+            const seed2 = x * 100 + y * 1000 + j * 5 + i * 2;
+            const seed3 = x * 10 + y * 10 + j + i * 3;
+
+            const angle = seededRandom(seed1) * Math.PI * 2;
+            const distance = seededRandom(seed2) * currentSize * 0.8;
+            const sprayX = x + Math.cos(angle) * distance;
+            const sprayY = y + Math.sin(angle) * distance;
+            const dotSize = seededRandom(seed3) * 2 + 0.5;
+
+            ctx.beginPath();
+            ctx.arc(sprayX, sprayY, dotSize, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      },
+      [canvasStore.background]
+    );
+
+    const renderTextureBrush = useCallback(
+      (
+        ctx: CanvasRenderingContext2D,
+        inputPoints: number[][],
+        stroke: any,
+        options: any
+      ) => {
+        const size = stroke.size;
+        const color = stroke.color; // Use stroke color directly (composite operation handles erasing)
+
+        // Create texture pattern using multiple overlapping strokes
+        for (let layer = 0; layer < 3; layer++) {
+          const layerOpacity = 0.3 - layer * 0.1;
+          const layerOffset = layer * 2;
+
+          const offsetPoints = inputPoints.map(
+            ([x, y, pressure], pointIndex) => {
+              // Use deterministic random based on point position and layer
+              const seed1 = x * 1000 + y * 100 + layer * 50 + pointIndex;
+              const seed2 = x * 100 + y * 1000 + layer * 25 + pointIndex * 2;
+
+              return [
+                x + (seededRandom(seed1) - 0.5) * layerOffset,
+                y + (seededRandom(seed2) - 0.5) * layerOffset,
+                pressure,
+              ];
+            }
+          );
+
+          const outlinePoints = getStroke(offsetPoints, {
+            ...options,
+            size: size * (0.8 + layer * 0.1),
+          });
+
+          if (outlinePoints.length < 3) continue;
+
+          ctx.globalAlpha = layerOpacity;
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.moveTo(outlinePoints[0][0], outlinePoints[0][1]);
+
+          for (let i = 1; i < outlinePoints.length; i++) {
+            ctx.lineTo(outlinePoints[i][0], outlinePoints[i][1]);
+          }
+
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        ctx.globalAlpha = 1.0;
+      },
+      [canvasStore.background]
     );
 
     const renderStroke = useCallback(
@@ -137,24 +262,62 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         ]);
         const options = getBrushOptions(stroke.brushStyle, stroke.size);
 
-        // Get stroke outline points
-        const outlinePoints = getStroke(inputPoints, options);
-
-        if (outlinePoints.length < 3) return;
-
-        // Draw the stroke
-        ctx.fillStyle = stroke.color;
-        ctx.beginPath();
-        ctx.moveTo(outlinePoints[0][0], outlinePoints[0][1]);
-
-        for (let i = 1; i < outlinePoints.length; i++) {
-          ctx.lineTo(outlinePoints[i][0], outlinePoints[i][1]);
+        // Handle eraser mode with background awareness
+        if (stroke.brushStyle === "eraser") {
+          if (canvasStore.background === "transparent") {
+            // Only for transparent background, use destination-out for true transparency
+            ctx.globalCompositeOperation = "destination-out";
+          } else {
+            // For white and grid backgrounds, use white paint
+            // (Grid is just white + lines, so white paint works fine)
+            ctx.globalCompositeOperation = "source-over";
+          }
+        } else {
+          ctx.globalCompositeOperation = "source-over";
         }
 
-        ctx.closePath();
-        ctx.fill();
+        // Special rendering for different brush types
+        switch (stroke.brushStyle) {
+          case "spray":
+            renderSprayBrush(ctx, inputPoints, stroke);
+            break;
+          case "texture":
+            renderTextureBrush(ctx, inputPoints, stroke, options);
+            break;
+          default:
+            // Standard perfect-freehand rendering
+            const outlinePoints = getStroke(inputPoints, options);
+            if (outlinePoints.length < 3) return;
+
+            // Set color based on brush type and background
+            if (
+              stroke.brushStyle === "eraser" &&
+              canvasStore.background !== "transparent"
+            ) {
+              // For eraser on white and grid backgrounds, use white paint
+              ctx.fillStyle = "white";
+            } else {
+              // For all other cases, use the stroke color
+              // (for destination-out eraser, color doesn't matter)
+              ctx.fillStyle = stroke.color;
+            }
+
+            ctx.beginPath();
+            ctx.moveTo(outlinePoints[0][0], outlinePoints[0][1]);
+
+            for (let i = 1; i < outlinePoints.length; i++) {
+              ctx.lineTo(outlinePoints[i][0], outlinePoints[i][1]);
+            }
+
+            ctx.closePath();
+            ctx.fill();
+            break;
+        }
+
+        // Reset composite operation
+        ctx.globalCompositeOperation = "source-over";
       },
-      [getBrushOptions]
+      [getBrushOptions, canvasStore.background]
     );
 
     const drawGrid = useCallback(
@@ -189,6 +352,95 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       [canvasStore.zoom, canvasStore.panX, canvasStore.panY]
     );
 
+    const drawWorldGrid = useCallback(
+      (ctx: CanvasRenderingContext2D) => {
+        const gridSize = 20;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        ctx.strokeStyle = "#f0f0f0";
+        ctx.lineWidth = 1 / canvasStore.zoom; // Adjust for zoom
+
+        // Calculate world bounds (what's visible in world coordinates)
+        const worldLeft = -canvasStore.panX / canvasStore.zoom;
+        const worldRight = (canvas.width - canvasStore.panX) / canvasStore.zoom;
+        const worldTop = -canvasStore.panY / canvasStore.zoom;
+        const worldBottom =
+          (canvas.height - canvasStore.panY) / canvasStore.zoom;
+
+        // Draw vertical lines
+        const startX = Math.floor(worldLeft / gridSize) * gridSize;
+        const endX = Math.ceil(worldRight / gridSize) * gridSize;
+        for (let x = startX; x <= endX; x += gridSize) {
+          ctx.beginPath();
+          ctx.moveTo(x, worldTop - gridSize);
+          ctx.lineTo(x, worldBottom + gridSize);
+          ctx.stroke();
+        }
+
+        // Draw horizontal lines
+        const startY = Math.floor(worldTop / gridSize) * gridSize;
+        const endY = Math.ceil(worldBottom / gridSize) * gridSize;
+        for (let y = startY; y <= endY; y += gridSize) {
+          ctx.beginPath();
+          ctx.moveTo(worldLeft - gridSize, y);
+          ctx.lineTo(worldRight + gridSize, y);
+          ctx.stroke();
+        }
+      },
+      [canvasStore.zoom, canvasStore.panX, canvasStore.panY]
+    );
+
+    const renderEraserCursor = useCallback(
+      (ctx: CanvasRenderingContext2D) => {
+        if (
+          !mousePosition ||
+          canvasStore.currentBrushStyle !== "eraser" ||
+          isDrawing ||
+          isPanning ||
+          spacePressed
+        ) {
+          return;
+        }
+
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        // Convert screen coordinates to canvas coordinates
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = mousePosition.x - rect.left;
+        const canvasY = mousePosition.y - rect.top;
+
+        // Draw eraser cursor circle
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform to draw in screen space
+
+        ctx.strokeStyle = "#666666";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.arc(
+          canvasX,
+          canvasY,
+          (canvasStore.currentSize * canvasStore.zoom) / 2,
+          0,
+          Math.PI * 2
+        );
+        ctx.stroke();
+
+        ctx.restore();
+      },
+      [
+        mousePosition,
+        canvasStore.currentBrushStyle,
+        canvasStore.currentSize,
+        canvasStore.zoom,
+        isDrawing,
+        isPanning,
+        spacePressed,
+      ]
+    );
+
     const renderStrokes = useCallback(() => {
       const canvas = canvasRef.current;
       const ctx = canvas?.getContext("2d");
@@ -204,13 +456,18 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       } else if (canvasStore.background === "grid") {
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        drawGrid(ctx);
+        // Don't draw grid here, we'll draw it in world space after transform
       }
 
       // Apply transformation once
       ctx.save();
       ctx.translate(canvasStore.panX, canvasStore.panY);
       ctx.scale(canvasStore.zoom, canvasStore.zoom);
+
+      // Draw grid in world coordinates if needed
+      if (canvasStore.background === "grid") {
+        drawWorldGrid(ctx);
+      }
 
       // Render all strokes
       canvasStore.strokes.forEach((stroke: IStroke) => {
@@ -231,6 +488,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       }
 
       ctx.restore();
+
+      // Render eraser cursor (after restoring transform)
+      renderEraserCursor(ctx);
     }, [
       canvasStore.strokes,
       canvasStore.background,
@@ -243,7 +503,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       canvasStore.renderVersion, // Add this to force re-renders on undo/redo
       currentPoints,
       drawGrid,
+      drawWorldGrid,
       renderStroke,
+      renderEraserCursor,
     ]);
 
     useEffect(() => {
@@ -348,6 +610,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
     const handlePointerMove = useCallback(
       (e: React.PointerEvent) => {
+        // Update mouse position for eraser cursor
+        setMousePosition({ x: e.clientX, y: e.clientY });
+
         if (isPanning && lastPanPoint) {
           // Panning
           const deltaX = e.clientX - lastPanPoint.x;
@@ -442,9 +707,17 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       renderStrokes();
     }, [renderStrokes]);
 
+    const handlePointerLeave = useCallback(() => {
+      // Clear mouse position when leaving canvas
+      setMousePosition(null);
+      // Also handle any ongoing interactions
+      handlePointerUp({} as React.PointerEvent);
+    }, []);
+
     const getCursorStyle = () => {
       if (spacePressed || isPanning) return "cursor-grabbing";
       if (!isDrawingMode) return "cursor-grab";
+      if (canvasStore.currentBrushStyle === "eraser") return "cursor-none"; // Hide cursor for eraser
       return "cursor-crosshair";
     };
 
@@ -456,7 +729,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerUp}
+        onPointerLeave={handlePointerLeave}
         onWheel={handleWheel}
         onContextMenu={(e) => e.preventDefault()}
         style={{
