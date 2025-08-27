@@ -84,7 +84,7 @@ export const CanvasModel = types
     history: [] as SnapshotOut<typeof CanvasState>[],
     historyIndex: -1,
     maxHistorySize: 50,
-    renderVersion: 0, // Add this to force re-renders
+    renderVersion: 0, // force re-renders
   }))
   .views((self) => ({
     get canUndo() {
@@ -183,11 +183,17 @@ export const CanvasModel = types
       self.renderVersion++;
     };
 
+    const clearHistory = () => {
+      self.history = [];
+      self.historyIndex = -1;
+    };
+
     return {
       saveToHistory,
       clearStrokes,
       addStrokeToModel,
       updateState,
+      clearHistory,
     };
   })
   .actions((self) => {

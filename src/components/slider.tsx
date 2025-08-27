@@ -109,9 +109,6 @@ const Sidebar: React.FC<SidebarProps> = observer(
             <h2 className="text-lg font-semibold text-gray-900">
               Drawing Tools
             </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Use the floating dock below for brush selection
-            </p>
           </div>
           {onCollapse && (
             <Button
@@ -125,7 +122,7 @@ const Sidebar: React.FC<SidebarProps> = observer(
           )}
         </div>
 
-        <div className="h-[100vh] overflow-y-auto p-4 space-y-6">
+        <div className="h-[85vh] overflow-y-auto p-4 space-y-6">
           {/* Pen Size */}
           <Card>
             <CardHeader className="pb-3">
