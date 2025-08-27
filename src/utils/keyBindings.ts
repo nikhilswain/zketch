@@ -61,6 +61,21 @@ export const KEY_BINDINGS: Record<string, KeyBinding> = {
     description: "Select pencil tool",
     action: "selectPencil",
   },
+  ERASER_TOOL: {
+    key: "6",
+    description: "Select eraser tool",
+    action: "selectEraser",
+  },
+  SPRAY_TOOL: {
+    key: "7",
+    description: "Select spray tool",
+    action: "selectSpray",
+  },
+  TEXTURE_TOOL: {
+    key: "8",
+    description: "Select texture tool",
+    action: "selectTexture",
+  },
 
   // Canvas Navigation
   PAN_MODE: {
