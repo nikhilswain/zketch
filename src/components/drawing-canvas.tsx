@@ -28,6 +28,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       x: number;
       y: number;
     } | null>(null);
+    const [lastEraseTime, setLastEraseTime] = useState(0);
+    const [eraserThrottle, setEraserThrottle] = useState(50); // Much slower for performance
 
     useEffect(() => {
       const updateCanvasSize = () => {
@@ -262,19 +264,13 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         ]);
         const options = getBrushOptions(stroke.brushStyle, stroke.size);
 
-        // Handle eraser mode with background awareness
+        // Skip eraser strokes - they don't get rendered, they remove data
         if (stroke.brushStyle === "eraser") {
-          if (canvasStore.background === "transparent") {
-            // Only for transparent background, use destination-out for true transparency
-            ctx.globalCompositeOperation = "destination-out";
-          } else {
-            // For white and grid backgrounds, use white paint
-            // (Grid is just white + lines, so white paint works fine)
-            ctx.globalCompositeOperation = "source-over";
-          }
-        } else {
-          ctx.globalCompositeOperation = "source-over";
+          return;
         }
+
+        // Normal rendering mode for all visible strokes
+        ctx.globalCompositeOperation = "source-over";
 
         // Special rendering for different brush types
         switch (stroke.brushStyle) {
@@ -289,18 +285,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             const outlinePoints = getStroke(inputPoints, options);
             if (outlinePoints.length < 3) return;
 
-            // Set color based on brush type and background
-            if (
-              stroke.brushStyle === "eraser" &&
-              canvasStore.background !== "transparent"
-            ) {
-              // For eraser on white and grid backgrounds, use white paint
-              ctx.fillStyle = "white";
-            } else {
-              // For all other cases, use the stroke color
-              // (for destination-out eraser, color doesn't matter)
-              ctx.fillStyle = stroke.color;
-            }
+            // Use the stroke color for all visible strokes
+            ctx.fillStyle = stroke.color;
 
             ctx.beginPath();
             ctx.moveTo(outlinePoints[0][0], outlinePoints[0][1]);
@@ -396,13 +382,13 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         if (
           !mousePosition ||
           canvasStore.currentBrushStyle !== "eraser" ||
-          isDrawing ||
           isPanning ||
           spacePressed
         ) {
           return;
         }
 
+        // Show eraser cursor even while erasing (removed isDrawing check)
         const canvas = canvasRef.current;
         if (!canvas) return;
 
@@ -474,8 +460,11 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         renderStroke(ctx, stroke);
       });
 
-      // Render current stroke being drawn
-      if (currentPoints.length > 1) {
+      // Render current stroke being drawn (except for eraser - no preview needed)
+      if (
+        currentPoints.length > 1 &&
+        canvasStore.currentBrushStyle !== "eraser"
+      ) {
         const tempStroke = {
           id: "temp",
           points: currentPoints.map((point) => ({ ...point })),
@@ -513,6 +502,17 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         if (e.code === "Space" && !e.repeat) {
           e.preventDefault();
           setSpacePressed(true);
+        }
+        // Toggle eraser throttling with Ctrl+A
+        if (e.code === "KeyA" && !e.repeat && e.ctrlKey) {
+          e.preventDefault();
+          // Cycle through throttle speeds for testing
+          const newThrottle =
+            eraserThrottle === 50 ? 100 : eraserThrottle === 100 ? 200 : 50;
+          setEraserThrottle(newThrottle);
+          console.log(
+            `Eraser throttle: ${newThrottle}ms - Real-time erasing disabled for performance`
+          );
         }
       };
 
@@ -626,6 +626,12 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           // Drawing
           const point = screenToCanvas(e.clientX, e.clientY);
           point.pressure = e.pressure || 0.5;
+
+          if (canvasStore.currentBrushStyle === "eraser") {
+            // For eraser, just collect points - no real-time erasing for performance
+            // Erasing will happen on stroke completion
+          }
+
           setCurrentPoints((prev) => [...prev, point]);
         }
       },
@@ -636,6 +642,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         lastPanPoint,
         screenToCanvas,
         canvasStore,
+        lastEraseTime,
+        eraserThrottle,
       ]
     );
 
@@ -649,14 +657,22 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         if (isDrawing && isDrawingMode) {
           setIsDrawing(false);
           if (currentPoints.length > 1) {
-            canvasStore.addStroke({
-              id: crypto.randomUUID(),
-              points: currentPoints.map((point) => ({ ...point })),
-              color: canvasStore.currentColor,
-              size: canvasStore.currentSize,
-              brushStyle: canvasStore.currentBrushStyle,
-              timestamp: Date.now(),
-            });
+            if (canvasStore.currentBrushStyle === "eraser") {
+              // Always use optimized advanced eraser for all backgrounds
+              canvasStore.eraseStrokes(
+                currentPoints.map((point) => ({ ...point })),
+                canvasStore.currentSize
+              );
+            } else {
+              canvasStore.addStroke({
+                id: crypto.randomUUID(),
+                points: currentPoints.map((point) => ({ ...point })),
+                color: canvasStore.currentColor,
+                size: canvasStore.currentSize,
+                brushStyle: canvasStore.currentBrushStyle,
+                timestamp: Date.now(),
+              });
+            }
           }
           setCurrentPoints([]);
         } else if (isPanning) {
