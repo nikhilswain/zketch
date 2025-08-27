@@ -54,6 +54,8 @@ const DrawByIdPage: React.FC = observer(() => {
     window.location.href = "/";
   };
 
+  
+
   // Loading state
   if (drawingExists === null) {
     return (

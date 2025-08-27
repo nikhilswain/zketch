@@ -137,7 +137,7 @@ const VaultView: React.FC<VaultViewProps> = observer(
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 sm:mb-8 gap-4">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-                Drawing Vault
+                Your Vault
               </h1>
               <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
                 <span>

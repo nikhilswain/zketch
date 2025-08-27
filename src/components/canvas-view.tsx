@@ -34,6 +34,10 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     const [showExportDialog, setShowExportDialog] = useState(false);
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+    useEffect(() => {
+      canvasStore.clearHistory();
+    }, []);
+
     // Load drawing if editing existing one
     useEffect(() => {
       if (editingDrawingId) {
@@ -48,6 +52,19 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         setDrawingName("Untitled Drawing");
       }
     }, [editingDrawingId, canvasStore, vaultStore]);
+
+    //   // beforeunload
+    // useEffect(() => {
+    //   const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+
+    //     // check if any changes.
+    //     event.preventDefault();
+    //     event.returnValue = "";
+    //   };
+
+    //   window.addEventListener("beforeunload", handleBeforeUnload);
+    //   return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    // }, []);
 
     const handleSave = async () => {
       if (canvasStore.isEmpty) return;
@@ -97,7 +114,8 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         );
       }
 
-      onBackToVault();
+      // TODO: update toast here
+      alert("Drawing saved successfully!");
     };
 
     const handleExport = async (format: ExportFormat) => {
