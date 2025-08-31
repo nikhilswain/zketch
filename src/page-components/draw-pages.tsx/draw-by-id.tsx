@@ -3,27 +3,17 @@ import { useState, useEffect } from "react";
 import { observer } from "mobx-react-lite";
 import { useVaultStore } from "@/hooks/useStores";
 import CanvasView from "@/components/canvas-view";
-import MobileDrawingApp from "@/components/mobile-drawing-app";
+import { useIsMobile } from "@/hooks/useMobile";
 const DrawByIdPage: React.FC = observer(() => {
   const vaultStore = useVaultStore();
-  const [isMobile, setIsMobile] = useState(false);
   const [drawingExists, setDrawingExists] = useState<boolean | null>(null);
+
+  const isMobile = useIsMobile();
 
   const drawingId =
     new URLSearchParams(window.location.search).get("id") ||
     window.location.pathname.split("/").pop() ||
     "";
-
-  // Detect mobile device
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
-  }, []);
 
   // Check if drawing exists in local database
   useEffect(() => {
@@ -53,8 +43,6 @@ const DrawByIdPage: React.FC = observer(() => {
   const handleBackToVault = () => {
     window.location.href = "/";
   };
-
-  
 
   // Loading state
   if (drawingExists === null) {
@@ -86,7 +74,7 @@ const DrawByIdPage: React.FC = observer(() => {
 
   // Use mobile app for small screens
   if (isMobile) {
-    return <MobileDrawingApp />;
+    window.location.href = "/";
   }
 
   return (

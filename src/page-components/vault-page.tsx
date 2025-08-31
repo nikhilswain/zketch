@@ -1,8 +1,12 @@
 import type React from "react";
 import { observer } from "mobx-react-lite";
 import VaultView from "@/components/valut-view";
+import { useIsMobile } from "@/hooks/useMobile";
+import NoMobile from "./no-mobile";
 
 const VaultPage: React.FC = observer(() => {
+  const isMobile = useIsMobile();
+
   const handleNewDrawing = () => {
     window.location.href = "/draw";
   };
@@ -12,10 +16,16 @@ const VaultPage: React.FC = observer(() => {
   };
 
   return (
-    <VaultView
-      onNewDrawing={handleNewDrawing}
-      onEditDrawing={handleEditDrawing}
-    />
+    <>
+      {isMobile ? (
+        <NoMobile />
+      ) : (
+        <VaultView
+          onNewDrawing={handleNewDrawing}
+          onEditDrawing={handleEditDrawing}
+        />
+      )}
+    </>
   );
 });
 

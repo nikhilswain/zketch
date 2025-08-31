@@ -5,28 +5,17 @@ import { useState, useEffect } from "react";
 import { observer } from "mobx-react-lite";
 import CanvasView from "@/components/canvas-view";
 import MobileDrawingApp from "@/components/mobile-drawing-app";
+import { useIsMobile } from "@/hooks/useMobile";
 
 const DrawPage: React.FC = observer(() => {
-  const [isMobile, setIsMobile] = useState(false);
-
-  // Detect mobile device
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
-  }, []);
+  const isMobile = useIsMobile();
 
   const handleBackToVault = () => {
     window.location.href = "/";
   };
 
-  // Use mobile app for small screens
   if (isMobile) {
-    return <MobileDrawingApp />;
+    handleBackToVault();
   }
 
   return (
