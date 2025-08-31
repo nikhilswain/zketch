@@ -1,8 +1,10 @@
 ---
+import { Toaster } from "@/components/ui/sonner";
 import Layout from "@/layouts/Layout.astro";
 import DrawPage from "@/page-components/draw-pages.tsx/draw-page";
 ---
 
 <Layout>
 	<DrawPage client:only="react" />
+	<Toaster richColors client:only="react" /> 
 </Layout>
