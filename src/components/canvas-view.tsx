@@ -12,6 +12,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import Sidebar from "./slider";
 import DrawingCanvas from "./drawing-canvas";
 import FloatingDock from "./floating-dock";
+import ExportDialog from "./export-dialog";
 import { ExportService } from "@/services/ExportService";
 import { ThumbnailService } from "@/services/ThumbnailService";
 import { Button } from "./ui/button";
@@ -236,25 +237,14 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         />
 
         {/* Export Dialog */}
-        {showExportDialog && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white p-6 rounded-lg shadow-lg">
-              <h2 className="text-lg font-semibold mb-4">Export Drawing</h2>
-              <div className="flex gap-4">
-                <Button onClick={() => handleExport("png")}>PNG</Button>
-                <Button onClick={() => handleExport("jpg")}>JPG</Button>
-                <Button onClick={() => handleExport("svg")}>SVG</Button>
-              </div>
-              <Button
-                variant="outline"
-                onClick={() => setShowExportDialog(false)}
-                className="mt-4"
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        )}
+        <ExportDialog
+          isOpen={showExportDialog}
+          onClose={() => setShowExportDialog(false)}
+          onExport={handleExport}
+          strokes={canvasStore.strokes}
+          background={canvasStore.background as BackgroundType}
+          drawingName={drawingName}
+        />
       </div>
     );
   }
