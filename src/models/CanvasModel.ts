@@ -21,9 +21,6 @@ export const Stroke = types.model("Stroke", {
   brushStyle: types.enumeration("BrushStyle", [
     "ink",
     "marker",
-    "brush",
-    "calligraphy",
-    "pencil",
     "eraser",
     "spray",
     "texture",
@@ -44,9 +41,6 @@ export const CanvasState = types.model("CanvasState", {
   currentBrushStyle: types.enumeration("BrushStyle", [
     "ink",
     "marker",
-    "brush",
-    "calligraphy",
-    "pencil",
     "eraser",
     "spray",
     "texture",
@@ -67,13 +61,11 @@ export const CanvasModel = types
     strokes: types.optional(types.array(Stroke), []),
     currentColor: types.optional(types.string, "#000000"),
     currentSize: types.optional(types.number, 4),
+    eraserSize: types.optional(types.number, 20),
     currentBrushStyle: types.optional(
       types.enumeration("BrushStyle", [
         "ink",
         "marker",
-        "brush",
-        "calligraphy",
-        "pencil",
         "eraser",
         "spray",
         "texture",
@@ -243,21 +235,14 @@ export const CanvasModel = types
         self.saveToHistory();
         self.renderVersion++; // Force re-render
       },
-      setBrushStyle(
-        style:
-          | "ink"
-          | "marker"
-          | "brush"
-          | "calligraphy"
-          | "pencil"
-          | "eraser"
-          | "spray"
-          | "texture"
-      ) {
+      setBrushStyle(style: "ink" | "marker" | "eraser" | "spray" | "texture") {
         self.currentBrushStyle = style;
       },
       setPenSize(size: number) {
         self.currentSize = Math.max(1, Math.min(50, size));
+      },
+      setEraserSize(size: number) {
+        self.eraserSize = Math.max(1, Math.min(100, size));
       },
       setColor(color: string) {
         self.currentColor = color;
@@ -516,15 +501,7 @@ export const CanvasModel = types
   });
 
 // Export type aliases for backward compatibility
-export type BrushStyle =
-  | "ink"
-  | "marker"
-  | "brush"
-  | "calligraphy"
-  | "pencil"
-  | "eraser"
-  | "spray"
-  | "texture";
+export type BrushStyle = "ink" | "marker" | "eraser" | "spray" | "texture";
 export type BackgroundType = "white" | "transparent" | "grid";
 
 export interface ICanvasModel extends Instance<typeof CanvasModel> {}

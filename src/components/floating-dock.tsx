@@ -46,9 +46,6 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
     const brushIcons: Record<BrushStyle, React.ReactNode> = {
       ink: <Pen className="w-4 h-4" />,
       marker: <Highlighter className="w-4 h-4" />,
-      brush: <Paintbrush className="w-4 h-4" />,
-      calligraphy: <PenTool className="w-4 h-4" />,
-      pencil: <Pencil className="w-4 h-4" />,
       eraser: <Eraser className="w-4 h-4" />,
       spray: <Sparkles className="w-4 h-4" />,
       texture: <Blend className="w-4 h-4" />,
@@ -57,9 +54,6 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
     const brushStyles: BrushStyle[] = [
       "ink",
       "marker",
-      "brush",
-      "calligraphy",
-      "pencil",
       "eraser",
       "spray",
       "texture",

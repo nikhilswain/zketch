@@ -74,6 +74,10 @@ const Sidebar: React.FC<SidebarProps> = observer(
       canvasStore.setPenSize(value[0]);
     };
 
+    const handleEraserSizeChange = (value: number[]) => {
+      canvasStore.setEraserSize(value[0]);
+    };
+
     const handleBackgroundChange = (value: BackgroundType) => {
       canvasStore.setBackground(value);
     };
@@ -126,16 +130,34 @@ const Sidebar: React.FC<SidebarProps> = observer(
           {/* Pen Size */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Pen Size</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {canvasStore.currentBrushStyle === "eraser" ? "Eraser" : "Pen"}{" "}
+                Size
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-xs font-medium text-gray-600">
-                  Size: {canvasStore.currentSize}px
+                  {/* Size: {canvasStore.currentSize}px */}
+                  Size:{" "}
+                  <span className="font-semibold">
+                    {canvasStore.currentBrushStyle === "eraser"
+                      ? canvasStore.eraserSize
+                      : canvasStore.currentSize}
+                    px
+                  </span>
                 </Label>
                 <Slider
-                  value={[canvasStore.currentSize]}
-                  onValueChange={handleSizeChange}
+                  value={
+                    canvasStore.currentBrushStyle === "eraser"
+                      ? [canvasStore.eraserSize]
+                      : [canvasStore.currentSize]
+                  }
+                  onValueChange={
+                    canvasStore.currentBrushStyle === "eraser"
+                      ? handleEraserSizeChange
+                      : handleSizeChange
+                  }
                   min={1}
                   max={50}
                   step={1}
