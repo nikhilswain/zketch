@@ -18,6 +18,7 @@ import { Button } from "./ui/button";
 import { ArrowLeft, ChevronRight } from "lucide-react";
 import type { ExportFormat } from "@/models/SettingsModel";
 import type { BackgroundType } from "@/models/CanvasModel";
+import { toast } from "sonner";
 
 interface CanvasViewProps {
   editingDrawingId: string | null;
@@ -114,8 +115,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         );
       }
 
-      // TODO: update toast here
-      alert("Drawing saved successfully!");
+      toast.success("Drawing saved successfully!");
     };
 
     const handleExport = async (format: ExportFormat) => {

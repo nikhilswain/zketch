@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { IndexedDBService } from "@/services/IndexedDBService";
 import type { ISavedDrawing } from "@/models/VaultModel";
+import { toast } from "sonner";
 
 type SortOrder = "name" | "created" | "updated";
 
@@ -45,13 +46,10 @@ const VaultView: React.FC<VaultViewProps> = observer(
 
     const handleDelete = async (drawingId: string, e: React.MouseEvent) => {
       e.stopPropagation();
-      if (
-        confirm(
-          "Are you sure you want to delete this drawing? This action cannot be undone."
-        )
-      ) {
-        await vaultStore.deleteDrawing(drawingId);
-      }
+
+      await vaultStore.deleteDrawing(drawingId);
+
+      toast.success("Drawing deleted successfully.");
     };
 
     const handleRename = async (drawingId: string) => {

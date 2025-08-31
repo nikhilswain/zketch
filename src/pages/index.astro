@@ -1,10 +1,12 @@
 ---
+import { Toaster } from '@/components/ui/sonner';
 import Layout from '@/layouts/Layout.astro';
 import VaultPage from '@/page-components/vault-page';
 ---
 
-<Layout>
+<Layout pageTitle="vault | zketch">
 	<VaultPage client:only="react" />
+	<Toaster richColors client:only="react" />
 </Layout>
   
  
