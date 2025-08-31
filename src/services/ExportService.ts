@@ -35,8 +35,28 @@ export class ExportService {
       }
     }
 
+    // Calculate stroke bounds and scale factor
+    const bounds = this.calculateStrokeBounds(strokes);
+    if (bounds) {
+      const scaleX = width / bounds.width;
+      const scaleY = height / bounds.height;
+      const scale = Math.min(scaleX, scaleY) * 0.9; // Leave some padding
+
+      const offsetX = (width - bounds.width * scale) / 2 - bounds.minX * scale;
+      const offsetY =
+        (height - bounds.height * scale) / 2 - bounds.minY * scale;
+
+      ctx.save();
+      ctx.translate(offsetX, offsetY);
+      ctx.scale(scale, scale);
+    }
+
     // Render strokes
     this.renderStrokesToCanvas(ctx, strokes, width, height);
+
+    if (bounds) {
+      ctx.restore();
+    }
 
     return canvas.toDataURL("image/png");
   }
@@ -71,8 +91,28 @@ export class ExportService {
       ctx.fillRect(0, 0, width, height);
     }
 
+    // Calculate stroke bounds and scale factor
+    const bounds = this.calculateStrokeBounds(strokes);
+    if (bounds) {
+      const scaleX = width / bounds.width;
+      const scaleY = height / bounds.height;
+      const scale = Math.min(scaleX, scaleY) * 0.9; // Leave some padding
+
+      const offsetX = (width - bounds.width * scale) / 2 - bounds.minX * scale;
+      const offsetY =
+        (height - bounds.height * scale) / 2 - bounds.minY * scale;
+
+      ctx.save();
+      ctx.translate(offsetX, offsetY);
+      ctx.scale(scale, scale);
+    }
+
     // Render strokes
     this.renderStrokesToCanvas(ctx, strokes, width, height);
+
+    if (bounds) {
+      ctx.restore();
+    }
 
     return canvas.toDataURL("image/jpeg", settings.quality);
   }
@@ -101,13 +141,32 @@ export class ExportService {
       }
     }
 
+    // Calculate stroke bounds and scale factor
+    const bounds = this.calculateStrokeBounds(strokes);
+    if (bounds) {
+      const scaleX = scaledWidth / bounds.width;
+      const scaleY = scaledHeight / bounds.height;
+      const scale = Math.min(scaleX, scaleY) * 0.9; // Leave some padding
+
+      const offsetX =
+        (scaledWidth - bounds.width * scale) / 2 - bounds.minX * scale;
+      const offsetY =
+        (scaledHeight - bounds.height * scale) / 2 - bounds.minY * scale;
+
+      svgContent += `<g transform="translate(${offsetX},${offsetY}) scale(${scale})">`;
+    }
+
     // Add strokes
     strokes.forEach((stroke) => {
       if (stroke.points.length < 2) return;
 
-      const path = this.generateSVGPath(stroke, width, height, settings.scale);
+      const path = this.generateSVGPath(stroke, width, height, 1); // Use scale 1 since we're handling scaling with transform
       svgContent += `<path d="${path}" fill="${stroke.color}" stroke="none"/>`;
     });
+
+    if (bounds) {
+      svgContent += "</g>";
+    }
 
     svgContent += "</svg>";
 
@@ -138,8 +197,8 @@ export class ExportService {
     canvasHeight: number
   ): string {
     const screenPoints = stroke.points.map((p) => [
-      p.x * canvasWidth,
-      p.y * canvasHeight,
+      p.x,
+      p.y,
       p.pressure || 0.5,
     ]);
 
@@ -181,8 +240,8 @@ export class ExportService {
     scale: number
   ): string {
     const screenPoints = stroke.points.map((p) => [
-      p.x * canvasWidth * scale,
-      p.y * canvasHeight * scale,
+      p.x * scale,
+      p.y * scale,
       p.pressure || 0.5,
     ]);
 
@@ -264,5 +323,39 @@ export class ExportService {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  }
+
+  private static calculateStrokeBounds(strokes: IStroke[]): {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+    width: number;
+    height: number;
+  } | null {
+    if (strokes.length === 0) return null;
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    strokes.forEach((stroke) => {
+      stroke.points.forEach((point) => {
+        minX = Math.min(minX, point.x);
+        minY = Math.min(minY, point.y);
+        maxX = Math.max(maxX, point.x);
+        maxY = Math.max(maxY, point.y);
+      });
+    });
+
+    return {
+      minX,
+      minY,
+      maxX,
+      maxY,
+      width: maxX - minX,
+      height: maxY - minY,
+    };
   }
 }
