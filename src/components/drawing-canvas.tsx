@@ -97,25 +97,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               start: { cap: true, taper: 0 },
               end: { cap: true, taper: 0 },
             };
-          case "brush":
-            return {
-              ...baseOptions,
-              thinning: 0.8,
-              smoothing: 0.6,
-              streamline: 0.6,
-              start: { cap: false, taper: 20 },
-              end: { cap: false, taper: 80 },
-            };
-          case "calligraphy":
-            return {
-              ...baseOptions,
-              thinning: 0.9,
-              smoothing: 0.4,
-              streamline: 0.4,
-              start: { cap: false, taper: 50 },
-              end: { cap: false, taper: 50 },
-            };
-          case "pencil":
             return {
               ...baseOptions,
               thinning: 0.6,

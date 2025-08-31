@@ -15,13 +15,7 @@ export const SettingsModel = types
     // Default drawing settings
     defaultPenSize: types.optional(types.number, 4),
     defaultBrushStyle: types.optional(
-      types.enumeration("BrushStyle", [
-        "ink",
-        "marker",
-        "brush",
-        "calligraphy",
-        "pencil",
-      ]),
+      types.enumeration("BrushStyle", ["ink", "marker"]),
       "ink"
     ),
     defaultColor: types.optional(types.string, "#000000"),
