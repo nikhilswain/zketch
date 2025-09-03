@@ -1,3 +1,27 @@
+// Utility: PF-recommended SVG path generator
+const average = (a: number, b: number) => (a + b) / 2;
+function getSvgPathFromStroke(points: number[][], closed = true) {
+  const len = points.length;
+  if (len < 4) return "";
+  let a = points[0],
+    b = points[1],
+    c = points[2];
+  let result = `M${a[0].toFixed(2)},${a[1].toFixed(2)} Q${b[0].toFixed(
+    2
+  )},${b[1].toFixed(2)} ${average(b[0], c[0]).toFixed(2)},${average(
+    b[1],
+    c[1]
+  ).toFixed(2)} T`;
+  for (let i = 2, max = len - 1; i < max; i++) {
+    a = points[i];
+    b = points[i + 1];
+    result += `${average(a[0], b[0]).toFixed(2)},${average(a[1], b[1]).toFixed(
+      2
+    )} `;
+  }
+  if (closed) result += "Z";
+  return result;
+}
 import type React from "react";
 import { useRef, useEffect, useState, useCallback } from "react";
 import { observer } from "mobx-react-lite";
@@ -29,8 +53,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       y: number;
     } | null>(null);
     const [lastEraseTime, setLastEraseTime] = useState(0);
-    const [eraserThrottle, setEraserThrottle] = useState(50); // Much slower for performance
+    const [eraserThrottle, setEraserThrottle] = useState(50);
 
+    // Canvas size / resize
     useEffect(() => {
       const updateCanvasSize = () => {
         const canvas = canvasRef.current;
@@ -53,19 +78,33 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       return () => window.removeEventListener("resize", updateCanvasSize);
     }, [width, height]);
 
+    // Coordinate conversion
     const screenToCanvas = useCallback(
       (clientX: number, clientY: number): IPoint => {
         const canvas = canvasRef.current;
         if (!canvas) return { x: 0, y: 0, pressure: 0.5 };
 
-        // Simple coordinate conversion accounting for zoom and pan
         const x = (clientX - canvasStore.panX) / canvasStore.zoom;
         const y = (clientY - canvasStore.panY) / canvasStore.zoom;
-
         return { x, y, pressure: 0.5 };
       },
       [canvasStore.panX, canvasStore.panY, canvasStore.zoom]
     );
+
+    // Easing functions for taper start/end
+    const easingFn = (name: string) => {
+      switch (name) {
+        case "easeIn":
+          return (t: number) => t * t;
+        case "easeOut":
+          return (t: number) => 1 - Math.pow(1 - t, 2);
+        case "easeInOut":
+          return (t: number) =>
+            t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        default:
+          return (t: number) => t; // linear
+      }
+    };
 
     const getBrushOptions = useCallback(
       (brushStyle: string, size: number) => {
@@ -76,7 +115,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           streamline: canvasStore.brushSettings.streamline,
           simulatePressure: true,
           last: true,
-        };
+        } as any;
 
         switch (brushStyle) {
           case "ink":
@@ -85,8 +124,15 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               thinning: canvasStore.brushSettings.thinning,
               smoothing: canvasStore.brushSettings.smoothing,
               streamline: canvasStore.brushSettings.streamline,
-              start: { cap: true, taper: 0 },
-              end: { cap: true, taper: 100 },
+              easing: easingFn(canvasStore.brushSettings.easing),
+              start: {
+                taper: canvasStore.brushSettings.taperStart,
+                easing: easingFn(canvasStore.brushSettings.easing),
+              },
+              end: {
+                taper: canvasStore.brushSettings.taperEnd,
+                easing: easingFn(canvasStore.brushSettings.easing),
+              },
             };
           case "marker":
             return {
@@ -94,16 +140,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               thinning: 0,
               smoothing: 0.3,
               streamline: 0.3,
-              start: { cap: true, taper: 0 },
-              end: { cap: true, taper: 0 },
-            };
-            return {
-              ...baseOptions,
-              thinning: 0.6,
-              smoothing: 0.9,
-              streamline: 0.9,
-              start: { cap: true, taper: 5 },
-              end: { cap: true, taper: 5 },
+              start: { cap: true, taper: 0, easing: (t: number) => t },
+              end: { cap: true, taper: 0, easing: (t: number) => t },
             };
           case "eraser":
             return {
@@ -111,8 +149,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               thinning: 0.3,
               smoothing: 0.6,
               streamline: 0.6,
-              start: { cap: true, taper: 0 },
-              end: { cap: true, taper: 0 },
+              start: { cap: true, taper: 0, easing: (t: number) => t },
+              end: { cap: true, taper: 0, easing: (t: number) => t },
             };
           case "spray":
             return {
@@ -120,8 +158,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               thinning: 0.8,
               smoothing: 0.3,
               streamline: 0.3,
-              start: { cap: false, taper: 0 },
-              end: { cap: false, taper: 0 },
+              start: { cap: false, taper: 0, easing: (t: number) => t },
+              end: { cap: false, taper: 0, easing: (t: number) => t },
             };
           case "texture":
             return {
@@ -129,8 +167,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               thinning: 0.7,
               smoothing: 0.5,
               streamline: 0.5,
-              start: { cap: false, taper: 10 },
-              end: { cap: false, taper: 10 },
+              start: { cap: false, taper: 10, easing: (t: number) => t },
+              end: { cap: false, taper: 10, easing: (t: number) => t },
             };
           default:
             return baseOptions;
@@ -262,22 +300,15 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             renderTextureBrush(ctx, inputPoints, stroke, options);
             break;
           default:
-            // Standard perfect-freehand rendering
+            // Standard perfect-freehand rendering using Path2D for smooth edges
             const outlinePoints = getStroke(inputPoints, options);
             if (outlinePoints.length < 3) return;
-
-            // Use the stroke color for all visible strokes
             ctx.fillStyle = stroke.color;
-
-            ctx.beginPath();
-            ctx.moveTo(outlinePoints[0][0], outlinePoints[0][1]);
-
-            for (let i = 1; i < outlinePoints.length; i++) {
-              ctx.lineTo(outlinePoints[i][0], outlinePoints[i][1]);
+            const pathData = getSvgPathFromStroke(outlinePoints);
+            if (pathData) {
+              const path = new Path2D(pathData);
+              ctx.fill(path);
             }
-
-            ctx.closePath();
-            ctx.fill();
             break;
         }
 
@@ -632,7 +663,12 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       (e: React.PointerEvent) => {
         const canvas = canvasRef.current;
         if (canvas) {
-          canvas.releasePointerCapture(e.pointerId);
+          try {
+            canvas.releasePointerCapture(e.pointerId);
+          } catch (error) {
+            // Ignore errors if pointer capture is not active
+            console.debug("Failed to release pointer capture:", error);
+          }
         }
 
         if (isDrawing && isDrawingMode) {
@@ -707,9 +743,44 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     const handlePointerLeave = useCallback(() => {
       // Clear mouse position when leaving canvas
       setMousePosition(null);
-      // Also handle any ongoing interactions
-      handlePointerUp({} as React.PointerEvent);
-    }, []);
+
+      // Safely release any pointer capture if present
+      const canvas = canvasRef.current;
+      if (canvas) {
+        try {
+          // We can't know the pointerId here; calling without id isn't allowed.
+          // Instead, just try to release all known captures by blurring.
+          canvas.blur();
+        } catch {}
+      }
+
+      // Handle any ongoing drawing interactions
+      if (isDrawing && isDrawingMode) {
+        setIsDrawing(false);
+        if (currentPoints.length > 1) {
+          if (canvasStore.currentBrushStyle === "eraser") {
+            canvasStore.eraseStrokes(currentPoints, canvasStore.eraserSize);
+          } else {
+            const stroke = {
+              id: Date.now().toString(),
+              points: currentPoints,
+              color: canvasStore.currentColor,
+              size: canvasStore.currentSize,
+              brushStyle: canvasStore.currentBrushStyle,
+              timestamp: Date.now(),
+            };
+            canvasStore.addStroke(stroke);
+          }
+        }
+        setCurrentPoints([]);
+      }
+
+      // Handle panning
+      if (isPanning) {
+        setIsPanning(false);
+        setLastPanPoint(null);
+      }
+    }, [isDrawing, isDrawingMode, currentPoints, canvasStore, isPanning]);
 
     const getCursorStyle = () => {
       if (spacePressed || isPanning) return "cursor-grabbing";

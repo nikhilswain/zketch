@@ -29,9 +29,12 @@ export const Stroke = types.model("Stroke", {
 });
 
 export const BrushSettings = types.model("BrushSettings", {
-  thinning: types.optional(types.number, 0.7),
-  smoothing: types.optional(types.number, 0.8),
-  streamline: types.optional(types.number, 0.8),
+  thinning: types.optional(types.number, 0.5),
+  smoothing: types.optional(types.number, 0.5),
+  streamline: types.optional(types.number, 0.5),
+  taperStart: types.optional(types.number, 30),
+  taperEnd: types.optional(types.number, 30),
+  easing: types.optional(types.string, "linear"),
 });
 
 export const CanvasState = types.model("CanvasState", {
@@ -144,6 +147,9 @@ export const CanvasModel = types
           thinning: self.brushSettings.thinning,
           smoothing: self.brushSettings.smoothing,
           streamline: self.brushSettings.streamline,
+          taperStart: self.brushSettings.taperStart,
+          taperEnd: self.brushSettings.taperEnd,
+          easing: self.brushSettings.easing,
         },
       };
 
@@ -197,6 +203,12 @@ export const CanvasModel = types
         self.brushSettings.thinning = state.brushSettings.thinning;
         self.brushSettings.smoothing = state.brushSettings.smoothing;
         self.brushSettings.streamline = state.brushSettings.streamline;
+        if (state.brushSettings.taperStart !== undefined)
+          self.brushSettings.taperStart = state.brushSettings.taperStart;
+        if (state.brushSettings.taperEnd !== undefined)
+          self.brushSettings.taperEnd = state.brushSettings.taperEnd;
+        if (state.brushSettings.easing !== undefined)
+          self.brushSettings.easing = state.brushSettings.easing;
       }
 
       // Force a re-render by incrementing version
@@ -262,6 +274,9 @@ export const CanvasModel = types
           thinning: number;
           smoothing: number;
           streamline: number;
+          taperStart: number;
+          taperEnd: number;
+          easing: string;
         }>
       ) {
         if (settings.thinning !== undefined)
@@ -270,6 +285,12 @@ export const CanvasModel = types
           self.brushSettings.smoothing = settings.smoothing;
         if (settings.streamline !== undefined)
           self.brushSettings.streamline = settings.streamline;
+        if (settings.taperStart !== undefined)
+          self.brushSettings.taperStart = settings.taperStart;
+        if (settings.taperEnd !== undefined)
+          self.brushSettings.taperEnd = settings.taperEnd;
+        if (settings.easing !== undefined)
+          self.brushSettings.easing = settings.easing;
       },
       clear() {
         self.clearStrokes();

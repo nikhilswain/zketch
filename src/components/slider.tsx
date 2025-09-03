@@ -6,6 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Slider } from "./ui/slider";
 import { Label } from "./ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
+import {
   Undo2,
   Redo2,
   Trash2,
@@ -104,6 +111,14 @@ const Sidebar: React.FC<SidebarProps> = observer(
       canvasStore.setBrushSettings({ streamline: value[0] });
     };
 
+    const handleTaperStartChange = (value: number[]) => {
+      canvasStore.setBrushSettings({ taperStart: value[0] });
+    };
+
+    const handleTaperEndChange = (value: number[]) => {
+      canvasStore.setBrushSettings({ taperEnd: value[0] });
+    };
+
     return (
       <div
         className={`w-80 bg-white border-r border-gray-200 flex flex-col ${className}`}
@@ -171,14 +186,14 @@ const Sidebar: React.FC<SidebarProps> = observer(
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium">
-                  Ink Brush Settings
+                  Pencil Settings
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label className="text-xs font-medium text-gray-600">
                     Thinning:{" "}
-                    {Math.round(canvasStore.brushSettings.thinning * 100)}%
+                    {(canvasStore.brushSettings.thinning * 100).toFixed(0)}%
                   </Label>
                   <Slider
                     value={[canvasStore.brushSettings.thinning]}
@@ -192,7 +207,7 @@ const Sidebar: React.FC<SidebarProps> = observer(
                 <div className="space-y-2">
                   <Label className="text-xs font-medium text-gray-600">
                     Smoothing:{" "}
-                    {Math.round(canvasStore.brushSettings.smoothing * 100)}%
+                    {(canvasStore.brushSettings.smoothing * 100).toFixed(0)}%
                   </Label>
                   <Slider
                     value={[canvasStore.brushSettings.smoothing]}
@@ -206,7 +221,7 @@ const Sidebar: React.FC<SidebarProps> = observer(
                 <div className="space-y-2">
                   <Label className="text-xs font-medium text-gray-600">
                     Streamline:{" "}
-                    {Math.round(canvasStore.brushSettings.streamline * 100)}%
+                    {(canvasStore.brushSettings.streamline * 100).toFixed(0)}%
                   </Label>
                   <Slider
                     value={[canvasStore.brushSettings.streamline]}
@@ -214,6 +229,32 @@ const Sidebar: React.FC<SidebarProps> = observer(
                     min={0}
                     max={1}
                     step={0.1}
+                    className="w-full"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-gray-600">
+                    Taper Start: {canvasStore.brushSettings.taperStart}
+                  </Label>
+                  <Slider
+                    value={[canvasStore.brushSettings.taperStart]}
+                    onValueChange={handleTaperStartChange}
+                    min={0}
+                    max={100}
+                    step={1}
+                    className="w-full"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-gray-600">
+                    Taper End: {canvasStore.brushSettings.taperEnd}
+                  </Label>
+                  <Slider
+                    value={[canvasStore.brushSettings.taperEnd]}
+                    onValueChange={handleTaperEndChange}
+                    min={0}
+                    max={100}
+                    step={1}
                     className="w-full"
                   />
                 </div>
