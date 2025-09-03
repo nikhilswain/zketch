@@ -52,8 +52,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       x: number;
       y: number;
     } | null>(null);
-    const [lastEraseTime, setLastEraseTime] = useState(0);
-    const [eraserThrottle, setEraserThrottle] = useState(50);
 
     // Canvas size / resize
     useEffect(() => {
@@ -515,14 +513,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           e.preventDefault();
           setSpacePressed(true);
         }
-        // Toggle eraser throttling with Ctrl+A
-        if (e.code === "KeyA" && !e.repeat && e.ctrlKey) {
-          e.preventDefault();
-          // Cycle through throttle speeds for testing
-          const newThrottle =
-            eraserThrottle === 50 ? 100 : eraserThrottle === 100 ? 200 : 50;
-          setEraserThrottle(newThrottle);
-        }
       };
 
       const handleKeyUp = (e: KeyboardEvent) => {
@@ -651,8 +641,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         lastPanPoint,
         screenToCanvas,
         canvasStore,
-        lastEraseTime,
-        eraserThrottle,
       ]
     );
 
