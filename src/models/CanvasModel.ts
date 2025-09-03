@@ -39,15 +39,6 @@ export const BrushSettings = types.model("BrushSettings", {
 
 export const CanvasState = types.model("CanvasState", {
   strokes: types.array(Stroke),
-  currentColor: types.string,
-  currentSize: types.number,
-  currentBrushStyle: types.enumeration("BrushStyle", [
-    "ink",
-    "marker",
-    "eraser",
-    "spray",
-    "texture",
-  ]),
   background: types.enumeration("BackgroundType", [
     "white",
     "transparent",
@@ -56,7 +47,6 @@ export const CanvasState = types.model("CanvasState", {
   zoom: types.number,
   panX: types.number,
   panY: types.number,
-  brushSettings: BrushSettings,
 });
 
 export const CanvasModel = types
@@ -136,21 +126,10 @@ export const CanvasModel = types
           brushStyle: stroke.brushStyle,
           timestamp: stroke.timestamp,
         })),
-        currentColor: self.currentColor,
-        currentSize: self.currentSize,
-        currentBrushStyle: self.currentBrushStyle,
         background: self.background,
         zoom: self.zoom,
         panX: self.panX,
         panY: self.panY,
-        brushSettings: {
-          thinning: self.brushSettings.thinning,
-          smoothing: self.brushSettings.smoothing,
-          streamline: self.brushSettings.streamline,
-          taperStart: self.brushSettings.taperStart,
-          taperEnd: self.brushSettings.taperEnd,
-          easing: self.brushSettings.easing,
-        },
       };
 
       // Remove any future history if we're not at the end
@@ -192,24 +171,10 @@ export const CanvasModel = types
         state.strokes.map((strokeData) => Stroke.create(strokeData))
       );
 
-      self.currentColor = state.currentColor;
-      self.currentSize = state.currentSize;
-      self.currentBrushStyle = state.currentBrushStyle as any;
       self.background = state.background as any;
       self.zoom = state.zoom;
       self.panX = state.panX;
       self.panY = state.panY;
-      if (state.brushSettings) {
-        self.brushSettings.thinning = state.brushSettings.thinning;
-        self.brushSettings.smoothing = state.brushSettings.smoothing;
-        self.brushSettings.streamline = state.brushSettings.streamline;
-        if (state.brushSettings.taperStart !== undefined)
-          self.brushSettings.taperStart = state.brushSettings.taperStart;
-        if (state.brushSettings.taperEnd !== undefined)
-          self.brushSettings.taperEnd = state.brushSettings.taperEnd;
-        if (state.brushSettings.easing !== undefined)
-          self.brushSettings.easing = state.brushSettings.easing;
-      }
 
       // Force a re-render by incrementing version
       self.renderVersion++;
@@ -255,6 +220,7 @@ export const CanvasModel = types
       },
       setEraserSize(size: number) {
         self.eraserSize = Math.max(1, Math.min(100, size));
+        self.renderVersion++; // Force re-render to ensure UI updates
       },
       setColor(color: string) {
         self.currentColor = color;
