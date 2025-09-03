@@ -204,6 +204,8 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
                 onSave={handleSave}
                 onExport={handleShowExportDialog}
                 onCollapse={() => setSidebarCollapsed(true)}
+                isDrawingMode={isDrawingMode}
+                onForceDrawingMode={() => setIsDrawingMode(true)}
               />
             </div>
           )}

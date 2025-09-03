@@ -129,6 +129,10 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
 
     const handleBrushChange = (brush: BrushStyle) => {
       canvasStore.setBrushStyle(brush);
+      // Switch to drawing mode when selecting any brush
+      if (!isDrawingMode) {
+        onToggleDrawingMode();
+      }
     };
 
     if (!isVisible && settingsStore.autoHideDock && !isMobile) {
