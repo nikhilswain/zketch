@@ -420,7 +420,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         ctx.arc(
           canvasX,
           canvasY,
-          (canvasStore.currentSize * canvasStore.zoom) / 2,
+          (canvasStore.eraserSize * canvasStore.zoom) / 2,
           0,
           Math.PI * 2
         );
@@ -431,7 +431,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       [
         mousePosition,
         canvasStore.currentBrushStyle,
-        canvasStore.currentSize,
+        canvasStore.eraserSize,
         canvasStore.zoom,
         isDrawing,
         isPanning,
@@ -522,9 +522,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           const newThrottle =
             eraserThrottle === 50 ? 100 : eraserThrottle === 100 ? 200 : 50;
           setEraserThrottle(newThrottle);
-          console.log(
-            `Eraser throttle: ${newThrottle}ms - Real-time erasing disabled for performance`
-          );
         }
       };
 
@@ -678,7 +675,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               // Always use optimized advanced eraser for all backgrounds
               canvasStore.eraseStrokes(
                 currentPoints.map((point) => ({ ...point })),
-                canvasStore.currentSize
+                canvasStore.eraserSize
               );
             } else {
               canvasStore.addStroke({
@@ -765,7 +762,10 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               id: Date.now().toString(),
               points: currentPoints,
               color: canvasStore.currentColor,
-              size: canvasStore.currentSize,
+              size:
+                canvasStore.currentBrushStyle === "eraser"
+                  ? canvasStore.eraserSize
+                  : canvasStore.currentSize,
               brushStyle: canvasStore.currentBrushStyle,
               timestamp: Date.now(),
             };

@@ -30,15 +30,8 @@ const SharePage: React.FC = () => {
     }
 
     try {
-      console.log("Received data param length:", dataParam.length);
       const decodedData = atob(decodeURIComponent(dataParam));
-      console.log("Decoded data length:", decodedData.length);
       const sharedData: SharedDrawing = JSON.parse(decodedData);
-      console.log("Parsed shared data:", {
-        name: sharedData.name,
-        timestamp: sharedData.timestamp,
-        dataLength: sharedData.data?.length,
-      });
       setSharedDrawing(sharedData);
     } catch (err) {
       console.error("Share parsing error:", err);

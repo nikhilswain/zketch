@@ -78,8 +78,6 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
           }
         );
 
-        console.log("Generated data URL length:", dataUrl.length);
-
         // Create a shareable URL with base64 data
         const shareData = {
           name: drawingName,
@@ -88,16 +86,12 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
         };
 
         const jsonString = JSON.stringify(shareData);
-        console.log("JSON string length:", jsonString.length);
 
         const base64Encoded = btoa(jsonString);
-        console.log("Base64 encoded length:", base64Encoded.length);
 
         const urlEncoded = encodeURIComponent(base64Encoded);
-        console.log("URL encoded length:", urlEncoded.length);
 
         const shareUrl = `${window.location.origin}/share?data=${urlEncoded}`;
-        console.log("Final share URL length:", shareUrl.length);
 
         // Check if URL is too long (more reasonable limit)
         if (shareUrl.length > 15000) {

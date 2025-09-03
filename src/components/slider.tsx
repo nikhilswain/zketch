@@ -227,7 +227,7 @@ const Sidebar: React.FC<SidebarProps> = observer(
                         : handleSizeChange
                     }
                     min={1}
-                    max={50}
+                    max={canvasStore.currentBrushStyle === "eraser" ? 100 : 50}
                     step={1}
                     className="w-full"
                   />
