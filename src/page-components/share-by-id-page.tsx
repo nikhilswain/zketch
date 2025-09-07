@@ -2,48 +2,48 @@ import type React from "react";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Download, Home, Share2, AlertCircle } from "lucide-react";
+import { Download, Home, Share2, AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { ShareService, type ShareData } from "@/services/ShareService";
 
-interface SharedDrawing {
-  name: string;
-  data: string; // base64 image data
-  timestamp: number;
+interface ShareByIdPageProps {
+  shareId: string;
 }
 
-const SharePage: React.FC = () => {
-  const [sharedDrawing, setSharedDrawing] = useState<SharedDrawing | null>(
-    null
-  );
+const ShareByIdPage: React.FC<ShareByIdPageProps> = ({ shareId }) => {
+  const [sharedDrawing, setSharedDrawing] = useState<ShareData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Parse the shared data from URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const dataParam = urlParams.get("data");
-
-    if (!dataParam) {
-      setError("No shared drawing data found in URL");
+    if (!shareId) {
+      setError("Invalid share link");
       setLoading(false);
       return;
     }
 
+    loadSharedDrawing();
+  }, [shareId]);
+
+  const loadSharedDrawing = async () => {
     try {
-      const decodedData = atob(decodeURIComponent(dataParam));
-      const sharedData: SharedDrawing = JSON.parse(decodedData);
-      setSharedDrawing(sharedData);
+      setLoading(true);
+      const response = await ShareService.retrieveSharedDrawing(shareId);
+
+      if (response.success && response.data) {
+        setSharedDrawing(response.data);
+      } else {
+        setError(
+          response.message || response.error || "Failed to load shared drawing"
+        );
+      }
     } catch (err) {
-      console.error("Share parsing error:", err);
-      setError(
-        `Invalid or corrupted shared drawing data: ${
-          err instanceof Error ? err.message : "Unknown error"
-        }`
-      );
+      console.error("Failed to load shared drawing:", err);
+      setError("This shared drawing may have expired or the link is invalid.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
   const handleDownload = () => {
     if (!sharedDrawing) return;
@@ -83,8 +83,11 @@ const SharePage: React.FC = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <Loader2 className="w-12 h-12 text-blue-600 mx-auto mb-4 animate-spin" />
           <div className="text-lg text-gray-600">Loading shared drawing...</div>
+          <div className="text-sm text-gray-500 mt-2">
+            This may take a moment for large drawings
+          </div>
         </div>
       </div>
     );
@@ -100,13 +103,22 @@ const SharePage: React.FC = () => {
               Unable to Load Drawing
             </h2>
             <p className="text-gray-600 mb-4">{error}</p>
-            <Button
-              onClick={() => (window.location.href = "/")}
-              className="w-full"
-            >
-              <Home className="w-4 h-4 mr-2" />
-              Go to ZKetch
-            </Button>
+            <div className="space-y-2">
+              <Button
+                onClick={() => window.location.reload()}
+                variant="outline"
+                className="w-full"
+              >
+                Try Again
+              </Button>
+              <Button
+                onClick={() => (window.location.href = "/")}
+                className="w-full"
+              >
+                <Home className="w-4 h-4 mr-2" />
+                Go to ZKetch
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -129,22 +141,6 @@ const SharePage: React.FC = () => {
         {/* Drawing Card */}
         <Card className="mb-6">
           <CardContent className="p-6">
-            {/* Legacy Link Notice */}
-            <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                <div className="text-sm">
-                  <p className="font-medium text-amber-800 mb-1">
-                    Legacy Share Link
-                  </p>
-                  <p className="text-amber-700">
-                    You're viewing an older share link. New share links are more
-                    secure and reliable. Consider re-sharing this drawing to get
-                    an updated link.
-                  </p>
-                </div>
-              </div>
-            </div>
             <div className="text-center mb-4">
               <h2 className="text-xl font-semibold text-gray-900 mb-1">
                 {sharedDrawing?.name || "Untitled Drawing"}
@@ -164,6 +160,7 @@ const SharePage: React.FC = () => {
                     src={sharedDrawing.data}
                     alt={sharedDrawing.name}
                     className="max-w-full max-h-[60vh] object-contain rounded"
+                    loading="eager"
                   />
                 )}
               </div>
@@ -191,9 +188,7 @@ const SharePage: React.FC = () => {
               </Button>
 
               <Button
-                onClick={() =>
-                  (window.location.href = "https://zketch.pages.dev")
-                }
+                onClick={() => (window.location.href = "/")}
                 variant="outline"
                 className="flex items-center gap-2"
                 size="lg"
@@ -205,12 +200,32 @@ const SharePage: React.FC = () => {
           </CardContent>
         </Card>
 
+        {/* Info Box */}
+        <Card className="mb-6 bg-blue-50 border-blue-200">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <div className="w-2 h-2 rounded-full bg-blue-600"></div>
+              </div>
+              <div className="text-sm">
+                <p className="font-medium text-blue-900 mb-1">
+                  Secure & Temporary Sharing
+                </p>
+                <p className="text-blue-700">
+                  This shared drawing is stored securely and will automatically
+                  expire after 30 days. Only people with this link can view it.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Footer */}
         <div className="text-center text-gray-500 text-sm">
           <p>
             Created with{" "}
             <a
-              href="https://zketch.pages.dev"
+              href="/"
               className="text-blue-600 hover:text-blue-700 font-medium"
             >
               ZKetch
@@ -223,4 +238,4 @@ const SharePage: React.FC = () => {
   );
 };
 
-export default SharePage;
+export default ShareByIdPage;

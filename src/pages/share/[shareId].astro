@@ -1,0 +1,10 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import ShareByIdPage from '@/page-components/share-by-id-page';
+import { Toaster } from '@/components/ui/sonner';
+---
+
+<Layout>
+  {Astro.params.shareId && <ShareByIdPage client:only="react" shareId={Astro.params.shareId} />}
+  <Toaster richColors client:only="react" />
+</Layout>
