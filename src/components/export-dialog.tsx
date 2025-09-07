@@ -9,10 +9,11 @@ import { Button } from "./ui/button";
 import { Label } from "./ui/label";
 import { Slider } from "./ui/slider";
 import { Checkbox } from "./ui/checkbox";
-import { Download, Share2, Copy, FileImage, File } from "lucide-react";
+import { Download, Share2, Copy, FileImage, File, Loader2 } from "lucide-react";
 import type { ExportFormat } from "@/models/SettingsModel";
 import type { IStroke, BackgroundType } from "@/models/CanvasModel";
 import { ExportService } from "@/services/ExportService";
+import { ShareService } from "@/services/ShareService";
 import { toast } from "sonner";
 
 interface ExportDialogProps {
@@ -29,6 +30,7 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
     const settingsStore = useSettingsStore();
     const [previewDataUrl, setPreviewDataUrl] = useState<string>("");
     const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+    const [isSharing, setIsSharing] = useState(false);
 
     // Generate preview whenever dialog opens or settings change
     useEffect(() => {
@@ -63,43 +65,45 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
     };
 
     const handleShare = async () => {
+      if (isSharing) return;
+
+      setIsSharing(true);
+
       try {
-        // Use JPG for sharing (smaller than PNG) with forced white background
+        // Export with higher quality for sharing (still optimized for size)
         const dataUrl = await ExportService.exportToJPG(
           strokes,
           background,
-          300, // Even smaller width
-          200, // Even smaller height
+          800, // Decent resolution for sharing
+          600,
           {
             ...settingsStore.exportSettings,
             scale: 1,
-            quality: 0.7,
-            transparentBackground: false,
+            quality: 0.8, // Good quality but still compressed
+            transparentBackground: false, // JPG doesn't support transparency
           }
         );
 
-        // Create a shareable URL with base64 data
-        const shareData = {
-          name: drawingName,
-          data: dataUrl,
-          timestamp: Date.now(),
-        };
+        // Create share data
+        const shareData = ShareService.createShareData(drawingName, dataUrl);
 
-        const jsonString = JSON.stringify(shareData);
-
-        const base64Encoded = btoa(jsonString);
-
-        const urlEncoded = encodeURIComponent(base64Encoded);
-
-        const shareUrl = `${window.location.origin}/share?data=${urlEncoded}`;
-
-        // Check if URL is too long (more reasonable limit)
-        if (shareUrl.length > 15000) {
-          throw new Error(
-            "Drawing is too complex to share via URL. Try exporting and sharing the file instead."
-          );
+        // Check size before attempting to store
+        const sizeCheck = ShareService.checkSizeLimit(shareData);
+        if (!sizeCheck.valid) {
+          toast.error(sizeCheck.message || "Drawing is too large to share");
+          return;
         }
 
+        // Store in Cloudflare KV
+        const response = await ShareService.storeSharedDrawing(shareData);
+
+        if (!response.success) {
+          throw new Error(response.error || "Failed to create share link");
+        }
+
+        const shareUrl = response.shareUrl!;
+
+        // Try native sharing first, fallback to clipboard
         if (navigator.share) {
           await navigator.share({
             title: `Check out my drawing: ${drawingName}`,
@@ -107,19 +111,29 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
             url: shareUrl,
           });
         } else {
-          // Fallback: copy to clipboard
           await navigator.clipboard.writeText(shareUrl);
-          toast.success("Share link copied to clipboard!");
+          toast.success(`Share link copied to clipboard! (expires in 30 days)`);
         }
       } catch (error) {
         console.error("Failed to share:", error);
+
         if (error instanceof Error) {
-          toast.error(error.message);
+          if (error.message.includes("too large")) {
+            toast.error(
+              "Drawing is too large to share. Try reducing complexity or export as a file instead."
+            );
+          } else if (error.message.includes("not available")) {
+            toast.error(
+              "Sharing service is temporarily unavailable. Please try again later."
+            );
+          } else {
+            toast.error(error.message);
+          }
         } else {
-          toast.error(
-            "Failed to create share link - drawing may be too complex"
-          );
+          toast.error("Failed to create share link. Please try again.");
         }
+      } finally {
+        setIsSharing(false);
       }
     };
 
@@ -226,14 +240,24 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
                   <Button
                     onClick={handleShare}
                     variant="outline"
-                    className="w-full h-12 border-2 border-purple-200 hover:bg-purple-50 text-purple-700 hover:text-purple-800 flex items-center justify-center gap-2"
+                    disabled={isSharing}
+                    className="w-full h-12 border-2 border-purple-200 hover:bg-purple-50 text-purple-700 hover:text-purple-800 flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    <Share2 className="w-4 h-4" />
-                    <span className="font-medium">Create Share Link</span>
+                    {isSharing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="font-medium">Creating Link...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Share2 className="w-4 h-4" />
+                        <span className="font-medium">Create Share Link</span>
+                      </>
+                    )}
                   </Button>
                   <p className="text-xs text-gray-500">
-                    Creates a shareable URL with a preview of your drawing. Uses
-                    compressed image for compatibility.
+                    Creates a secure shareable URL that expires in 30 days.
+                    Drawing data is stored safely in the cloud.
                   </p>
                 </div>
 
