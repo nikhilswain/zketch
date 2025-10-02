@@ -74,6 +74,13 @@ export const KEY_BINDINGS: Record<string, KeyBinding> = {
     description: "Zoom in",
     action: "zoomIn",
   },
+  // Some keyboards emit '+' when pressing Shift+='; capture that too
+  ZOOM_IN_PLUS: {
+    key: "+",
+    ctrlKey: true,
+    description: "Zoom in",
+    action: "zoomIn",
+  },
   ZOOM_OUT: {
     key: "-",
     ctrlKey: true,

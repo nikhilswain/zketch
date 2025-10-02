@@ -40,6 +40,11 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
   ({ isDrawingMode, className, width, height }) => {
     const canvasStore = useCanvasStore();
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    // Wheel axis lock to keep horizontal pan during momentum even after Shift released
+    const wheelAxisLockRef = useRef<"none" | "horizontal" | "vertical">("none");
+    const wheelAxisResetTimerRef = useRef<number | null>(null);
+    const shiftDownRef = useRef(false);
+    const lastShiftUpTsRef = useRef<number>(0);
     const [isDrawing, setIsDrawing] = useState(false);
     const [isPanning, setIsPanning] = useState(false);
     const [currentPoints, setCurrentPoints] = useState<IPoint[]>([]);
@@ -513,6 +518,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           e.preventDefault();
           setSpacePressed(true);
         }
+        if (e.key === "Shift") {
+          shiftDownRef.current = true;
+        }
       };
 
       const handleKeyUp = (e: KeyboardEvent) => {
@@ -522,18 +530,23 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           setIsPanning(false);
           setLastPanPoint(null);
         }
+        if (e.key === "Shift") {
+          shiftDownRef.current = false;
+          lastShiftUpTsRef.current = performance.now();
+        }
       };
 
-      // Prevent browser zoom when canvas is focused
+      // Prevent browser zoom/scroll if the pointer is over the canvas area, but still let the event reach our canvas handler
       const handleGlobalWheel = (e: WheelEvent) => {
         const canvas = canvasRef.current;
-        if (
-          canvas &&
-          (e.target === canvas || canvas.contains(e.target as Node))
-        ) {
+        if (!canvas) return;
+        const target = e.target as Node | null;
+        const inside =
+          !!target && (target === canvas || canvas.contains(target));
+        if (!inside) return;
+        if (e.ctrlKey) {
+          // Only block default when user is trying to zoom the page
           e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
         }
       };
 
@@ -559,7 +572,10 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
       window.addEventListener("keydown", handleKeyDown);
       window.addEventListener("keyup", handleKeyUp);
-      window.addEventListener("wheel", handleGlobalWheel, { passive: false });
+      window.addEventListener("wheel", handleGlobalWheel, {
+        passive: false,
+        capture: true,
+      });
       window.addEventListener("touchstart", handleTouchStart, {
         passive: false,
       });
@@ -570,7 +586,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       return () => {
         window.removeEventListener("keydown", handleKeyDown);
         window.removeEventListener("keyup", handleKeyUp);
-        window.removeEventListener("wheel", handleGlobalWheel);
+        window.removeEventListener("wheel", handleGlobalWheel, true);
         window.removeEventListener("touchstart", handleTouchStart);
         window.removeEventListener("gesturestart", handleGestureStart);
       };
@@ -711,11 +727,39 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             canvasStore.setPan(newPanX, newPanY);
           }
         } else {
-          // Handle touchpad pan
-          canvasStore.setPan(
-            canvasStore.panX - e.deltaX * 0.5,
-            canvasStore.panY - e.deltaY * 0.5
-          );
+          // Determine axis lock: if Shift is held, lock to horizontal using vertical wheel
+          // Keep the lock briefly to absorb inertial/momentum after Shift release
+          const recentlyShifted =
+            performance.now() - lastShiftUpTsRef.current < 600;
+          const nowLock =
+            e.shiftKey || shiftDownRef.current || recentlyShifted
+              ? "horizontal"
+              : "none";
+          if (nowLock === "horizontal") {
+            wheelAxisLockRef.current = "horizontal";
+          }
+
+          // Clear/restart lock timeout
+          if (wheelAxisResetTimerRef.current) {
+            window.clearTimeout(wheelAxisResetTimerRef.current);
+          }
+          wheelAxisResetTimerRef.current = window.setTimeout(() => {
+            wheelAxisLockRef.current = "none";
+            wheelAxisResetTimerRef.current = null;
+          }, 600);
+
+          const lock = wheelAxisLockRef.current;
+          if (lock === "horizontal") {
+            canvasStore.setPan(
+              canvasStore.panX - e.deltaY * 0.5,
+              canvasStore.panY
+            );
+          } else {
+            canvasStore.setPan(
+              canvasStore.panX - e.deltaX * 0.5,
+              canvasStore.panY - e.deltaY * 0.5
+            );
+          }
         }
       },
       [canvasStore]
@@ -799,7 +843,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           WebkitTapHighlightColor: "transparent",
           // Prevent zoom and pan gestures
           msContentZooming: "none",
+          overscrollBehavior: "none",
           KhtmlUserSelect: "none",
+          zIndex: 0,
         }}
       />
     );
