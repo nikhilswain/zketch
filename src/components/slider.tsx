@@ -7,6 +7,9 @@ import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Slider } from "./ui/slider";
 import { Label } from "./ui/label";
+import { ZColorPicker, type ZColorResult } from "@zzro/z-color-picker";
+import "@zzro/z-color-picker/styles";
+
 import {
   Undo2,
   Redo2,
@@ -63,17 +66,10 @@ const Sidebar: React.FC<SidebarProps> = observer(
       "#00FF00", // Green
       "#0000FF", // Blue
       "#FFFF00", // Yellow
-      "#FF00FF", // Magenta
-      "#00FFFF", // Cyan
-      "#FFA500", // Orange
-      "#800080", // Purple
-      "#FFC0CB", // Pink
-      "#A52A2A", // Brown
-      "#808080", // Gray
     ];
 
-    const handleColorChange = (color: string) => {
-      canvasStore.setColor(color);
+    const handleColorChange = (color: ZColorResult<["hex"]>) => {
+      canvasStore.setColor(color.hex);
     };
 
     const handleCustomColorChange = (
@@ -323,45 +319,15 @@ const Sidebar: React.FC<SidebarProps> = observer(
                   Color
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Color Palette */}
-                <div className="grid grid-cols-6 gap-2">
-                  {commonColors.map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => handleColorChange(color)}
-                      className={`w-8 h-8 rounded border-2 transition-all ${
-                        canvasStore.currentColor === color
-                          ? "border-gray-900 scale-110"
-                          : "border-gray-300 hover:border-gray-400"
-                      }`}
-                      style={{ backgroundColor: color }}
-                      title={color}
-                    />
-                  ))}
-                </div>
-
-                {/* Custom Color */}
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium text-gray-600">
-                    Custom Color
-                  </Label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={canvasStore.currentColor}
-                      onChange={handleCustomColorChange}
-                      className="w-12 h-8 rounded border border-gray-300 cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={canvasStore.currentColor}
-                      onChange={(e) => handleColorChange(e.target.value)}
-                      className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded"
-                      placeholder="#000000"
-                    />
-                  </div>
-                </div>
+              <CardContent className="space-y-4 overflow-auto">
+                <ZColorPicker
+                  size={220}
+                  formats={["hex"]}
+                  onChange={handleColorChange}
+                  showColorRings={true}
+                  showBrightnessBar={true}
+                  colorRingsPalette={commonColors}
+                />
               </CardContent>
             </Card>
 
