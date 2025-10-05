@@ -235,7 +235,7 @@ const Sidebar: React.FC<SidebarProps> = observer(
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-medium">
-                    Pencil Settings
+                    Pen Settings
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -321,6 +321,7 @@ const Sidebar: React.FC<SidebarProps> = observer(
               </CardHeader>
               <CardContent className="space-y-4 overflow-auto">
                 <ZColorPicker
+                  initialColor={{ r: 0, g: 0, b: 0, a: 1 }}
                   size={220}
                   formats={["hex"]}
                   onChange={handleColorChange}
