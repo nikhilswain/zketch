@@ -291,13 +291,12 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         ]);
         const options = getBrushOptions(stroke.brushStyle, stroke.size);
 
-        // Skip eraser strokes - they don't get rendered, they remove data
-        if (stroke.brushStyle === "eraser") {
-          return;
-        }
-
-        // Normal rendering mode for all visible strokes
-        ctx.globalCompositeOperation = "source-over";
+        // Set composite per stroke: eraser cuts holes; others draw on top
+        const prevComposite = ctx.globalCompositeOperation;
+        ctx.globalCompositeOperation =
+          stroke.brushStyle === "eraser"
+            ? ("destination-out" as GlobalCompositeOperation)
+            : "source-over";
 
         // Special rendering for different brush types
         switch (stroke.brushStyle) {
@@ -324,7 +323,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         }
 
         // Reset composite operation
-        ctx.globalCompositeOperation = "source-over";
+        ctx.globalCompositeOperation = prevComposite;
       },
       [getBrushOptions, canvasStore.background]
     );
@@ -404,6 +403,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       (ctx: CanvasRenderingContext2D) => {
         if (
           !mousePosition ||
+          !isDrawingMode ||
           canvasStore.currentBrushStyle !== "eraser" ||
           isPanning ||
           spacePressed
@@ -441,6 +441,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       },
       [
         mousePosition,
+        isDrawingMode,
         canvasStore.currentBrushStyle,
         canvasStore.eraserSize,
         canvasStore.zoom,
@@ -455,44 +456,29 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       const ctx = canvas?.getContext("2d");
       if (!canvas || !ctx) return;
 
-      // Clear canvas
+      // Clear canvas (draw background/grid later using destination-over)
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Set background
-      if (canvasStore.background === "white") {
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      } else if (canvasStore.background === "grid") {
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        // Don't draw grid here, we'll draw it in world space after transform
-      }
 
       // Apply transformation once
       ctx.save();
       ctx.translate(canvasStore.panX, canvasStore.panY);
       ctx.scale(canvasStore.zoom, canvasStore.zoom);
 
-      // Draw grid in world coordinates if needed
-      if (canvasStore.background === "grid") {
-        drawWorldGrid(ctx);
-      }
-
       // Render all strokes
       canvasStore.strokes.forEach((stroke: IStroke) => {
         renderStroke(ctx, stroke);
       });
 
-      // Render current stroke being drawn (except for eraser - no preview needed)
-      if (
-        currentPoints.length > 1 &&
-        canvasStore.currentBrushStyle !== "eraser"
-      ) {
+      // Render current stroke being drawn (including eraser preview)
+      if (currentPoints.length > 1) {
         const tempStroke = {
           id: "temp",
           points: currentPoints.map((point) => ({ ...point })),
           color: canvasStore.currentColor,
-          size: canvasStore.currentSize,
+          size:
+            canvasStore.currentBrushStyle === "eraser"
+              ? canvasStore.eraserSize
+              : canvasStore.currentSize,
           opacity: canvasStore.brushSettings.opacity ?? 1,
           brushStyle: canvasStore.currentBrushStyle,
           timestamp: Date.now(),
@@ -502,7 +488,31 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
       ctx.restore();
 
-      // Render eraser cursor (after restoring transform)
+      // Draw background/grid under strokes using destination-over so eraser never affects it
+      if (canvasStore.background === "grid") {
+        // First draw world-grid under content
+        ctx.save();
+        ctx.globalCompositeOperation = "destination-over";
+        ctx.translate(canvasStore.panX, canvasStore.panY);
+        ctx.scale(canvasStore.zoom, canvasStore.zoom);
+        drawWorldGrid(ctx);
+        ctx.restore();
+
+        // Then fill any remaining transparent areas with white under everything
+        ctx.save();
+        ctx.globalCompositeOperation = "destination-over";
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      } else if (canvasStore.background === "white") {
+        ctx.save();
+        ctx.globalCompositeOperation = "destination-over";
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      }
+
+      // Render eraser cursor (after background)
       renderEraserCursor(ctx);
     }, [
       canvasStore.strokes,
@@ -515,7 +525,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       canvasStore.panY,
       canvasStore.renderVersion, // Add this to force re-renders on undo/redo
       currentPoints,
-      drawGrid,
       drawWorldGrid,
       renderStroke,
       renderEraserCursor,
@@ -684,23 +693,19 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         if (isDrawing && isDrawingMode) {
           setIsDrawing(false);
           if (currentPoints.length > 1) {
-            if (canvasStore.currentBrushStyle === "eraser") {
-              // Always use optimized advanced eraser for all backgrounds
-              canvasStore.eraseStrokes(
-                currentPoints.map((point) => ({ ...point })),
-                canvasStore.eraserSize
-              );
-            } else {
-              canvasStore.addStroke({
-                id: crypto.randomUUID(),
-                points: currentPoints.map((point) => ({ ...point })),
-                color: canvasStore.currentColor,
-                size: canvasStore.currentSize,
-                opacity: canvasStore.brushSettings.opacity ?? 1,
-                brushStyle: canvasStore.currentBrushStyle,
-                timestamp: Date.now(),
-              });
-            }
+            // Add a stroke for both draw and eraser; eraser will be composited out during render
+            canvasStore.addStroke({
+              id: crypto.randomUUID(),
+              points: currentPoints.map((point) => ({ ...point })),
+              color: canvasStore.currentColor,
+              size:
+                canvasStore.currentBrushStyle === "eraser"
+                  ? canvasStore.eraserSize
+                  : canvasStore.currentSize,
+              opacity: canvasStore.brushSettings.opacity ?? 1,
+              brushStyle: canvasStore.currentBrushStyle,
+              timestamp: Date.now(),
+            });
           }
           setCurrentPoints([]);
         } else if (isPanning) {
@@ -797,23 +802,19 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       if (isDrawing && isDrawingMode) {
         setIsDrawing(false);
         if (currentPoints.length > 1) {
-          if (canvasStore.currentBrushStyle === "eraser") {
-            canvasStore.eraseStrokes(currentPoints, canvasStore.eraserSize);
-          } else {
-            const stroke = {
-              id: Date.now().toString(),
-              points: currentPoints,
-              color: canvasStore.currentColor,
-              size:
-                canvasStore.currentBrushStyle === "eraser"
-                  ? canvasStore.eraserSize
-                  : canvasStore.currentSize,
-              opacity: canvasStore.brushSettings.opacity ?? 1,
-              brushStyle: canvasStore.currentBrushStyle,
-              timestamp: Date.now(),
-            };
-            canvasStore.addStroke(stroke);
-          }
+          const stroke = {
+            id: Date.now().toString(),
+            points: currentPoints,
+            color: canvasStore.currentColor,
+            size:
+              canvasStore.currentBrushStyle === "eraser"
+                ? canvasStore.eraserSize
+                : canvasStore.currentSize,
+            opacity: canvasStore.brushSettings.opacity ?? 1,
+            brushStyle: canvasStore.currentBrushStyle,
+            timestamp: Date.now(),
+          } as IStroke;
+          canvasStore.addStroke(stroke);
         }
         setCurrentPoints([]);
       }

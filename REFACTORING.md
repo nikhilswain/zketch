@@ -93,6 +93,14 @@ Notes:
 - Keep existing pointer logic; start adding eraser strokes instead of splitting.
 - Fix eraser cursor lingering (overlay visibility rules).
 
+Phase 1 checklist:
+
+- [ ] Convert eraser to destination-out compositing (no stroke splitting).
+- [ ] Draw background/grid using destination-over so it’s never erased.
+- [ ] Keep undo/redo intact (eraser as stroke).
+- [ ] Hide eraser cursor when not drawing or while panning/space.
+- [ ] Minimal engine scaffold for future layering (ok to keep single canvas temporarily if needed).
+
 2. Brush registry & cleanup
 
 - Move current spray/texture rendering into `brushes/`.
@@ -151,6 +159,12 @@ Notes:
 - Hit-testing quadtree for stroke selection.
 - Brush preview thumbnails and real-time settings panel.
 - Blend modes per-stroke when moving to WebGL (future).
+
+## Tools (Floater) engines
+
+- Each tool/brush maps to a brush engine implementing `Brush`.
+- Floater toggles set current brush and options in the store; engine reads and renders accordingly.
+- New brushes are added by registering a new brush implementation and wiring UI controls.
 
 ---
 
