@@ -9,7 +9,6 @@ import { Separator } from "./ui/separator";
 import { Move, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
 import {
   Pen,
-  Highlighter,
   Paintbrush,
   PenTool,
   Pencil,
@@ -45,19 +44,13 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
 
     const brushIcons: Record<BrushStyle, React.ReactNode> = {
       ink: <Pencil className="w-4 h-4" />,
-      marker: <Highlighter className="w-4 h-4" />,
+      // marker removed from UI
       eraser: <Eraser className="w-4 h-4" />,
       spray: <Sparkles className="w-4 h-4" />,
       texture: <Blend className="w-4 h-4" />,
-    };
+    } as any;
 
-    const brushStyles: BrushStyle[] = [
-      "ink",
-      "marker",
-      "eraser",
-      "spray",
-      "texture",
-    ];
+    const brushStyles: BrushStyle[] = ["ink", "eraser", "spray", "texture"];
 
     // Auto-hide functionality
     useEffect(() => {
@@ -189,7 +182,7 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
                   className="h-9 w-9 p-0 transition-all hover:scale-105"
                   title={`${
                     brush === "ink"
-                      ? "Pencil"
+                      ? "Pen"
                       : brush.charAt(0).toUpperCase() + brush.slice(1)
                   } brush`}
                 >

@@ -189,14 +189,14 @@ const Sidebar: React.FC<SidebarProps> = observer(
           </div>
 
           <div className="h-[88vh] overflow-y-auto p-4 space-y-6">
-            {/* Pen Size */}
+            {/* Brush Settings: Size + Opacity */}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium">
                   {canvasStore.currentBrushStyle === "eraser"
                     ? "Eraser"
-                    : "Pen"}{" "}
-                  Size
+                    : "Brush"}{" "}
+                  Settings
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -228,6 +228,30 @@ const Sidebar: React.FC<SidebarProps> = observer(
                     className="w-full"
                   />
                 </div>
+
+                {canvasStore.currentBrushStyle !== "eraser" && (
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium text-gray-600">
+                      Opacity:{" "}
+                      {Math.round(
+                        (canvasStore.brushSettings.opacity ?? 1) * 100
+                      )}
+                      %
+                    </Label>
+                    <Slider
+                      value={[canvasStore.brushSettings.opacity ?? 1]}
+                      onValueChange={(v) => {
+                        if (!isDrawingMode && onForceDrawingMode)
+                          onForceDrawingMode();
+                        canvasStore.setBrushSettings({ opacity: v[0] });
+                      }}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      className="w-full"
+                    />
+                  </div>
+                )}
               </CardContent>
             </Card>
 

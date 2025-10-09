@@ -193,6 +193,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         const color = stroke.color; // Use stroke color directly (composite operation handles erasing)
 
         ctx.fillStyle = color;
+        const prevAlpha = ctx.globalAlpha;
+        ctx.globalAlpha = (stroke.opacity ?? 1) * prevAlpha;
 
         for (let i = 0; i < inputPoints.length; i++) {
           const [x, y, pressure] = inputPoints[i];
@@ -216,6 +218,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             ctx.fill();
           }
         }
+        ctx.globalAlpha = prevAlpha;
       },
       [canvasStore.background]
     );
@@ -231,6 +234,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         const color = stroke.color; // Use stroke color directly (composite operation handles erasing)
 
         // Create texture pattern using multiple overlapping strokes
+        const basePrevAlpha = ctx.globalAlpha;
+        const strokeAlpha = stroke.opacity ?? 1;
         for (let layer = 0; layer < 3; layer++) {
           const layerOpacity = 0.3 - layer * 0.1;
           const layerOffset = layer * 2;
@@ -256,7 +261,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
           if (outlinePoints.length < 3) continue;
 
-          ctx.globalAlpha = layerOpacity;
+          ctx.globalAlpha = layerOpacity * strokeAlpha * basePrevAlpha;
           ctx.fillStyle = color;
           ctx.beginPath();
           ctx.moveTo(outlinePoints[0][0], outlinePoints[0][1]);
@@ -269,7 +274,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           ctx.fill();
         }
 
-        ctx.globalAlpha = 1.0;
+        ctx.globalAlpha = basePrevAlpha;
       },
       [canvasStore.background]
     );
@@ -306,12 +311,15 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             // Standard perfect-freehand rendering using Path2D for smooth edges
             const outlinePoints = getStroke(inputPoints, options);
             if (outlinePoints.length < 3) return;
+            const prevAlpha = ctx.globalAlpha;
             ctx.fillStyle = stroke.color;
+            ctx.globalAlpha = (stroke.opacity ?? 1) * prevAlpha;
             const pathData = getSvgPathFromStroke(outlinePoints);
             if (pathData) {
               const path = new Path2D(pathData);
               ctx.fill(path);
             }
+            ctx.globalAlpha = prevAlpha;
             break;
         }
 
@@ -485,6 +493,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           points: currentPoints.map((point) => ({ ...point })),
           color: canvasStore.currentColor,
           size: canvasStore.currentSize,
+          opacity: canvasStore.brushSettings.opacity ?? 1,
           brushStyle: canvasStore.currentBrushStyle,
           timestamp: Date.now(),
         };
@@ -687,6 +696,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                 points: currentPoints.map((point) => ({ ...point })),
                 color: canvasStore.currentColor,
                 size: canvasStore.currentSize,
+                opacity: canvasStore.brushSettings.opacity ?? 1,
                 brushStyle: canvasStore.currentBrushStyle,
                 timestamp: Date.now(),
               });
@@ -798,6 +808,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                 canvasStore.currentBrushStyle === "eraser"
                   ? canvasStore.eraserSize
                   : canvasStore.currentSize,
+              opacity: canvasStore.brushSettings.opacity ?? 1,
               brushStyle: canvasStore.currentBrushStyle,
               timestamp: Date.now(),
             };

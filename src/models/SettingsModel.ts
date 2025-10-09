@@ -15,7 +15,7 @@ export const SettingsModel = types
     // Default drawing settings
     defaultPenSize: types.optional(types.number, 4),
     defaultBrushStyle: types.optional(
-      types.enumeration("BrushStyle", ["ink", "marker"]),
+      types.enumeration("BrushStyle", ["ink"]),
       "ink"
     ),
     defaultColor: types.optional(types.string, "#000000"),
@@ -107,7 +107,7 @@ export const SettingsModel = types
       setDefaults(
         settings: Partial<{
           penSize: number;
-          brushStyle: "ink" | "marker" | "brush" | "calligraphy" | "pencil";
+          brushStyle: "ink";
           color: string;
           background: "white" | "transparent" | "grid";
         }>

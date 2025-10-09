@@ -37,11 +37,7 @@ const MobileSidebar: React.FC<MobileSidebarProps> = observer(
     const canvasStore = useCanvasStore();
 
     const brushStyles: { value: BrushStyle; label: string }[] = [
-      { value: "ink", label: "Ink" },
-      { value: "marker", label: "Marker" },
-      { value: "brush", label: "Brush" },
-      { value: "calligraphy", label: "Calligraphy" },
-      { value: "pencil", label: "Pencil" },
+      { value: "ink", label: "Pen" },
       { value: "eraser", label: "Eraser" },
       { value: "spray", label: "Spray" },
       { value: "texture", label: "Texture" },
@@ -166,6 +162,23 @@ const MobileSidebar: React.FC<MobileSidebarProps> = observer(
                   min={1}
                   max={50}
                   step={1}
+                  className="w-full mt-2"
+                />
+              </div>
+
+              <div>
+                <Label className="text-sm text-gray-600">
+                  Opacity:{" "}
+                  {Math.round((canvasStore.brushSettings.opacity ?? 1) * 100)}%
+                </Label>
+                <Slider
+                  value={[canvasStore.brushSettings.opacity ?? 1]}
+                  onValueChange={(v) =>
+                    canvasStore.setBrushSettings({ opacity: v[0] })
+                  }
+                  min={0}
+                  max={1}
+                  step={0.05}
                   className="w-full mt-2"
                 />
               </div>

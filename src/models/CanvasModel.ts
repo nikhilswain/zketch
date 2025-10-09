@@ -18,6 +18,7 @@ export const Stroke = types.model("Stroke", {
   points: types.array(Point),
   color: types.string,
   size: types.number,
+  opacity: types.optional(types.number, 1),
   brushStyle: types.enumeration("BrushStyle", [
     "ink",
     "marker",
@@ -35,6 +36,7 @@ export const BrushSettings = types.model("BrushSettings", {
   taperStart: types.optional(types.number, 30),
   taperEnd: types.optional(types.number, 30),
   easing: types.optional(types.string, "linear"),
+  opacity: types.optional(types.number, 1),
 });
 
 export const CanvasState = types.model("CanvasState", {
@@ -123,6 +125,7 @@ export const CanvasModel = types
           })),
           color: stroke.color,
           size: stroke.size,
+          opacity: (stroke as any).opacity ?? 1,
           brushStyle: stroke.brushStyle,
           timestamp: stroke.timestamp,
         })),
@@ -213,7 +216,8 @@ export const CanvasModel = types
         self.renderVersion++; // Force re-render
       },
       setBrushStyle(style: "ink" | "marker" | "eraser" | "spray" | "texture") {
-        self.currentBrushStyle = style;
+        // map deprecated 'marker' to 'ink' to keep behavior but remove from UI
+        self.currentBrushStyle = style === "marker" ? "ink" : style;
       },
       setPenSize(size: number) {
         self.currentSize = Math.max(1, Math.min(50, size));
@@ -243,6 +247,7 @@ export const CanvasModel = types
           taperStart: number;
           taperEnd: number;
           easing: string;
+          opacity: number;
         }>
       ) {
         if (settings.thinning !== undefined)
@@ -257,6 +262,11 @@ export const CanvasModel = types
           self.brushSettings.taperEnd = settings.taperEnd;
         if (settings.easing !== undefined)
           self.brushSettings.easing = settings.easing;
+        if (settings.opacity !== undefined)
+          self.brushSettings.opacity = Math.max(
+            0,
+            Math.min(1, settings.opacity)
+          );
       },
       clear() {
         self.clearStrokes();
@@ -396,6 +406,7 @@ export const CanvasModel = types
                 points: [...currentSegment],
                 color: stroke.color,
                 size: stroke.size,
+                opacity: (stroke as any).opacity ?? 1,
                 brushStyle: stroke.brushStyle,
                 timestamp: stroke.timestamp,
               });
@@ -414,6 +425,7 @@ export const CanvasModel = types
             points: [...currentSegment],
             color: stroke.color,
             size: stroke.size,
+            opacity: (stroke as any).opacity ?? 1,
             brushStyle: stroke.brushStyle,
             timestamp: stroke.timestamp,
           });
@@ -453,6 +465,7 @@ export const CanvasModel = types
                 points: [...currentSegment],
                 color: stroke.color,
                 size: stroke.size,
+                opacity: (stroke as any).opacity ?? 1,
                 brushStyle: stroke.brushStyle,
                 timestamp: stroke.timestamp,
               });
@@ -471,6 +484,7 @@ export const CanvasModel = types
             points: [...currentSegment],
             color: stroke.color,
             size: stroke.size,
+            opacity: (stroke as any).opacity ?? 1,
             brushStyle: stroke.brushStyle,
             timestamp: stroke.timestamp,
           });

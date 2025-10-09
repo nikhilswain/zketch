@@ -30,9 +30,6 @@ export const useKeyboardShortcuts = (
     KeyBindingManager.registerHandler("selectPen", () =>
       canvasStore.setBrushStyle("ink")
     );
-    KeyBindingManager.registerHandler("selectMarker", () =>
-      canvasStore.setBrushStyle("marker")
-    );
     KeyBindingManager.registerHandler("selectEraser", () =>
       canvasStore.setBrushStyle("eraser")
     );

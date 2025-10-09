@@ -41,23 +41,18 @@ export const KEY_BINDINGS: Record<string, KeyBinding> = {
     description: "Select pen tool",
     action: "selectPen",
   },
-  MARKER_TOOL: {
-    key: "2",
-    description: "Select marker tool",
-    action: "selectMarker",
-  },
   ERASER_TOOL: {
-    key: "3",
+    key: "2",
     description: "Select eraser tool",
     action: "selectEraser",
   },
   SPRAY_TOOL: {
-    key: "4",
+    key: "3",
     description: "Select spray tool",
     action: "selectSpray",
   },
   TEXTURE_TOOL: {
-    key: "5",
+    key: "4",
     description: "Select texture tool",
     action: "selectTexture",
   },
