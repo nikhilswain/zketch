@@ -181,13 +181,32 @@ export class ExportService {
   ) {
     strokes.forEach((stroke) => {
       if (stroke.points.length < 2) return;
+      const prevComposite = ctx.globalCompositeOperation;
+      ctx.globalCompositeOperation = (
+        stroke.brushStyle === "eraser" ? "destination-out" : "source-over"
+      ) as GlobalCompositeOperation;
 
-      const path = this.getStrokePath(stroke, width, height);
-      if (!path) return;
+      switch (stroke.brushStyle) {
+        case "spray":
+          this.renderSpray(ctx, stroke);
+          break;
+        case "texture":
+          this.renderTexture(ctx, stroke);
+          break;
+        default: {
+          const path = this.getStrokePath(stroke, width, height);
+          if (!path) break;
+          const prevAlpha = ctx.globalAlpha;
+          ctx.fillStyle = stroke.color;
+          ctx.globalAlpha = (stroke.opacity ?? 1) * prevAlpha;
+          const path2D = new Path2D(path);
+          ctx.fill(path2D);
+          ctx.globalAlpha = prevAlpha;
+          break;
+        }
+      }
 
-      const path2D = new Path2D(path);
-      ctx.fillStyle = stroke.color;
-      ctx.fill(path2D);
+      ctx.globalCompositeOperation = prevComposite;
     });
   }
 
@@ -274,6 +293,85 @@ export class ExportService {
 
     d.push("Z");
     return d.join(" ");
+  }
+
+  // --- Brush renderers for export parity ---
+  private static seededRandom(seed: number) {
+    const x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+  }
+
+  private static renderSpray(ctx: CanvasRenderingContext2D, stroke: IStroke) {
+    const size = stroke.size;
+    const prevAlpha = ctx.globalAlpha;
+    ctx.fillStyle = stroke.color;
+    ctx.globalAlpha = (stroke.opacity ?? 1) * prevAlpha;
+    for (let i = 0; i < stroke.points.length; i++) {
+      const { x, y, pressure = 0.5 } = stroke.points[i];
+      const currentSize = size * pressure;
+      const density = Math.max(3, currentSize * 0.3);
+      for (let j = 0; j < density; j++) {
+        const s1 = x * 1000 + y * 100 + j * 10 + i;
+        const s2 = x * 100 + y * 1000 + j * 5 + i * 2;
+        const s3 = x * 10 + y * 10 + j + i * 3;
+        const angle = this.seededRandom(s1) * Math.PI * 2;
+        const distance = this.seededRandom(s2) * currentSize * 0.8;
+        const sx = x + Math.cos(angle) * distance;
+        const sy = y + Math.sin(angle) * distance;
+        const dot = this.seededRandom(s3) * 2 + 0.5;
+        ctx.beginPath();
+        ctx.arc(sx, sy, dot, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = prevAlpha;
+  }
+
+  private static renderTexture(ctx: CanvasRenderingContext2D, stroke: IStroke) {
+    const baseAlpha = ctx.globalAlpha;
+    const pts = stroke.points.map((p) => [p.x, p.y, p.pressure ?? 0.5]);
+    for (let layer = 0; layer < 3; layer++) {
+      const layerOpacity = 0.3 - layer * 0.1;
+      const offset = layer * 2;
+      const offsetPts = pts.map(([x, y, pr], idx) => {
+        const s1 = x * 1000 + y * 100 + layer * 50 + idx;
+        const s2 = x * 100 + y * 1000 + layer * 25 + idx * 2;
+        return [
+          x + (this.seededRandom(s1) - 0.5) * offset,
+          y + (this.seededRandom(s2) - 0.5) * offset,
+          pr,
+        ];
+      });
+      const outline = getStroke(
+        offsetPts as any,
+        {
+          size: stroke.size * (0.8 + layer * 0.1),
+          thinning: 0.7,
+          smoothing: 0.5,
+          streamline: 0.5,
+          start: { cap: false, taper: 10 },
+          end: { cap: false, taper: 10 },
+          last: true,
+        } as any
+      );
+      if (outline.length < 3) continue;
+      ctx.globalAlpha = (stroke.opacity ?? 1) * layerOpacity * baseAlpha;
+      const path2 = new Path2D(
+        outline
+          .reduce(
+            (acc: any[], [x0, y0]: number[], i: number, arr: number[][]) => {
+              const [x1, y1] = arr[(i + 1) % arr.length];
+              acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
+              return acc;
+            },
+            ["M", ...outline[0], "Q"] as any
+          )
+          .join(" ") + " Z"
+      );
+      ctx.fillStyle = stroke.color;
+      ctx.fill(path2);
+    }
+    ctx.globalAlpha = baseAlpha;
   }
 
   private static drawGrid(

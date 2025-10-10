@@ -85,6 +85,22 @@ Notes:
   - Respect transparent export option; only paint background if not transparent.
 - SVG export: keep as-is for now (no native dest-out); optionally skip eraser strokes or approximate later. Mark as follow-up.
 
+## Current status
+
+Done:
+
+- Layered canvases (background, strokes, UI overlay) with DPR-aware resize.
+- Eraser via `destination-out` compositing on strokes layer (grid/background preserved).
+- React component mounts engine; preview stroke + eraser cursor overlay.
+- Pan/zoom unified (screen = zoom × world + pan), correct wheel focal zoom.
+- Undo/redo immediate via engine invalidation on `renderVersion`.
+- Export/Thumbnail parity: apply same compositing (eraser cuts strokes only).
+
+Notes:
+
+- Legacy migration and in-app vault reset helpers were removed. To start fresh in dev, clear site data.
+- Folder naming gotcha fixed (avoid `.tsx` in folder names for Vite dynamic imports).
+
 ## Phased rollout
 
 1. Core engine + layering
@@ -95,11 +111,11 @@ Notes:
 
 Phase 1 checklist:
 
-- [ ] Convert eraser to destination-out compositing (no stroke splitting).
-- [ ] Draw background/grid using destination-over so it’s never erased.
-- [ ] Keep undo/redo intact (eraser as stroke).
-- [ ] Hide eraser cursor when not drawing or while panning/space.
-- [ ] Minimal engine scaffold for future layering (ok to keep single canvas temporarily if needed).
+- [x] Convert eraser to destination-out compositing (no stroke splitting).
+- [x] Draw background/grid in separate layer so it’s never erased.
+- [x] Keep undo/redo intact (eraser as stroke).
+- [x] Hide eraser cursor when not drawing or while panning/space.
+- [x] Engine scaffold with layered canvases.
 
 2. Brush registry & cleanup
 
@@ -168,4 +184,11 @@ Phase 1 checklist:
 
 ---
 
-Implementation will start with engine scaffolding and swapping `DrawingCanvas` to mount it, then we’ll remove the geometry-based eraser.
+Implementation started with engine scaffolding and swapping `DrawingCanvas` to mount it; geometry-based eraser has been removed in favor of compositing.
+
+## Next steps (short)
+
+- Tweak preview performance thresholds (min-distance, RAF cadence).
+- Pressure-based opacity/size brush variant.
+- Image import layer under strokes.
+- Selection/move tool groundwork (overlay handles, hit-testing).

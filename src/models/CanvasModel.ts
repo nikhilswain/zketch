@@ -21,7 +21,6 @@ export const Stroke = types.model("Stroke", {
   opacity: types.optional(types.number, 1),
   brushStyle: types.enumeration("BrushStyle", [
     "ink",
-    "marker",
     "eraser",
     "spray",
     "texture",
@@ -58,13 +57,7 @@ export const CanvasModel = types
     currentSize: types.optional(types.number, 4),
     eraserSize: types.optional(types.number, 20),
     currentBrushStyle: types.optional(
-      types.enumeration("BrushStyle", [
-        "ink",
-        "marker",
-        "eraser",
-        "spray",
-        "texture",
-      ]),
+      types.enumeration("BrushStyle", ["ink", "eraser", "spray", "texture"]),
       "ink"
     ),
     background: types.optional(
@@ -215,9 +208,8 @@ export const CanvasModel = types
         self.saveToHistory();
         self.renderVersion++; // Force re-render
       },
-      setBrushStyle(style: "ink" | "marker" | "eraser" | "spray" | "texture") {
-        // map deprecated 'marker' to 'ink' to keep behavior but remove from UI
-        self.currentBrushStyle = style === "marker" ? "ink" : style;
+      setBrushStyle(style: "ink" | "eraser" | "spray" | "texture") {
+        self.currentBrushStyle = style;
       },
       setPenSize(size: number) {
         self.currentSize = Math.max(1, Math.min(50, size));
@@ -291,69 +283,18 @@ export const CanvasModel = types
           }
         }
       },
+      // DEPRECATED: Geometry-based eraser is replaced by compositing eraser (destination-out).
+      // Keeping method for backward compatibility; now a no-op.
       eraseStrokes(
-        eraserPath: { x: number; y: number; pressure: number }[],
-        eraserSize: number
+        _eraserPath: { x: number; y: number; pressure: number }[],
+        _eraserSize: number
       ) {
-        const modifiedStrokes: SnapshotIn<typeof Stroke>[] = [];
-
-        self.strokes.forEach((stroke) => {
-          const strokeSnapshot = getSnapshot(stroke);
-          const segments = this.splitStrokeByEraser(
-            strokeSnapshot,
-            eraserPath,
-            eraserSize
-          );
-          modifiedStrokes.push(...segments);
-        });
-
-        this.replaceStrokes(modifiedStrokes);
+        // no-op: erasing is recorded as a stroke with brushStyle = 'eraser'
+        return;
       },
-      eraseAtPoint(x: number, y: number, eraserSize: number) {
-        // Optimized real-time erasing for better performance
-        const eraserRadius = eraserSize / 2;
-        const modifiedStrokes: SnapshotIn<typeof Stroke>[] = [];
-        let hasChanges = false;
-
-        self.strokes.forEach((stroke) => {
-          const strokeSnapshot = getSnapshot(stroke);
-
-          // Quick bounding box check first for performance
-          const strokeBounds = this.getStrokeBounds(strokeSnapshot.points);
-          if (!this.intersectsCircle(strokeBounds, x, y, eraserRadius)) {
-            // No intersection, keep stroke as-is
-            modifiedStrokes.push(strokeSnapshot);
-            return;
-          }
-
-          // Detailed intersection check and splitting
-          const segments = this.splitStrokeByPoint(
-            strokeSnapshot,
-            x,
-            y,
-            eraserRadius
-          );
-
-          // Check if anything changed by counting total points
-          const originalPoints = strokeSnapshot.points.length;
-          const newPoints = segments.reduce(
-            (sum, seg) => sum + (seg.points?.length || 0),
-            0
-          );
-
-          if (originalPoints !== newPoints || segments.length !== 1) {
-            hasChanges = true;
-          }
-          modifiedStrokes.push(...segments);
-        });
-
-        // Only update if there were actual changes
-        if (hasChanges) {
-          self.strokes.replace(
-            modifiedStrokes.map((strokeData) => Stroke.create(strokeData))
-          );
-          self.renderVersion++; // Force immediate re-render
-        }
+      // DEPRECATED: real-time geometry erasing; no longer used. Left as a no-op.
+      eraseAtPoint(_x: number, _y: number, _eraserSize: number) {
+        return;
       },
       getStrokeBounds(points: { x: number; y: number; pressure: number }[]) {
         if (points.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
@@ -386,111 +327,23 @@ export const CanvasModel = types
         );
         return distance <= radius;
       },
+      // DEPRECATED support helpers retained for compatibility (no-op implementations)
       splitStrokeByPoint(
-        stroke: SnapshotOut<typeof Stroke>,
-        x: number,
-        y: number,
-        eraserRadius: number
+        _stroke: SnapshotOut<typeof Stroke>,
+        _x: number,
+        _y: number,
+        _eraserRadius: number
       ): SnapshotIn<typeof Stroke>[] {
-        const segments: SnapshotIn<typeof Stroke>[] = [];
-        let currentSegment: { x: number; y: number; pressure: number }[] = [];
-
-        for (const point of stroke.points) {
-          const distance = Math.sqrt((point.x - x) ** 2 + (point.y - y) ** 2);
-
-          if (distance <= eraserRadius) {
-            // Point is erased - end current segment
-            if (currentSegment.length > 1) {
-              segments.push({
-                id: crypto.randomUUID(),
-                points: [...currentSegment],
-                color: stroke.color,
-                size: stroke.size,
-                opacity: (stroke as any).opacity ?? 1,
-                brushStyle: stroke.brushStyle,
-                timestamp: stroke.timestamp,
-              });
-            }
-            currentSegment = [];
-          } else {
-            // Point survives - add to current segment
-            currentSegment.push(point);
-          }
-        }
-
-        // Add final segment if it has points
-        if (currentSegment.length > 1) {
-          segments.push({
-            id: crypto.randomUUID(),
-            points: [...currentSegment],
-            color: stroke.color,
-            size: stroke.size,
-            opacity: (stroke as any).opacity ?? 1,
-            brushStyle: stroke.brushStyle,
-            timestamp: stroke.timestamp,
-          });
-        }
-
-        return segments;
+        // return original stroke unchanged
+        return [];
       },
+      // No-op replacement for legacy splitStrokeByEraser (geometry eraser removed)
       splitStrokeByEraser(
         stroke: SnapshotOut<typeof Stroke>,
-        eraserPath: { x: number; y: number; pressure: number }[],
-        eraserSize: number
+        _eraserPath: { x: number; y: number; pressure: number }[],
+        _eraserSize: number
       ): SnapshotIn<typeof Stroke>[] {
-        const segments: SnapshotIn<typeof Stroke>[] = [];
-        let currentSegment: { x: number; y: number; pressure: number }[] = [];
-
-        for (let i = 0; i < stroke.points.length; i++) {
-          const point = stroke.points[i];
-          let isErased = false;
-
-          // Check if this point intersects with any point in the eraser path
-          for (const eraserPoint of eraserPath) {
-            const distance = Math.sqrt(
-              Math.pow(point.x - eraserPoint.x, 2) +
-                Math.pow(point.y - eraserPoint.y, 2)
-            );
-            if (distance <= eraserSize / 2) {
-              isErased = true;
-              break;
-            }
-          }
-
-          if (isErased) {
-            // End current segment if it has points
-            if (currentSegment.length > 1) {
-              segments.push({
-                id: crypto.randomUUID(),
-                points: [...currentSegment],
-                color: stroke.color,
-                size: stroke.size,
-                opacity: (stroke as any).opacity ?? 1,
-                brushStyle: stroke.brushStyle,
-                timestamp: stroke.timestamp,
-              });
-            }
-            currentSegment = [];
-          } else {
-            // Add point to current segment
-            currentSegment.push(point);
-          }
-        }
-
-        // Add final segment if it has points
-        if (currentSegment.length > 1) {
-          segments.push({
-            id: crypto.randomUUID(),
-            points: [...currentSegment],
-            color: stroke.color,
-            size: stroke.size,
-            opacity: (stroke as any).opacity ?? 1,
-            brushStyle: stroke.brushStyle,
-            timestamp: stroke.timestamp,
-          });
-        }
-
-        return segments;
+        return [stroke as any];
       },
       saveCurrentStateToHistory() {
         self.saveToHistory();
@@ -502,7 +355,7 @@ export const CanvasModel = types
   });
 
 // Export type aliases for backward compatibility
-export type BrushStyle = "ink" | "marker" | "eraser" | "spray" | "texture";
+export type BrushStyle = "ink" | "eraser" | "spray" | "texture";
 export type BackgroundType = "white" | "transparent" | "grid";
 
 export interface ICanvasModel extends Instance<typeof CanvasModel> {}

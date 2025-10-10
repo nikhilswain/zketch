@@ -1,33 +1,11 @@
-// Utility: PF-recommended SVG path generator
-const average = (a: number, b: number) => (a + b) / 2;
-function getSvgPathFromStroke(points: number[][], closed = true) {
-  const len = points.length;
-  if (len < 4) return "";
-  let a = points[0],
-    b = points[1],
-    c = points[2];
-  let result = `M${a[0].toFixed(2)},${a[1].toFixed(2)} Q${b[0].toFixed(
-    2
-  )},${b[1].toFixed(2)} ${average(b[0], c[0]).toFixed(2)},${average(
-    b[1],
-    c[1]
-  ).toFixed(2)} T`;
-  for (let i = 2, max = len - 1; i < max; i++) {
-    a = points[i];
-    b = points[i + 1];
-    result += `${average(a[0], b[0]).toFixed(2)},${average(a[1], b[1]).toFixed(
-      2
-    )} `;
-  }
-  if (closed) result += "Z";
-  return result;
-}
 import type React from "react";
 import { useRef, useEffect, useState, useCallback } from "react";
 import { observer } from "mobx-react-lite";
-import { getStroke } from "perfect-freehand";
 import { useCanvasStore } from "../hooks/useStores";
 import type { IPoint, IStroke } from "@/models/CanvasModel";
+import { CanvasEngine } from "@/engine";
+import type { StrokeLike } from "@/engine";
+import { createGetBrushOptions } from "@/engine/brushOptions";
 
 interface DrawingCanvasProps {
   isDrawingMode: boolean;
@@ -39,7 +17,9 @@ interface DrawingCanvasProps {
 const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
   ({ isDrawingMode, className, width, height }) => {
     const canvasStore = useCanvasStore();
-    const canvasRef = useRef<HTMLCanvasElement>(null);
+    // We now mount canvases inside this root div via CanvasEngine; no direct canvas ref needed
+    const rootRef = useRef<HTMLDivElement>(null);
+    const engineRef = useRef<CanvasEngine | null>(null);
     // Wheel axis lock to keep horizontal pan during momentum even after Shift released
     const wheelAxisLockRef = useRef<"none" | "horizontal" | "vertical">("none");
     const wheelAxisResetTimerRef = useRef<number | null>(null);
@@ -58,476 +38,113 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       y: number;
     } | null>(null);
 
-    // Canvas size / resize
+    // Mount layered engine (background + strokes). Engine handles its own resizing.
     useEffect(() => {
-      const updateCanvasSize = () => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        if (width && height) {
-          canvas.width = width;
-          canvas.height = height;
-        } else {
-          canvas.width = window.innerWidth;
-          canvas.height = window.innerHeight;
-        }
-
-        // Redraw after resize
-        renderStrokes();
+      const root = rootRef.current;
+      if (!root) return;
+      const engine = new CanvasEngine(root, {
+        background: canvasStore.background as any,
+        getStrokes: () => canvasStore.strokes as unknown as StrokeLike[],
+        // Use a dynamic brush options builder bound to the latest settings
+        getBrushOptions: (brush, size) =>
+          createGetBrushOptions(canvasStore.brushSettings as any)(
+            brush as any,
+            size
+          ),
+      });
+      engine.setPanZoom({
+        panX: canvasStore.panX,
+        panY: canvasStore.panY,
+        zoom: canvasStore.zoom,
+      });
+      engineRef.current = engine;
+      return () => {
+        engine.destroy();
+        engineRef.current = null;
       };
+    }, []);
 
-      updateCanvasSize();
-      window.addEventListener("resize", updateCanvasSize);
-      return () => window.removeEventListener("resize", updateCanvasSize);
-    }, [width, height]);
+    // Sync background with engine
+    useEffect(() => {
+      engineRef.current?.setBackground(canvasStore.background as any);
+      engineRef.current?.invalidate();
+    }, [canvasStore.background]);
+
+    // Sync pan/zoom with engine
+    useEffect(() => {
+      engineRef.current?.setPanZoom({
+        panX: canvasStore.panX,
+        panY: canvasStore.panY,
+        zoom: canvasStore.zoom,
+      });
+    }, [canvasStore.panX, canvasStore.panY, canvasStore.zoom]);
+
+    // Force repaint on history/state changes (undo/redo/clear, etc.)
+    useEffect(() => {
+      const engine = engineRef.current;
+      if (!engine) return;
+      // Clear any preview in case undo/redo occurred mid-stroke
+      engine.setPreviewStroke(null);
+      engine.invalidate();
+    }, [canvasStore.renderVersion]);
 
     // Coordinate conversion
     const screenToCanvas = useCallback(
       (clientX: number, clientY: number): IPoint => {
-        const canvas = canvasRef.current;
-        if (!canvas) return { x: 0, y: 0, pressure: 0.5 };
-
-        const x = (clientX - canvasStore.panX) / canvasStore.zoom;
-        const y = (clientY - canvasStore.panY) / canvasStore.zoom;
+        const root = rootRef.current;
+        if (!root) return { x: 0, y: 0, pressure: 0.5 };
+        const rect = root.getBoundingClientRect();
+        const localX = clientX - rect.left;
+        const localY = clientY - rect.top;
+        // screen = zoom * world + pan  =>  world = (screen - pan) / zoom
+        const x = (localX - canvasStore.panX) / canvasStore.zoom;
+        const y = (localY - canvasStore.panY) / canvasStore.zoom;
         return { x, y, pressure: 0.5 };
       },
       [canvasStore.panX, canvasStore.panY, canvasStore.zoom]
     );
 
-    // Easing functions for taper start/end
-    const easingFn = (name: string) => {
-      switch (name) {
-        case "easeIn":
-          return (t: number) => t * t;
-        case "easeOut":
-          return (t: number) => 1 - Math.pow(1 - t, 2);
-        case "easeInOut":
-          return (t: number) =>
-            t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-        default:
-          return (t: number) => t; // linear
-      }
-    };
-
-    const getBrushOptions = useCallback(
-      (brushStyle: string, size: number) => {
-        const baseOptions = {
-          size: size,
-          thinning: canvasStore.brushSettings.thinning,
-          smoothing: canvasStore.brushSettings.smoothing,
-          streamline: canvasStore.brushSettings.streamline,
-          simulatePressure: true,
-          last: true,
-        } as any;
-
-        switch (brushStyle) {
-          case "ink":
-            return {
-              ...baseOptions,
-              thinning: canvasStore.brushSettings.thinning,
-              smoothing: canvasStore.brushSettings.smoothing,
-              streamline: canvasStore.brushSettings.streamline,
-              easing: easingFn(canvasStore.brushSettings.easing),
-              start: {
-                taper: canvasStore.brushSettings.taperStart,
-                easing: easingFn(canvasStore.brushSettings.easing),
-              },
-              end: {
-                taper: canvasStore.brushSettings.taperEnd,
-                easing: easingFn(canvasStore.brushSettings.easing),
-              },
-            };
-          case "marker":
-            return {
-              ...baseOptions,
-              thinning: 0,
-              smoothing: 0.3,
-              streamline: 0.3,
-              start: { cap: true, taper: 0, easing: (t: number) => t },
-              end: { cap: true, taper: 0, easing: (t: number) => t },
-            };
-          case "eraser":
-            return {
-              ...baseOptions,
-              thinning: 0.3,
-              smoothing: 0.6,
-              streamline: 0.6,
-              start: { cap: true, taper: 0, easing: (t: number) => t },
-              end: { cap: true, taper: 0, easing: (t: number) => t },
-            };
-          case "spray":
-            return {
-              ...baseOptions,
-              thinning: 0.8,
-              smoothing: 0.3,
-              streamline: 0.3,
-              start: { cap: false, taper: 0, easing: (t: number) => t },
-              end: { cap: false, taper: 0, easing: (t: number) => t },
-            };
-          case "texture":
-            return {
-              ...baseOptions,
-              thinning: 0.7,
-              smoothing: 0.5,
-              streamline: 0.5,
-              start: { cap: false, taper: 10, easing: (t: number) => t },
-              end: { cap: false, taper: 10, easing: (t: number) => t },
-            };
-          default:
-            return baseOptions;
-        }
-      },
-      [canvasStore.brushSettings]
-    );
-
-    // Specialized brush rendering functions
-    // Deterministic pseudo-random function to prevent texture vibration
-    const seededRandom = (seed: number) => {
-      const x = Math.sin(seed) * 10000;
-      return x - Math.floor(x);
-    };
-
-    const renderSprayBrush = useCallback(
-      (ctx: CanvasRenderingContext2D, inputPoints: number[][], stroke: any) => {
-        const size = stroke.size;
-        const color = stroke.color; // Use stroke color directly (composite operation handles erasing)
-
-        ctx.fillStyle = color;
-        const prevAlpha = ctx.globalAlpha;
-        ctx.globalAlpha = (stroke.opacity ?? 1) * prevAlpha;
-
-        for (let i = 0; i < inputPoints.length; i++) {
-          const [x, y, pressure] = inputPoints[i];
-          const currentSize = size * (pressure || 0.5);
-          const density = Math.max(3, currentSize * 0.3);
-
-          for (let j = 0; j < density; j++) {
-            // Use deterministic random based on point position and spray index
-            const seed1 = x * 1000 + y * 100 + j * 10 + i;
-            const seed2 = x * 100 + y * 1000 + j * 5 + i * 2;
-            const seed3 = x * 10 + y * 10 + j + i * 3;
-
-            const angle = seededRandom(seed1) * Math.PI * 2;
-            const distance = seededRandom(seed2) * currentSize * 0.8;
-            const sprayX = x + Math.cos(angle) * distance;
-            const sprayY = y + Math.sin(angle) * distance;
-            const dotSize = seededRandom(seed3) * 2 + 0.5;
-
-            ctx.beginPath();
-            ctx.arc(sprayX, sprayY, dotSize, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-        ctx.globalAlpha = prevAlpha;
-      },
-      [canvasStore.background]
-    );
-
-    const renderTextureBrush = useCallback(
-      (
-        ctx: CanvasRenderingContext2D,
-        inputPoints: number[][],
-        stroke: any,
-        options: any
-      ) => {
-        const size = stroke.size;
-        const color = stroke.color; // Use stroke color directly (composite operation handles erasing)
-
-        // Create texture pattern using multiple overlapping strokes
-        const basePrevAlpha = ctx.globalAlpha;
-        const strokeAlpha = stroke.opacity ?? 1;
-        for (let layer = 0; layer < 3; layer++) {
-          const layerOpacity = 0.3 - layer * 0.1;
-          const layerOffset = layer * 2;
-
-          const offsetPoints = inputPoints.map(
-            ([x, y, pressure], pointIndex) => {
-              // Use deterministic random based on point position and layer
-              const seed1 = x * 1000 + y * 100 + layer * 50 + pointIndex;
-              const seed2 = x * 100 + y * 1000 + layer * 25 + pointIndex * 2;
-
-              return [
-                x + (seededRandom(seed1) - 0.5) * layerOffset,
-                y + (seededRandom(seed2) - 0.5) * layerOffset,
-                pressure,
-              ];
-            }
-          );
-
-          const outlinePoints = getStroke(offsetPoints, {
-            ...options,
-            size: size * (0.8 + layer * 0.1),
-          });
-
-          if (outlinePoints.length < 3) continue;
-
-          ctx.globalAlpha = layerOpacity * strokeAlpha * basePrevAlpha;
-          ctx.fillStyle = color;
-          ctx.beginPath();
-          ctx.moveTo(outlinePoints[0][0], outlinePoints[0][1]);
-
-          for (let i = 1; i < outlinePoints.length; i++) {
-            ctx.lineTo(outlinePoints[i][0], outlinePoints[i][1]);
-          }
-
-          ctx.closePath();
-          ctx.fill();
-        }
-
-        ctx.globalAlpha = basePrevAlpha;
-      },
-      [canvasStore.background]
-    );
-
-    const renderStroke = useCallback(
-      (ctx: CanvasRenderingContext2D, stroke: IStroke | any) => {
-        if (stroke.points.length < 2) return;
-
-        // Convert points to the format expected by perfect-freehand
-        const inputPoints = stroke.points.map((p: any) => [
-          p.x,
-          p.y,
-          p.pressure || 0.5,
-        ]);
-        const options = getBrushOptions(stroke.brushStyle, stroke.size);
-
-        // Set composite per stroke: eraser cuts holes; others draw on top
-        const prevComposite = ctx.globalCompositeOperation;
-        ctx.globalCompositeOperation =
-          stroke.brushStyle === "eraser"
-            ? ("destination-out" as GlobalCompositeOperation)
-            : "source-over";
-
-        // Special rendering for different brush types
-        switch (stroke.brushStyle) {
-          case "spray":
-            renderSprayBrush(ctx, inputPoints, stroke);
-            break;
-          case "texture":
-            renderTextureBrush(ctx, inputPoints, stroke, options);
-            break;
-          default:
-            // Standard perfect-freehand rendering using Path2D for smooth edges
-            const outlinePoints = getStroke(inputPoints, options);
-            if (outlinePoints.length < 3) return;
-            const prevAlpha = ctx.globalAlpha;
-            ctx.fillStyle = stroke.color;
-            ctx.globalAlpha = (stroke.opacity ?? 1) * prevAlpha;
-            const pathData = getSvgPathFromStroke(outlinePoints);
-            if (pathData) {
-              const path = new Path2D(pathData);
-              ctx.fill(path);
-            }
-            ctx.globalAlpha = prevAlpha;
-            break;
-        }
-
-        // Reset composite operation
-        ctx.globalCompositeOperation = prevComposite;
-      },
-      [getBrushOptions, canvasStore.background]
-    );
-
-    const drawGrid = useCallback(
-      (ctx: CanvasRenderingContext2D) => {
-        const gridSize = 20 * canvasStore.zoom;
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        ctx.strokeStyle = "#f0f0f0";
-        ctx.lineWidth = 1;
-
-        // Calculate grid offset based on pan
-        const offsetX = canvasStore.panX % gridSize;
-        const offsetY = canvasStore.panY % gridSize;
-
-        // Draw vertical lines
-        for (let x = offsetX; x < canvas.width; x += gridSize) {
-          ctx.beginPath();
-          ctx.moveTo(x, 0);
-          ctx.lineTo(x, canvas.height);
-          ctx.stroke();
-        }
-
-        // Draw horizontal lines
-        for (let y = offsetY; y < canvas.height; y += gridSize) {
-          ctx.beginPath();
-          ctx.moveTo(0, y);
-          ctx.lineTo(canvas.width, y);
-          ctx.stroke();
-        }
-      },
-      [canvasStore.zoom, canvasStore.panX, canvasStore.panY]
-    );
-
-    const drawWorldGrid = useCallback(
-      (ctx: CanvasRenderingContext2D) => {
-        const gridSize = 20;
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        ctx.strokeStyle = "#f0f0f0";
-        ctx.lineWidth = 1 / canvasStore.zoom; // Adjust for zoom
-
-        // Calculate world bounds (what's visible in world coordinates)
-        const worldLeft = -canvasStore.panX / canvasStore.zoom;
-        const worldRight = (canvas.width - canvasStore.panX) / canvasStore.zoom;
-        const worldTop = -canvasStore.panY / canvasStore.zoom;
-        const worldBottom =
-          (canvas.height - canvasStore.panY) / canvasStore.zoom;
-
-        // Draw vertical lines
-        const startX = Math.floor(worldLeft / gridSize) * gridSize;
-        const endX = Math.ceil(worldRight / gridSize) * gridSize;
-        for (let x = startX; x <= endX; x += gridSize) {
-          ctx.beginPath();
-          ctx.moveTo(x, worldTop - gridSize);
-          ctx.lineTo(x, worldBottom + gridSize);
-          ctx.stroke();
-        }
-
-        // Draw horizontal lines
-        const startY = Math.floor(worldTop / gridSize) * gridSize;
-        const endY = Math.ceil(worldBottom / gridSize) * gridSize;
-        for (let y = startY; y <= endY; y += gridSize) {
-          ctx.beginPath();
-          ctx.moveTo(worldLeft - gridSize, y);
-          ctx.lineTo(worldRight + gridSize, y);
-          ctx.stroke();
-        }
-      },
-      [canvasStore.zoom, canvasStore.panX, canvasStore.panY]
-    );
-
-    const renderEraserCursor = useCallback(
-      (ctx: CanvasRenderingContext2D) => {
-        if (
-          !mousePosition ||
-          !isDrawingMode ||
-          canvasStore.currentBrushStyle !== "eraser" ||
-          isPanning ||
-          spacePressed
-        ) {
-          return;
-        }
-
-        // Show eraser cursor even while erasing (removed isDrawing check)
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        // Convert screen coordinates to canvas coordinates
-        const rect = canvas.getBoundingClientRect();
-        const canvasX = mousePosition.x - rect.left;
-        const canvasY = mousePosition.y - rect.top;
-
-        // Draw eraser cursor circle
-        ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform to draw in screen space
-
-        ctx.strokeStyle = "#666666";
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 5]);
-        ctx.beginPath();
-        ctx.arc(
-          canvasX,
-          canvasY,
-          (canvasStore.eraserSize * canvasStore.zoom) / 2,
-          0,
-          Math.PI * 2
-        );
-        ctx.stroke();
-
-        ctx.restore();
-      },
-      [
-        mousePosition,
-        isDrawingMode,
-        canvasStore.currentBrushStyle,
-        canvasStore.eraserSize,
-        canvasStore.zoom,
-        isDrawing,
-        isPanning,
-        spacePressed,
-      ]
-    );
+    // Preview RAF coalescing
+    const previewRafRef = useRef<number | null>(null);
 
     const renderStrokes = useCallback(() => {
-      const canvas = canvasRef.current;
-      const ctx = canvas?.getContext("2d");
-      if (!canvas || !ctx) return;
-
-      // Clear canvas (draw background/grid later using destination-over)
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Apply transformation once
-      ctx.save();
-      ctx.translate(canvasStore.panX, canvasStore.panY);
-      ctx.scale(canvasStore.zoom, canvasStore.zoom);
-
-      // Render all strokes
-      canvasStore.strokes.forEach((stroke: IStroke) => {
-        renderStroke(ctx, stroke);
+      const engine = engineRef.current;
+      if (!engine) return;
+      if (previewRafRef.current) cancelAnimationFrame(previewRafRef.current);
+      previewRafRef.current = requestAnimationFrame(() => {
+        if (!engineRef.current) return;
+        if (currentPoints.length > 1) {
+          const temp: StrokeLike = {
+            id: "temp",
+            points: currentPoints.map((p) => ({
+              x: p.x,
+              y: p.y,
+              pressure: p.pressure,
+            })),
+            color: canvasStore.currentColor,
+            size:
+              canvasStore.currentBrushStyle === "eraser"
+                ? canvasStore.eraserSize
+                : canvasStore.currentSize,
+            opacity: canvasStore.brushSettings.opacity ?? 1,
+            brushStyle: canvasStore.currentBrushStyle as any,
+            timestamp: Date.now(),
+          };
+          engineRef.current.setPreviewStroke(temp);
+        } else {
+          engineRef.current.setPreviewStroke(null);
+        }
+        engineRef.current.invalidate();
+        previewRafRef.current = null;
       });
-
-      // Render current stroke being drawn (including eraser preview)
-      if (currentPoints.length > 1) {
-        const tempStroke = {
-          id: "temp",
-          points: currentPoints.map((point) => ({ ...point })),
-          color: canvasStore.currentColor,
-          size:
-            canvasStore.currentBrushStyle === "eraser"
-              ? canvasStore.eraserSize
-              : canvasStore.currentSize,
-          opacity: canvasStore.brushSettings.opacity ?? 1,
-          brushStyle: canvasStore.currentBrushStyle,
-          timestamp: Date.now(),
-        };
-        renderStroke(ctx, tempStroke as IStroke);
-      }
-
-      ctx.restore();
-
-      // Draw background/grid under strokes using destination-over so eraser never affects it
-      if (canvasStore.background === "grid") {
-        // First draw world-grid under content
-        ctx.save();
-        ctx.globalCompositeOperation = "destination-over";
-        ctx.translate(canvasStore.panX, canvasStore.panY);
-        ctx.scale(canvasStore.zoom, canvasStore.zoom);
-        drawWorldGrid(ctx);
-        ctx.restore();
-
-        // Then fill any remaining transparent areas with white under everything
-        ctx.save();
-        ctx.globalCompositeOperation = "destination-over";
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.restore();
-      } else if (canvasStore.background === "white") {
-        ctx.save();
-        ctx.globalCompositeOperation = "destination-over";
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.restore();
-      }
-
-      // Render eraser cursor (after background)
-      renderEraserCursor(ctx);
     }, [
-      canvasStore.strokes,
-      canvasStore.background,
+      engineRef.current,
+      currentPoints,
+      canvasStore.currentBrushStyle,
       canvasStore.currentColor,
       canvasStore.currentSize,
-      canvasStore.currentBrushStyle,
-      canvasStore.zoom,
-      canvasStore.panX,
-      canvasStore.panY,
-      canvasStore.renderVersion, // Add this to force re-renders on undo/redo
-      currentPoints,
-      drawWorldGrid,
-      renderStroke,
-      renderEraserCursor,
+      canvasStore.eraserSize,
+      canvasStore.brushSettings.opacity,
     ]);
 
     useEffect(() => {
@@ -556,11 +173,10 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
       // Prevent browser zoom/scroll if the pointer is over the canvas area, but still let the event reach our canvas handler
       const handleGlobalWheel = (e: WheelEvent) => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
+        const root = rootRef.current;
+        if (!root) return;
         const target = e.target as Node | null;
-        const inside =
-          !!target && (target === canvas || canvas.contains(target));
+        const inside = !!target && (target === root || root.contains(target));
         if (!inside) return;
         if (e.ctrlKey) {
           // Only block default when user is trying to zoom the page
@@ -570,20 +186,16 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
       // Additional prevention for touchstart to prevent pinch gestures
       const handleTouchStart = (e: TouchEvent) => {
-        const canvas = canvasRef.current;
-        if (
-          canvas &&
-          canvas.contains(e.target as Node) &&
-          e.touches.length > 1
-        ) {
+        const root = rootRef.current;
+        if (root && root.contains(e.target as Node) && e.touches.length > 1) {
           e.preventDefault();
         }
       };
 
       // Prevent gesturestart which can trigger zoom
       const handleGestureStart = (e: Event) => {
-        const canvas = canvasRef.current;
-        if (canvas && canvas.contains(e.target as Node)) {
+        const root = rootRef.current;
+        if (root && root.contains(e.target as Node)) {
           e.preventDefault();
         }
       };
@@ -613,11 +225,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     const handlePointerDown = useCallback(
       (e: React.PointerEvent) => {
         e.preventDefault();
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        canvas.focus();
-        canvas.setPointerCapture(e.pointerId);
+        const root = rootRef.current;
+        if (!root) return;
+        root.focus?.();
 
         // Pan mode: middle mouse button or space + left click
         if (
@@ -665,7 +275,16 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             // Erasing will happen on stroke completion
           }
 
-          setCurrentPoints((prev) => [...prev, point]);
+          // Min-distance filter to reduce point density and preview work
+          const MIN_DIST = 0.5; // world units
+          setCurrentPoints((prev) => {
+            const last = prev[prev.length - 1];
+            if (!last) return [point];
+            const dx = point.x - last.x;
+            const dy = point.y - last.y;
+            if (dx * dx + dy * dy < MIN_DIST * MIN_DIST) return prev;
+            return [...prev, point];
+          });
         }
       },
       [
@@ -680,18 +299,14 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
     const handlePointerUp = useCallback(
       (e: React.PointerEvent) => {
-        const canvas = canvasRef.current;
-        if (canvas) {
-          try {
-            canvas.releasePointerCapture(e.pointerId);
-          } catch (error) {
-            // Ignore errors if pointer capture is not active
-            console.debug("Failed to release pointer capture:", error);
-          }
-        }
+        // no pointer capture on root div
 
         if (isDrawing && isDrawingMode) {
           setIsDrawing(false);
+          if (previewRafRef.current) {
+            cancelAnimationFrame(previewRafRef.current);
+            previewRafRef.current = null;
+          }
           if (currentPoints.length > 1) {
             // Add a stroke for both draw and eraser; eraser will be composited out during render
             canvasStore.addStroke({
@@ -727,14 +342,16 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           const newZoom = Math.max(0.1, Math.min(5, canvasStore.zoom * delta));
 
           // Zoom towards mouse position
-          const rect = canvasRef.current?.getBoundingClientRect();
+          const rect = rootRef.current?.getBoundingClientRect();
           if (rect) {
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
 
+            // world from screen: (screen - pan) / zoom
             const worldX = (mouseX - canvasStore.panX) / canvasStore.zoom;
             const worldY = (mouseY - canvasStore.panY) / canvasStore.zoom;
 
+            // keep mouse position stable: screen = newZoom*world + newPan
             const newPanX = mouseX - worldX * newZoom;
             const newPanY = mouseY - worldY * newZoom;
 
@@ -787,16 +404,31 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     const handlePointerLeave = useCallback(() => {
       // Clear mouse position when leaving canvas
       setMousePosition(null);
+      // Hide eraser cursor overlay when leaving
+      engineRef.current?.setCursor({ visible: false });
+
+      // Cancel any pending preview
+      // and clear preview immediately
+      // to avoid ghost previews when leaving
+      // the drawing surface
+      //
+      // Note: engine will also be invalidated
+      // on state changes
+      // so this is safe.
+      //
+      // Cancel RAF if scheduled
+      // and clear engine preview
+      //
+      // Then handle ongoing interactions
+      if (previewRafRef.current) {
+        cancelAnimationFrame(previewRafRef.current);
+        previewRafRef.current = null;
+      }
+      engineRef.current?.setPreviewStroke(null);
 
       // Safely release any pointer capture if present
-      const canvas = canvasRef.current;
-      if (canvas) {
-        try {
-          // We can't know the pointerId here; calling without id isn't allowed.
-          // Instead, just try to release all known captures by blurring.
-          canvas.blur();
-        } catch {}
-      }
+      const root = rootRef.current;
+      root?.blur?.();
 
       // Handle any ongoing drawing interactions
       if (isDrawing && isDrawingMode) {
@@ -833,9 +465,42 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       return "cursor-crosshair";
     };
 
+    // Update overlay eraser cursor on pointer moves and state changes
+    useEffect(() => {
+      const engine = engineRef.current;
+      if (!engine) return;
+      const root = rootRef.current;
+      if (!root) return;
+      if (
+        mousePosition &&
+        isDrawingMode &&
+        canvasStore.currentBrushStyle === "eraser" &&
+        !isPanning &&
+        !spacePressed
+      ) {
+        const rect = root.getBoundingClientRect();
+        engine.setCursor({
+          visible: true,
+          x: mousePosition.x - rect.left,
+          y: mousePosition.y - rect.top,
+          r: (canvasStore.eraserSize * canvasStore.zoom) / 2,
+        });
+      } else {
+        engine.setCursor({ visible: false });
+      }
+    }, [
+      mousePosition,
+      isDrawingMode,
+      canvasStore.currentBrushStyle,
+      canvasStore.eraserSize,
+      canvasStore.zoom,
+      isPanning,
+      spacePressed,
+    ]);
+
     return (
-      <canvas
-        ref={canvasRef}
+      <div
+        ref={rootRef}
         className={`fixed inset-0 touch-none ${getCursorStyle()} ${className}`}
         tabIndex={0}
         onPointerDown={handlePointerDown}
@@ -853,7 +518,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           msUserSelect: "none",
           WebkitTouchCallout: "none",
           WebkitTapHighlightColor: "transparent",
-          // Prevent zoom and pan gestures
+          position: "fixed",
+          inset: 0,
           msContentZooming: "none",
           overscrollBehavior: "none",
           KhtmlUserSelect: "none",

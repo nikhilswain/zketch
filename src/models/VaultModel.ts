@@ -45,6 +45,9 @@ export const VaultModel = types
     isLoading: types.optional(types.boolean, false),
     storageInfo: types.optional(StorageInfo, {}),
   })
+  .volatile(() => ({
+    // no volatile state yet
+  }))
   .views((self) => ({
     get sortedDrawings() {
       return [...self.drawings].sort(
@@ -125,7 +128,7 @@ export const VaultModel = types
         const drawingsData = await DexieService.loadAllDrawings();
         self.clearDrawings();
         drawingsData.forEach((drawingData) => {
-          self.addDrawingToList(drawingData);
+          self.addDrawingToList(drawingData as any);
         });
       } catch (error) {
         console.error("Failed to load from Dexie:", error);
@@ -276,7 +279,7 @@ export const VaultModel = types
         const drawingData = await DexieService.getDrawing(id);
         if (drawingData) {
           // Add to memory for future access
-          self.addDrawingToList(drawingData);
+          self.addDrawingToList(drawingData as any);
           return self.drawings.find((d) => d.id === id) || null;
         }
         return null;
