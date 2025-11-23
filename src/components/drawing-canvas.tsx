@@ -335,43 +335,38 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       (e: React.WheelEvent) => {
         e.preventDefault();
         e.stopPropagation();
+        // mouse wheel event handling for panning and zooming.
 
-        // Handle touchpad pinch zoom (ctrlKey) or regular zoom
-        if (e.ctrlKey || Math.abs(e.deltaY) > 50) {
-          const delta = e.deltaY > 0 ? 0.9 : 1.1;
-          const newZoom = Math.max(0.1, Math.min(5, canvasStore.zoom * delta));
-
-          // Zoom towards mouse position
+        if (e.ctrlKey) {
+          // Zooming branch (supports pinch zoom because browsers synthesize ctrlKey)
+          const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+          const newZoom = Math.max(
+            0.1,
+            Math.min(5, canvasStore.zoom * zoomFactor)
+          );
           const rect = rootRef.current?.getBoundingClientRect();
           if (rect) {
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
-
-            // world from screen: (screen - pan) / zoom
             const worldX = (mouseX - canvasStore.panX) / canvasStore.zoom;
             const worldY = (mouseY - canvasStore.panY) / canvasStore.zoom;
-
-            // keep mouse position stable: screen = newZoom*world + newPan
             const newPanX = mouseX - worldX * newZoom;
             const newPanY = mouseY - worldY * newZoom;
-
             canvasStore.setZoom(newZoom);
             canvasStore.setPan(newPanX, newPanY);
           }
-        } else {
-          // Determine axis lock: if Shift is held, lock to horizontal using vertical wheel
-          // Keep the lock briefly to absorb inertial/momentum after Shift release
-          const recentlyShifted =
-            performance.now() - lastShiftUpTsRef.current < 600;
-          const nowLock =
-            e.shiftKey || shiftDownRef.current || recentlyShifted
-              ? "horizontal"
-              : "none";
-          if (nowLock === "horizontal") {
-            wheelAxisLockRef.current = "horizontal";
-          }
+          return;
+        }
 
-          // Clear/restart lock timeout
+        // Panning branch
+        const recentlyShifted =
+          performance.now() - lastShiftUpTsRef.current < 600;
+        const horizontalPanActive =
+          e.shiftKey || shiftDownRef.current || recentlyShifted;
+
+        // Maintain axis lock for momentum (reuse existing timers if we want extended behavior)
+        if (horizontalPanActive) {
+          wheelAxisLockRef.current = "horizontal";
           if (wheelAxisResetTimerRef.current) {
             window.clearTimeout(wheelAxisResetTimerRef.current);
           }
@@ -379,19 +374,20 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             wheelAxisLockRef.current = "none";
             wheelAxisResetTimerRef.current = null;
           }, 600);
+        }
 
-          const lock = wheelAxisLockRef.current;
-          if (lock === "horizontal") {
-            canvasStore.setPan(
-              canvasStore.panX - e.deltaY * 0.5,
-              canvasStore.panY
-            );
-          } else {
-            canvasStore.setPan(
-              canvasStore.panX - e.deltaX * 0.5,
-              canvasStore.panY - e.deltaY * 0.5
-            );
-          }
+        if (wheelAxisLockRef.current === "horizontal") {
+          // Horizontal pan: use deltaY to move X (natural feel: scroll down moves right => subtract)
+          canvasStore.setPan(
+            canvasStore.panX - e.deltaY * 0.5,
+            canvasStore.panY
+          );
+        } else {
+          // Vertical + incidental horizontal from trackpads: prioritize vertical scroll for panY
+          // Use deltaX for sideways pan only if present (trackpad gesture)
+          const nextPanX = canvasStore.panX - e.deltaX * 0.5;
+          const nextPanY = canvasStore.panY - e.deltaY * 0.5;
+          canvasStore.setPan(nextPanX, nextPanY);
         }
       },
       [canvasStore]
