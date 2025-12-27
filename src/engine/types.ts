@@ -16,6 +16,15 @@ export interface StrokeLike {
   timestamp: number;
 }
 
+export interface LayerLike {
+  id: string;
+  name: string;
+  strokes: StrokeLike[];
+  visible: boolean;
+  locked: boolean;
+  opacity: number;
+}
+
 export interface BrushOptions {
   size: number;
   thinning?: number;
@@ -38,6 +47,10 @@ export interface Brush {
 export interface EngineConfig {
   background: "white" | "transparent" | "grid";
   getStrokes(): StrokeLike[];
+  // New: provide layers for multi-layer rendering
+  getLayers?: () => LayerLike[];
+  // Which layer is currently active (for visual indication)
+  getActiveLayerId?: () => string;
   // Optional: provide per-brush rendering options (size, smoothing, taper, etc.)
   getBrushOptions?: (
     brush: BrushStyle,

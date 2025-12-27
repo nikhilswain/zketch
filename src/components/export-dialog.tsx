@@ -23,10 +23,21 @@ interface ExportDialogProps {
   strokes: IStroke[];
   background: BackgroundType;
   drawingName: string;
+  layerCount?: number;
+  onFlattenLayers?: () => void;
 }
 
 const ExportDialog: React.FC<ExportDialogProps> = observer(
-  ({ isOpen, onClose, onExport, strokes, background, drawingName }) => {
+  ({
+    isOpen,
+    onClose,
+    onExport,
+    strokes,
+    background,
+    drawingName,
+    layerCount = 1,
+    onFlattenLayers,
+  }) => {
     const settingsStore = useSettingsStore();
     const [previewDataUrl, setPreviewDataUrl] = useState<string>("");
     const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
@@ -159,10 +170,34 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
             </DialogTitle>
           </DialogHeader>
 
+          {/* Layers Warning */}
+          {layerCount > 1 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-amber-600 text-sm">
+                  📋 You have {layerCount} layers. Export will combine all
+                  visible layers.
+                </span>
+              </div>
+              {onFlattenLayers && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onFlattenLayers}
+                  className="text-amber-700 border-amber-300 hover:bg-amber-100"
+                >
+                  Flatten First
+                </Button>
+              )}
+            </div>
+          )}
+
           <div className="flex gap-6 h-full">
             {/* Left side - Preview */}
             <div className="flex-1 flex flex-col">
-              <Label className="text-sm font-medium mb-3">Preview</Label>
+              <Label className="text-sm font-medium mb-3">
+                Preview (All Visible Layers)
+              </Label>
               <div className="flex-1 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center min-h-[300px]">
                 {isGeneratingPreview ? (
                   <div className="text-center">

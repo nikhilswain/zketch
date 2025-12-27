@@ -1,10 +1,11 @@
 import type React from "react";
 import { useRef, useEffect, useState, useCallback } from "react";
 import { observer } from "mobx-react-lite";
+import { getSnapshot } from "mobx-state-tree";
 import { useCanvasStore } from "../hooks/useStores";
 import type { IPoint, IStroke } from "@/models/CanvasModel";
 import { CanvasEngine } from "@/engine";
-import type { StrokeLike } from "@/engine";
+import type { StrokeLike, LayerLike } from "@/engine";
 import { createGetBrushOptions } from "@/engine/brushOptions";
 
 interface DrawingCanvasProps {
@@ -45,6 +46,29 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       const engine = new CanvasEngine(root, {
         background: canvasStore.background as any,
         getStrokes: () => canvasStore.strokes as unknown as StrokeLike[],
+        // Provide layers for multi-layer rendering - use snapshots to avoid MST detachment issues
+        getLayers: () => {
+          if (canvasStore.layers.length === 0) return [];
+          // Use getSnapshot to get plain data and avoid accessing detached MST nodes
+          try {
+            return canvasStore.layers.map((layer) => {
+              const snapshot = getSnapshot(layer);
+              return {
+                id: snapshot.id,
+                name: snapshot.name,
+                strokes: snapshot.strokes as unknown as StrokeLike[],
+                visible: snapshot.visible,
+                locked: snapshot.locked,
+                opacity: snapshot.opacity,
+              };
+            });
+          } catch (e) {
+            // If layers are being reordered, return empty to avoid crash
+            console.warn("Layer access during transition:", e);
+            return [];
+          }
+        },
+        getActiveLayerId: () => canvasStore.activeLayerId,
         // Use a dynamic brush options builder bound to the latest settings
         getBrushOptions: (brush, size) =>
           createGetBrushOptions(canvasStore.brushSettings as any)(
@@ -308,8 +332,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             previewRafRef.current = null;
           }
           if (currentPoints.length > 1) {
-            // Add a stroke for both draw and eraser; eraser will be composited out during render
-            canvasStore.addStroke({
+            // Add a stroke to the active layer (or legacy strokes if no layers)
+            const strokeData = {
               id: crypto.randomUUID(),
               points: currentPoints.map((point) => ({ ...point })),
               color: canvasStore.currentColor,
@@ -320,7 +344,14 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               opacity: canvasStore.brushSettings.opacity ?? 1,
               brushStyle: canvasStore.currentBrushStyle,
               timestamp: Date.now(),
-            });
+            };
+
+            // Use layer-aware stroke addition if layers exist
+            if (canvasStore.hasLayers) {
+              canvasStore.addStrokeToActiveLayer(strokeData);
+            } else {
+              canvasStore.addStroke(strokeData);
+            }
           }
           setCurrentPoints([]);
         } else if (isPanning) {
@@ -442,7 +473,13 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             brushStyle: canvasStore.currentBrushStyle,
             timestamp: Date.now(),
           } as IStroke;
-          canvasStore.addStroke(stroke);
+
+          // Use layer-aware stroke addition if layers exist
+          if (canvasStore.hasLayers) {
+            canvasStore.addStrokeToActiveLayer(stroke as any);
+          } else {
+            canvasStore.addStroke(stroke);
+          }
         }
         setCurrentPoints([]);
       }

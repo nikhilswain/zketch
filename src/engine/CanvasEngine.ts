@@ -6,6 +6,7 @@ import type {
   Brush,
   BrushStyle,
   EngineConfig,
+  LayerLike,
   PanZoom,
   StrokeLike,
 } from "./types";
@@ -158,23 +159,66 @@ export class CanvasEngine {
     // This matches screen = zoom * world + pan
     ctx.translate(this.pz.panX, this.pz.panY);
     ctx.scale(this.pz.zoom, this.pz.zoom);
-    const strokes = this.config.getStrokes();
-    for (const s of strokes) this.renderStroke(ctx, s);
-    if (this.preview) this.renderStroke(ctx, this.preview);
+
+    // Check if we have layers to render
+    const layers = this.config.getLayers?.();
+    if (layers && layers.length > 0) {
+      // Render layers from bottom to top
+      for (const layer of layers) {
+        this.renderLayer(ctx, layer);
+      }
+    } else {
+      // Fallback to legacy stroke rendering
+      const strokes = this.config.getStrokes();
+      for (const s of strokes) this.renderStroke(ctx, s, 1);
+    }
+
+    // Always render preview stroke on top
+    if (this.preview) this.renderStroke(ctx, this.preview, 1);
     ctx.restore();
   }
 
-  private renderStroke(ctx: CanvasRenderingContext2D, s: StrokeLike) {
-    const composite =
-      s.brushStyle === "eraser" ? "destination-out" : "source-over";
-    const prev = ctx.globalCompositeOperation;
-    ctx.globalCompositeOperation = composite as GlobalCompositeOperation;
+  private renderLayer(ctx: CanvasRenderingContext2D, layer: LayerLike) {
+    // Skip invisible layers
+    if (!layer.visible) return;
+
+    // Save context state for layer-level transformations
+    ctx.save();
+
+    // Apply layer opacity
+    ctx.globalAlpha = layer.opacity;
+
+    // Render all strokes in this layer
+    for (const stroke of layer.strokes) {
+      this.renderStroke(ctx, stroke, layer.opacity);
+    }
+
+    ctx.restore();
+  }
+
+  private renderStroke(
+    ctx: CanvasRenderingContext2D,
+    s: StrokeLike,
+    layerOpacity: number
+  ) {
+    // For eraser strokes, use destination-out composite
+    const isEraser = s.brushStyle === "eraser";
+    const prevComposite = ctx.globalCompositeOperation;
+
+    if (isEraser) {
+      ctx.globalCompositeOperation = "destination-out";
+    }
+
     const key: BrushStyle = s.brushStyle === "eraser" ? "ink" : s.brushStyle;
     const brush = this.registry.get(key);
     if (!brush) return;
+
     const opts = this.config.getBrushOptions?.(key, s.size);
     brush.render(ctx, s, opts);
-    ctx.globalCompositeOperation = prev;
+
+    if (isEraser) {
+      ctx.globalCompositeOperation = prevComposite;
+    }
   }
 
   private renderOverlay() {

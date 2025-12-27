@@ -6,40 +6,20 @@ import {
   getSnapshot,
   isStateTreeNode,
 } from "mobx-state-tree";
-
-export const Point = types.model("Point", {
-  x: types.number,
-  y: types.number,
-  pressure: types.optional(types.number, 1),
-});
-
-export const Stroke = types.model("Stroke", {
-  id: types.identifier,
-  points: types.array(Point),
-  color: types.string,
-  size: types.number,
-  opacity: types.optional(types.number, 1),
-  brushStyle: types.enumeration("BrushStyle", [
-    "ink",
-    "eraser",
-    "spray",
-    "texture",
-  ]),
-  timestamp: types.number,
-});
-
-export const BrushSettings = types.model("BrushSettings", {
-  thinning: types.optional(types.number, 0.5),
-  smoothing: types.optional(types.number, 0.5),
-  streamline: types.optional(types.number, 0.5),
-  taperStart: types.optional(types.number, 30),
-  taperEnd: types.optional(types.number, 30),
-  easing: types.optional(types.string, "linear"),
-  opacity: types.optional(types.number, 1),
-});
+import {
+  Layer,
+  createLayerId,
+  createDefaultLayer,
+  type ILayerSnapshot,
+} from "./LayerModel";
+// Import shared models and re-export for backward compatibility
+import { Point, Stroke, BrushSettings } from "./SharedModels";
+export { Point, Stroke, BrushSettings } from "./SharedModels";
 
 export const CanvasState = types.model("CanvasState", {
   strokes: types.array(Stroke),
+  layers: types.optional(types.array(Layer), []),
+  activeLayerId: types.optional(types.string, ""),
   background: types.enumeration("BackgroundType", [
     "white",
     "transparent",
@@ -52,7 +32,16 @@ export const CanvasState = types.model("CanvasState", {
 
 export const CanvasModel = types
   .model("CanvasModel", {
+    // Legacy strokes array - maintained for backward compatibility
     strokes: types.optional(types.array(Stroke), []),
+    // New layers system
+    layers: types.optional(types.array(Layer), []),
+    activeLayerId: types.optional(types.string, ""),
+    // Layer display mode: "normal" shows individual layers, "flattened" shows merged result
+    layerDisplayMode: types.optional(
+      types.enumeration("LayerDisplayMode", ["normal", "flattened"]),
+      "normal"
+    ),
     currentColor: types.optional(types.string, "#000000"),
     currentSize: types.optional(types.number, 4),
     eraserSize: types.optional(types.number, 20),
@@ -85,7 +74,45 @@ export const CanvasModel = types
       return self.historyIndex < self.history.length - 1;
     },
     get isEmpty() {
-      return self.strokes.length === 0;
+      // Check both legacy strokes and all layer strokes
+      if (self.strokes.length > 0) return false;
+      return self.layers.every((layer) => layer.strokes.length === 0);
+    },
+    // Get the currently active layer
+    get activeLayer() {
+      return self.layers.find((l) => l.id === self.activeLayerId) || null;
+    },
+    // Get all layers in render order (bottom to top)
+    get sortedLayers() {
+      return self.layers.slice();
+    },
+    // Get visible layers only
+    get visibleLayers() {
+      return self.layers.filter((l) => l.visible);
+    },
+    // Check if we have any layers
+    get hasLayers() {
+      return self.layers.length > 0;
+    },
+    // Get the layer count
+    get layerCount() {
+      return self.layers.length;
+    },
+    // Get flattened strokes from all visible layers (for export/preview)
+    get flattenedStrokes() {
+      const allStrokes: SnapshotOut<typeof Stroke>[] = [];
+      for (const layer of self.layers) {
+        if (layer.visible) {
+          for (const stroke of layer.strokes) {
+            allStrokes.push(getSnapshot(stroke));
+          }
+        }
+      }
+      // Also include legacy strokes if any
+      for (const stroke of self.strokes) {
+        allStrokes.push(getSnapshot(stroke));
+      }
+      return allStrokes;
     },
     // Always use optimized advanced eraser for consistency
     get eraserMode(): "advanced" | "composite" {
@@ -122,6 +149,27 @@ export const CanvasModel = types
           brushStyle: stroke.brushStyle,
           timestamp: stroke.timestamp,
         })),
+        layers: self.layers.map((layer) => ({
+          id: layer.id,
+          name: layer.name,
+          visible: layer.visible,
+          locked: layer.locked,
+          opacity: layer.opacity,
+          strokes: layer.strokes.map((stroke) => ({
+            id: stroke.id,
+            points: stroke.points.map((p) => ({
+              x: p.x,
+              y: p.y,
+              pressure: p.pressure,
+            })),
+            color: stroke.color,
+            size: stroke.size,
+            opacity: (stroke as any).opacity ?? 1,
+            brushStyle: stroke.brushStyle,
+            timestamp: stroke.timestamp,
+          })),
+        })),
+        activeLayerId: self.activeLayerId,
         background: self.background,
         zoom: self.zoom,
         panX: self.panX,
@@ -133,7 +181,7 @@ export const CanvasModel = types
         self.history = self.history.slice(0, self.historyIndex + 1);
       }
 
-      self.history.push(state);
+      self.history.push(state as any);
       self.historyIndex = self.history.length - 1;
 
       // Limit history size
@@ -166,6 +214,16 @@ export const CanvasModel = types
       self.strokes.replace(
         state.strokes.map((strokeData) => Stroke.create(strokeData))
       );
+
+      // Update layers if present in state
+      if (state.layers) {
+        self.layers.replace(
+          state.layers.map((layerData) => Layer.create(layerData as any))
+        );
+      }
+      if (state.activeLayerId !== undefined) {
+        self.activeLayerId = state.activeLayerId;
+      }
 
       self.background = state.background as any;
       self.zoom = state.zoom;
@@ -350,6 +408,284 @@ export const CanvasModel = types
       },
       setEraserMode(useAdvancedForAll: boolean) {
         self.useAdvancedEraserForAllBackgrounds = useAdvancedForAll;
+      },
+
+      // ===== Layer Management Actions =====
+
+      // Initialize layers with a default layer if none exist
+      initializeLayers() {
+        if (self.layers.length === 0) {
+          const defaultLayer = createDefaultLayer("Layer 1");
+          self.layers.push(Layer.create(defaultLayer as any));
+          self.activeLayerId = defaultLayer.id;
+          self.renderVersion++;
+        }
+      },
+
+      // Add a new layer
+      addLayer(name?: string) {
+        const newLayer = createDefaultLayer(
+          name || `Layer ${self.layers.length + 1}`
+        );
+        self.layers.push(Layer.create(newLayer as any));
+        self.activeLayerId = newLayer.id;
+        self.saveToHistory();
+        self.renderVersion++;
+        return newLayer.id;
+      },
+
+      // Remove a layer by ID
+      removeLayer(layerId: string) {
+        const index = self.layers.findIndex((l) => l.id === layerId);
+        if (index === -1) return;
+
+        // Don't allow removing the last layer
+        if (self.layers.length === 1) return;
+
+        self.layers.splice(index, 1);
+
+        // If we removed the active layer, select another one
+        if (self.activeLayerId === layerId) {
+          self.activeLayerId =
+            self.layers[Math.min(index, self.layers.length - 1)]?.id || "";
+        }
+
+        self.saveToHistory();
+        self.renderVersion++;
+      },
+
+      // Set the active layer
+      setActiveLayer(layerId: string) {
+        const layer = self.layers.find((l) => l.id === layerId);
+        if (layer) {
+          self.activeLayerId = layerId;
+          self.renderVersion++;
+        }
+      },
+
+      // Move layer to a new position (index)
+      moveLayer(layerId: string, newIndex: number) {
+        const currentIndex = self.layers.findIndex((l) => l.id === layerId);
+        if (currentIndex === -1) return;
+        if (newIndex < 0 || newIndex >= self.layers.length) return;
+        if (currentIndex === newIndex) return;
+
+        const [layer] = self.layers.splice(currentIndex, 1);
+        self.layers.splice(newIndex, 0, layer);
+
+        self.saveToHistory();
+        self.renderVersion++;
+      },
+
+      // Move layer up (towards the top/front) - swap with the layer above
+      moveLayerUp(layerId: string) {
+        const currentIndex = self.layers.findIndex((l) => l.id === layerId);
+        if (currentIndex === -1 || currentIndex === self.layers.length - 1)
+          return;
+
+        // Use move instead of splice to avoid detaching nodes
+        // swap current layer with the one above it
+        const targetIndex = currentIndex + 1;
+        
+        // Get snapshots of both layers
+        const currentLayerSnapshot = getSnapshot(self.layers[currentIndex]);
+        const targetLayerSnapshot = getSnapshot(self.layers[targetIndex]);
+        
+        // Replace in place to avoid detachment issues
+        self.layers[currentIndex] = Layer.create(targetLayerSnapshot as any);
+        self.layers[targetIndex] = Layer.create(currentLayerSnapshot as any);
+
+        self.renderVersion++;
+      },
+
+      // Move layer down (towards the bottom/back) - swap with the layer below
+      moveLayerDown(layerId: string) {
+        const currentIndex = self.layers.findIndex((l) => l.id === layerId);
+        if (currentIndex <= 0) return;
+
+        const targetIndex = currentIndex - 1;
+        
+        // Get snapshots of both layers
+        const currentLayerSnapshot = getSnapshot(self.layers[currentIndex]);
+        const targetLayerSnapshot = getSnapshot(self.layers[targetIndex]);
+        
+        // Replace in place to avoid detachment issues
+        self.layers[currentIndex] = Layer.create(targetLayerSnapshot as any);
+        self.layers[targetIndex] = Layer.create(currentLayerSnapshot as any);
+
+        self.renderVersion++;
+      },
+
+      // Rename a layer
+      renameLayer(layerId: string, name: string) {
+        const layer = self.layers.find((l) => l.id === layerId);
+        if (layer) {
+          layer.setName(name);
+          self.renderVersion++;
+        }
+      },
+
+      // Toggle layer visibility
+      toggleLayerVisibility(layerId: string) {
+        const layer = self.layers.find((l) => l.id === layerId);
+        if (layer) {
+          layer.toggleVisible();
+          self.renderVersion++;
+        }
+      },
+
+      // Toggle layer lock
+      toggleLayerLock(layerId: string) {
+        const layer = self.layers.find((l) => l.id === layerId);
+        if (layer) {
+          layer.toggleLocked();
+          self.renderVersion++;
+        }
+      },
+
+      // Set layer opacity
+      setLayerOpacity(layerId: string, opacity: number) {
+        const layer = self.layers.find((l) => l.id === layerId);
+        if (layer) {
+          layer.setOpacity(opacity);
+          self.renderVersion++;
+        }
+      },
+
+      // Add a stroke to the active layer
+      addStrokeToActiveLayer(strokeData: SnapshotIn<typeof Stroke>) {
+        const activeLayer = self.layers.find(
+          (l) => l.id === self.activeLayerId
+        );
+        if (activeLayer && !activeLayer.locked) {
+          activeLayer.addStroke(strokeData);
+          self.saveToHistory();
+          self.renderVersion++;
+        } else if (!activeLayer && self.layers.length === 0) {
+          // Fallback to legacy strokes if no layers exist
+          self.addStrokeToModel(strokeData);
+          self.saveToHistory();
+          self.renderVersion++;
+        }
+      },
+
+      // Clear strokes from the active layer
+      clearActiveLayer() {
+        const activeLayer = self.layers.find(
+          (l) => l.id === self.activeLayerId
+        );
+        if (activeLayer && !activeLayer.locked) {
+          activeLayer.clearStrokes();
+          self.saveToHistory();
+          self.renderVersion++;
+        }
+      },
+
+      // Duplicate a layer
+      duplicateLayer(layerId: string) {
+        const layer = self.layers.find((l) => l.id === layerId);
+        if (!layer) return;
+
+        const newLayerId = createLayerId();
+        const newLayer = Layer.create({
+          id: newLayerId,
+          name: `${layer.name} Copy`,
+          visible: layer.visible,
+          locked: false,
+          opacity: layer.opacity,
+          strokes: getSnapshot(layer.strokes) as any,
+        });
+
+        const index = self.layers.findIndex((l) => l.id === layerId);
+        self.layers.splice(index + 1, 0, newLayer);
+        self.activeLayerId = newLayerId;
+
+        self.saveToHistory();
+        self.renderVersion++;
+        return newLayerId;
+      },
+
+      // Merge visible layers into a single layer
+      mergeVisibleLayers() {
+        const visibleLayers = self.layers.filter((l) => l.visible);
+        if (visibleLayers.length < 2) return;
+
+        const allStrokes: SnapshotIn<typeof Stroke>[] = [];
+        for (const layer of visibleLayers) {
+          for (const stroke of layer.strokes) {
+            allStrokes.push(getSnapshot(stroke));
+          }
+        }
+
+        // Create a new merged layer
+        const mergedLayerId = createLayerId();
+        const mergedLayer = Layer.create({
+          id: mergedLayerId,
+          name: "Merged Layer",
+          visible: true,
+          locked: false,
+          opacity: 1,
+          strokes: allStrokes as any,
+        });
+
+        // Remove all visible layers and add the merged one
+        const hiddenLayers = self.layers.filter((l) => !l.visible);
+        self.layers.replace([
+          ...hiddenLayers.map((l) => Layer.create(getSnapshot(l) as any)),
+          mergedLayer,
+        ]);
+        self.activeLayerId = mergedLayerId;
+
+        self.saveToHistory();
+        self.renderVersion++;
+        return mergedLayerId;
+      },
+
+      // Flatten all layers into one
+      flattenAllLayers() {
+        if (self.layers.length < 1) return;
+
+        const allStrokes: SnapshotIn<typeof Stroke>[] = [];
+        for (const layer of self.layers) {
+          if (layer.visible) {
+            for (const stroke of layer.strokes) {
+              allStrokes.push(getSnapshot(stroke));
+            }
+          }
+        }
+
+        // Create a single flattened layer
+        const flattenedLayerId = createLayerId();
+        const flattenedLayer = Layer.create({
+          id: flattenedLayerId,
+          name: "Flattened",
+          visible: true,
+          locked: false,
+          opacity: 1,
+          strokes: allStrokes as any,
+        });
+
+        self.layers.replace([flattenedLayer]);
+        self.activeLayerId = flattenedLayerId;
+
+        self.saveToHistory();
+        self.renderVersion++;
+        return flattenedLayerId;
+      },
+
+      // Toggle layer display mode (normal vs flattened preview)
+      setLayerDisplayMode(mode: "normal" | "flattened") {
+        self.layerDisplayMode = mode;
+        self.renderVersion++;
+      },
+
+      // Clear all layers (for new document)
+      clearAllLayers() {
+        self.layers.clear();
+        self.activeLayerId = "";
+        self.strokes.clear();
+        self.saveToHistory();
+        self.renderVersion++;
       },
     };
   });

@@ -13,10 +13,11 @@ import Sidebar from "./slider";
 import DrawingCanvas from "./drawing-canvas";
 import FloatingDock from "./floating-dock";
 import ExportDialog from "./export-dialog";
+import LayersPanel from "./layers-panel";
 import { ExportService } from "@/services/ExportService";
 import { ThumbnailService } from "@/services/ThumbnailService";
 import { Button } from "./ui/button";
-import { ArrowLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronRight, ChevronLeft, Layers } from "lucide-react";
 import type { ExportFormat } from "@/models/SettingsModel";
 import type { BackgroundType } from "@/models/CanvasModel";
 import { toast } from "sonner";
@@ -35,6 +36,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     const [isDrawingMode, setIsDrawingMode] = useState(true);
     const [showExportDialog, setShowExportDialog] = useState(false);
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    const [layersPanelCollapsed, setLayersPanelCollapsed] = useState(false);
 
     useEffect(() => {
       canvasStore.clearHistory();
@@ -71,46 +73,41 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     const handleSave = async () => {
       if (canvasStore.isEmpty) return;
 
+      // Get all strokes from visible layers for thumbnail and saving
+      const allStrokes = canvasStore.flattenedStrokes;
+
       const thumbnail = ThumbnailService.generateThumbnail(
-        canvasStore.strokes,
+        allStrokes as any,
         canvasStore.background,
         200,
         150
       );
 
+      // Map strokes to save format
+      const strokesToSave = allStrokes.map((stroke) => ({
+        id: stroke.id,
+        points: stroke.points.map((p) => ({
+          x: p.x,
+          y: p.y,
+          pressure: p.pressure,
+        })),
+        color: stroke.color,
+        size: stroke.size,
+        brushStyle: stroke.brushStyle,
+        timestamp: stroke.timestamp,
+      }));
+
       if (editingDrawingId) {
         await vaultStore.updateDrawing(
           editingDrawingId,
-          canvasStore.strokes.map((stroke) => ({
-            id: stroke.id,
-            points: stroke.points.map((p) => ({
-              x: p.x,
-              y: p.y,
-              pressure: p.pressure,
-            })),
-            color: stroke.color,
-            size: stroke.size,
-            brushStyle: stroke.brushStyle,
-            timestamp: stroke.timestamp,
-          })),
+          strokesToSave as any,
           thumbnail,
           canvasStore.background as any
         );
       } else {
         await vaultStore.addDrawing(
           drawingName,
-          canvasStore.strokes.map((stroke) => ({
-            id: stroke.id,
-            points: stroke.points.map((p) => ({
-              x: p.x,
-              y: p.y,
-              pressure: p.pressure,
-            })),
-            color: stroke.color,
-            size: stroke.size,
-            brushStyle: stroke.brushStyle,
-            timestamp: stroke.timestamp,
-          })),
+          strokesToSave as any,
           thumbnail,
           canvasStore.background as any
         );
@@ -125,11 +122,13 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
       try {
         let dataUrl: string;
         const exportSize = { width: 1920, height: 1080 };
+        // Get all strokes from visible layers for export
+        const allStrokes = canvasStore.flattenedStrokes;
 
         switch (format) {
           case "png":
             dataUrl = await ExportService.exportToPNG(
-              canvasStore.strokes,
+              allStrokes as any,
               canvasStore.background as BackgroundType,
               exportSize.width,
               exportSize.height,
@@ -138,7 +137,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             break;
           case "jpg":
             dataUrl = await ExportService.exportToJPG(
-              canvasStore.strokes,
+              allStrokes as any,
               canvasStore.background as BackgroundType,
               exportSize.width,
               exportSize.height,
@@ -147,7 +146,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             break;
           case "svg":
             dataUrl = await ExportService.exportToSVG(
-              canvasStore.strokes,
+              allStrokes as any,
               canvasStore.background as BackgroundType,
               exportSize.width,
               exportSize.height,
@@ -232,6 +231,43 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         {/* Full-screen canvas */}
         <DrawingCanvas isDrawingMode={isDrawingMode} />
 
+        {/* Layers Panel - Right side */}
+        <div
+          className={`fixed top-20 right-4 transition-all duration-300 z-10 ${
+            layersPanelCollapsed ? "w-10" : "w-64"
+          }`}
+        >
+          {layersPanelCollapsed ? (
+            <div className="bg-white/90 backdrop-blur-sm border border-gray-200 rounded-lg shadow-lg">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setLayersPanelCollapsed(false)}
+                className="p-2 w-full flex items-center justify-center"
+                title="Show Layers Panel"
+              >
+                <Layers className="w-4 h-4 mr-1" />
+                <ChevronLeft className="w-3 h-3" />
+              </Button>
+            </div>
+          ) : (
+            <div className="bg-white/90 backdrop-blur-sm border border-gray-200 rounded-lg shadow-lg">
+              <div className="flex items-center justify-end p-1 border-b border-gray-200">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setLayersPanelCollapsed(true)}
+                  className="p-1 h-6 w-6"
+                  title="Hide Layers Panel"
+                >
+                  <ChevronRight className="w-3 h-3" />
+                </Button>
+              </div>
+              <LayersPanel />
+            </div>
+          )}
+        </div>
+
         {/* Floating dock */}
         <FloatingDock
           isDrawingMode={isDrawingMode}
@@ -243,9 +279,11 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           isOpen={showExportDialog}
           onClose={() => setShowExportDialog(false)}
           onExport={handleExport}
-          strokes={canvasStore.strokes}
+          strokes={canvasStore.flattenedStrokes as any}
           background={canvasStore.background as BackgroundType}
           drawingName={drawingName}
+          layerCount={canvasStore.layerCount}
+          onFlattenLayers={() => canvasStore.flattenAllLayers()}
         />
       </div>
     );
