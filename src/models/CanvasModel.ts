@@ -486,11 +486,11 @@ export const CanvasModel = types
         // Use move instead of splice to avoid detaching nodes
         // swap current layer with the one above it
         const targetIndex = currentIndex + 1;
-        
+
         // Get snapshots of both layers
         const currentLayerSnapshot = getSnapshot(self.layers[currentIndex]);
         const targetLayerSnapshot = getSnapshot(self.layers[targetIndex]);
-        
+
         // Replace in place to avoid detachment issues
         self.layers[currentIndex] = Layer.create(targetLayerSnapshot as any);
         self.layers[targetIndex] = Layer.create(currentLayerSnapshot as any);
@@ -504,11 +504,11 @@ export const CanvasModel = types
         if (currentIndex <= 0) return;
 
         const targetIndex = currentIndex - 1;
-        
+
         // Get snapshots of both layers
         const currentLayerSnapshot = getSnapshot(self.layers[currentIndex]);
         const targetLayerSnapshot = getSnapshot(self.layers[targetIndex]);
-        
+
         // Replace in place to avoid detachment issues
         self.layers[currentIndex] = Layer.create(targetLayerSnapshot as any);
         self.layers[targetIndex] = Layer.create(currentLayerSnapshot as any);

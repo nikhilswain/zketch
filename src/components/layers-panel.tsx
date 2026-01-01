@@ -57,7 +57,7 @@ function generateLayerThumbnail(
     minY = Infinity,
     maxX = -Infinity,
     maxY = -Infinity;
-  
+
   for (let i = 0; i < maxStrokesToCheck; i++) {
     const stroke = strokes[i];
     for (const p of stroke.points) {
@@ -78,8 +78,10 @@ function generateLayerThumbnail(
     (width - padding * 2) / contentWidth,
     (height - padding * 2) / contentHeight
   );
-  const offsetX = padding + (width - padding * 2 - contentWidth * scale) / 2 - minX * scale;
-  const offsetY = padding + (height - padding * 2 - contentHeight * scale) / 2 - minY * scale;
+  const offsetX =
+    padding + (width - padding * 2 - contentWidth * scale) / 2 - minX * scale;
+  const offsetY =
+    padding + (height - padding * 2 - contentHeight * scale) / 2 - minY * scale;
 
   ctx.save();
   ctx.translate(offsetX, offsetY);
@@ -101,7 +103,7 @@ function generateLayerThumbnail(
 
     const pts = stroke.points;
     ctx.moveTo(pts[0].x, pts[0].y);
-    
+
     // Sample points for very long strokes
     const step = pts.length > 100 ? Math.floor(pts.length / 50) : 1;
     for (let j = step; j < pts.length; j += step) {
@@ -164,13 +166,13 @@ const LayerItem: React.FC<LayerItemProps> = observer(
     // Use snapshot to avoid MST detachment issues during reordering
     const strokeCount = layer.strokes.length;
     const layerId = layer.id;
-    
+
     useEffect(() => {
       // Clear any pending thumbnail generation
       if (thumbnailTimeoutRef.current) {
         clearTimeout(thumbnailTimeoutRef.current);
       }
-      
+
       // Debounce thumbnail generation to prevent hanging on rapid updates
       thumbnailTimeoutRef.current = setTimeout(() => {
         try {
@@ -186,7 +188,7 @@ const LayerItem: React.FC<LayerItemProps> = observer(
           console.warn("Thumbnail generation skipped:", e);
         }
       }, 150);
-      
+
       return () => {
         if (thumbnailTimeoutRef.current) {
           clearTimeout(thumbnailTimeoutRef.current);
