@@ -742,6 +742,47 @@ export const CanvasModel = types
         self.layers.clear();
         self.activeLayerId = "";
         self.strokes.clear();
+        self.focusedLayerId = null;
+        self.saveToHistory();
+        self.renderVersion++;
+      },
+
+      // Load layers from saved drawing data
+      loadLayers(
+        layersData: Array<{
+          id: string;
+          name: string;
+          visible: boolean;
+          locked: boolean;
+          opacity: number;
+          strokes: SnapshotIn<typeof Stroke>[];
+        }>,
+        activeLayerId?: string
+      ) {
+        // Clear existing layers
+        self.layers.clear();
+        self.focusedLayerId = null;
+
+        // Add each layer from saved data
+        layersData.forEach((layerData) => {
+          const layer = Layer.create({
+            id: layerData.id,
+            name: layerData.name,
+            visible: layerData.visible,
+            locked: layerData.locked,
+            opacity: layerData.opacity,
+            strokes: layerData.strokes as any,
+          });
+          self.layers.push(layer);
+        });
+
+        // Set active layer
+        if (activeLayerId && self.layers.find((l) => l.id === activeLayerId)) {
+          self.activeLayerId = activeLayerId;
+        } else if (self.layers.length > 0) {
+          self.activeLayerId = self.layers[0].id;
+        }
+
         self.saveToHistory();
         self.renderVersion++;
       },

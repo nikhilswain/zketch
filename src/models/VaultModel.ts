@@ -1,33 +1,66 @@
 import { types, type Instance, type SnapshotIn } from "mobx-state-tree";
 import { DexieService } from "@/services/DexieService";
 import { Stroke } from "./CanvasModel";
+import { Layer } from "./LayerModel";
+
+// Stroke data interface for persistence
+export interface IStrokeData {
+  id: string;
+  points: Array<{
+    x: number;
+    y: number;
+    pressure: number;
+  }>;
+  color: string;
+  size: number;
+  opacity?: number;
+  brushStyle: string;
+  timestamp: number;
+}
+
+// Layer data interface for persistence
+export interface ILayerData {
+  id: string;
+  name: string;
+  strokes: IStrokeData[];
+  visible: boolean;
+  locked: boolean;
+  opacity: number;
+}
 
 // Plain data interfaces for persistence
 export interface ISavedDrawingData {
   id: string;
   name: string;
-  strokes: Array<{
-    id: string;
-    points: Array<{
-      x: number;
-      y: number;
-      pressure: number;
-    }>;
-    color: string;
-    size: number;
-    brushStyle: string;
-    timestamp: number;
-  }>;
+  // Legacy strokes - kept for backward compatibility
+  strokes: IStrokeData[];
+  // New layers array
+  layers?: ILayerData[];
+  activeLayerId?: string;
   thumbnail: string;
   createdAt: Date;
   updatedAt: Date;
   background: string;
 }
 
-export const SavedDrawing = types.model("SavedDrawing", {
+// Saved layer model for MST
+export const SavedLayer = types.model("SavedLayer", {
   id: types.identifier,
   name: types.string,
   strokes: types.array(Stroke),
+  visible: types.optional(types.boolean, true),
+  locked: types.optional(types.boolean, false),
+  opacity: types.optional(types.number, 1),
+});
+
+export const SavedDrawing = types.model("SavedDrawing", {
+  id: types.identifier,
+  name: types.string,
+  // Legacy strokes - kept for backward compatibility with old drawings
+  strokes: types.optional(types.array(Stroke), []),
+  // New layers system
+  layers: types.optional(types.array(SavedLayer), []),
+  activeLayerId: types.optional(types.string, ""),
   thumbnail: types.string,
   createdAt: types.Date,
   updatedAt: types.Date,
@@ -93,14 +126,36 @@ export const VaultModel = types
       id: string,
       strokes: SnapshotIn<typeof Stroke>[],
       thumbnail: string,
-      background: string
+      background: string,
+      layers?: ILayerData[],
+      activeLayerId?: string
     ) {
       const drawing = self.drawings.find((d) => d.id === id);
       if (drawing) {
+        // Update legacy strokes (for backward compatibility)
         drawing.strokes.clear();
         strokes.forEach((strokeData) => {
           drawing.strokes.push(Stroke.create(strokeData));
         });
+
+        // Update layers if provided
+        if (layers && layers.length > 0) {
+          drawing.layers.clear();
+          layers.forEach((layerData) => {
+            drawing.layers.push(
+              SavedLayer.create({
+                id: layerData.id,
+                name: layerData.name,
+                visible: layerData.visible,
+                locked: layerData.locked,
+                opacity: layerData.opacity,
+                strokes: layerData.strokes as any,
+              })
+            );
+          });
+          drawing.activeLayerId = activeLayerId || layers[0]?.id || "";
+        }
+
         drawing.thumbnail = thumbnail;
         drawing.background = background;
         drawing.updatedAt = new Date();
@@ -142,6 +197,7 @@ export const VaultModel = types
           (drawing) => ({
             id: drawing.id,
             name: drawing.name,
+            // Legacy strokes (for backward compatibility)
             strokes: drawing.strokes.map((stroke) => ({
               id: stroke.id,
               points: stroke.points.map((p) => ({
@@ -151,9 +207,32 @@ export const VaultModel = types
               })),
               color: stroke.color,
               size: stroke.size,
+              opacity: (stroke as any).opacity ?? 1,
               brushStyle: stroke.brushStyle,
               timestamp: stroke.timestamp,
             })),
+            // New layers data
+            layers: drawing.layers.map((layer) => ({
+              id: layer.id,
+              name: layer.name,
+              visible: layer.visible,
+              locked: layer.locked,
+              opacity: layer.opacity,
+              strokes: layer.strokes.map((stroke) => ({
+                id: stroke.id,
+                points: stroke.points.map((p) => ({
+                  x: p.x,
+                  y: p.y,
+                  pressure: p.pressure,
+                })),
+                color: stroke.color,
+                size: stroke.size,
+                opacity: (stroke as any).opacity ?? 1,
+                brushStyle: stroke.brushStyle,
+                timestamp: stroke.timestamp,
+              })),
+            })),
+            activeLayerId: drawing.activeLayerId,
             thumbnail: drawing.thumbnail,
             createdAt: new Date(drawing.createdAt),
             updatedAt: new Date(drawing.updatedAt),
@@ -171,12 +250,16 @@ export const VaultModel = types
       name: string,
       strokes: SnapshotIn<typeof Stroke>[],
       thumbnail: string,
-      background: string
+      background: string,
+      layers?: ILayerData[],
+      activeLayerId?: string
     ) {
       const drawingData = {
         id: crypto.randomUUID(),
         name,
         strokes,
+        layers: layers || [],
+        activeLayerId: activeLayerId || "",
         thumbnail,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -232,9 +315,18 @@ export const VaultModel = types
       id: string,
       strokes: SnapshotIn<typeof Stroke>[],
       thumbnail: string,
-      background: string
+      background: string,
+      layers?: ILayerData[],
+      activeLayerId?: string
     ) {
-      self.replaceDrawingStrokes(id, strokes, thumbnail, background);
+      self.replaceDrawingStrokes(
+        id,
+        strokes,
+        thumbnail,
+        background,
+        layers,
+        activeLayerId
+      );
       const drawing = self.drawings.find((d) => d.id === id);
       if (drawing) {
         try {
@@ -250,9 +342,31 @@ export const VaultModel = types
               })),
               color: stroke.color,
               size: stroke.size,
+              opacity: (stroke as any).opacity ?? 1,
               brushStyle: stroke.brushStyle,
               timestamp: stroke.timestamp,
             })),
+            layers: drawing.layers.map((layer) => ({
+              id: layer.id,
+              name: layer.name,
+              visible: layer.visible,
+              locked: layer.locked,
+              opacity: layer.opacity,
+              strokes: layer.strokes.map((stroke) => ({
+                id: stroke.id,
+                points: stroke.points.map((p) => ({
+                  x: p.x,
+                  y: p.y,
+                  pressure: p.pressure,
+                })),
+                color: stroke.color,
+                size: stroke.size,
+                opacity: (stroke as any).opacity ?? 1,
+                brushStyle: stroke.brushStyle,
+                timestamp: stroke.timestamp,
+              })),
+            })),
+            activeLayerId: drawing.activeLayerId,
             thumbnail: drawing.thumbnail,
             createdAt: new Date(drawing.createdAt),
             updatedAt: new Date(drawing.updatedAt),

@@ -40,9 +40,56 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
       if (editingDrawingId) {
         const drawing = vaultStore.loadDrawing(editingDrawingId);
         if (drawing) {
-          canvasStore.replaceStrokes(drawing.strokes);
           setDrawingName(drawing.name);
           canvasStore.setBackground(drawing.background as any);
+
+          // Check if drawing has layers (new format)
+          if (drawing.layers && drawing.layers.length > 0) {
+            // Load layers from saved drawing
+            const layersData = drawing.layers.map((layer) => ({
+              id: layer.id,
+              name: layer.name,
+              visible: layer.visible,
+              locked: layer.locked,
+              opacity: layer.opacity,
+              strokes: layer.strokes.map((stroke) => ({
+                id: stroke.id,
+                points: stroke.points.map((p) => ({
+                  x: p.x,
+                  y: p.y,
+                  pressure: p.pressure,
+                })),
+                color: stroke.color,
+                size: stroke.size,
+                opacity: (stroke as any).opacity ?? 1,
+                brushStyle: stroke.brushStyle,
+                timestamp: stroke.timestamp,
+              })),
+            }));
+            canvasStore.loadLayers(layersData as any, drawing.activeLayerId);
+          } else {
+            // Legacy format - just strokes, create a single layer
+            canvasStore.clear();
+            if (drawing.strokes.length > 0) {
+              const strokesData = drawing.strokes.map((stroke) => ({
+                id: stroke.id,
+                points: stroke.points.map((p) => ({
+                  x: p.x,
+                  y: p.y,
+                  pressure: p.pressure,
+                })),
+                color: stroke.color,
+                size: stroke.size,
+                opacity: (stroke as any).opacity ?? 1,
+                brushStyle: stroke.brushStyle,
+                timestamp: stroke.timestamp,
+              }));
+              // Add strokes to the default layer
+              strokesData.forEach((stroke) => {
+                canvasStore.addStrokeToActiveLayer(stroke as any);
+              });
+            }
+          }
         }
       } else {
         canvasStore.clear();

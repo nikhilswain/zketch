@@ -6,7 +6,15 @@ export class DrawingDatabase extends Dexie {
 
   constructor() {
     super("DrawingVault");
+
+    // Version 1: Original schema with strokes only
     this.version(1).stores({
+      drawings: "id, name, createdAt, updatedAt",
+    });
+
+    // Version 2: Added layers support (layers, activeLayerId fields)
+    // No index changes needed, just data structure update
+    this.version(2).stores({
       drawings: "id, name, createdAt, updatedAt",
     });
   }

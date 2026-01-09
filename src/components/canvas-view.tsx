@@ -47,9 +47,56 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
       if (editingDrawingId) {
         const drawing = vaultStore.loadDrawing(editingDrawingId);
         if (drawing) {
-          canvasStore.replaceStrokes(drawing.strokes);
           setDrawingName(drawing.name);
           canvasStore.setBackground(drawing.background as any);
+
+          // Check if drawing has layers (new format)
+          if (drawing.layers && drawing.layers.length > 0) {
+            // Load layers from saved drawing
+            const layersData = drawing.layers.map((layer) => ({
+              id: layer.id,
+              name: layer.name,
+              visible: layer.visible,
+              locked: layer.locked,
+              opacity: layer.opacity,
+              strokes: layer.strokes.map((stroke) => ({
+                id: stroke.id,
+                points: stroke.points.map((p) => ({
+                  x: p.x,
+                  y: p.y,
+                  pressure: p.pressure,
+                })),
+                color: stroke.color,
+                size: stroke.size,
+                opacity: (stroke as any).opacity ?? 1,
+                brushStyle: stroke.brushStyle,
+                timestamp: stroke.timestamp,
+              })),
+            }));
+            canvasStore.loadLayers(layersData as any, drawing.activeLayerId);
+          } else {
+            // Legacy format - just strokes, create a single layer
+            canvasStore.clear();
+            if (drawing.strokes.length > 0) {
+              const strokesData = drawing.strokes.map((stroke) => ({
+                id: stroke.id,
+                points: stroke.points.map((p) => ({
+                  x: p.x,
+                  y: p.y,
+                  pressure: p.pressure,
+                })),
+                color: stroke.color,
+                size: stroke.size,
+                opacity: (stroke as any).opacity ?? 1,
+                brushStyle: stroke.brushStyle,
+                timestamp: stroke.timestamp,
+              }));
+              // Add strokes to the default layer
+              strokesData.forEach((stroke) => {
+                canvasStore.addStrokeToActiveLayer(stroke as any);
+              });
+            }
+          }
         }
       } else {
         canvasStore.clear();
@@ -73,7 +120,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     const handleSave = async () => {
       if (canvasStore.isEmpty) return;
 
-      // Get all strokes from visible layers for thumbnail and saving
+      // Get all strokes from visible layers for thumbnail (flattened preview)
       const allStrokes = canvasStore.flattenedStrokes;
 
       const thumbnail = ThumbnailService.generateThumbnail(
@@ -83,7 +130,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         150
       );
 
-      // Map strokes to save format
+      // Map strokes to save format (legacy - for backward compatibility)
       const strokesToSave = allStrokes.map((stroke) => ({
         id: stroke.id,
         points: stroke.points.map((p) => ({
@@ -93,8 +140,31 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         })),
         color: stroke.color,
         size: stroke.size,
+        opacity: stroke.opacity ?? 1,
         brushStyle: stroke.brushStyle,
         timestamp: stroke.timestamp,
+      }));
+
+      // Map layers to save format (new - preserves layer structure)
+      const layersToSave = canvasStore.layers.map((layer) => ({
+        id: layer.id,
+        name: layer.name,
+        visible: layer.visible,
+        locked: layer.locked,
+        opacity: layer.opacity,
+        strokes: layer.strokes.map((stroke) => ({
+          id: stroke.id,
+          points: stroke.points.map((p) => ({
+            x: p.x,
+            y: p.y,
+            pressure: p.pressure,
+          })),
+          color: stroke.color,
+          size: stroke.size,
+          opacity: (stroke as any).opacity ?? 1,
+          brushStyle: stroke.brushStyle,
+          timestamp: stroke.timestamp,
+        })),
       }));
 
       if (editingDrawingId) {
@@ -102,14 +172,18 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           editingDrawingId,
           strokesToSave as any,
           thumbnail,
-          canvasStore.background as any
+          canvasStore.background as any,
+          layersToSave as any,
+          canvasStore.activeLayerId
         );
       } else {
         await vaultStore.addDrawing(
           drawingName,
           strokesToSave as any,
           thumbnail,
-          canvasStore.background as any
+          canvasStore.background as any,
+          layersToSave as any,
+          canvasStore.activeLayerId
         );
       }
 
