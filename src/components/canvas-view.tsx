@@ -21,6 +21,7 @@ import { ArrowLeft, ChevronRight, ChevronLeft, Layers } from "lucide-react";
 import type { ExportFormat } from "@/models/SettingsModel";
 import type { BackgroundType } from "@/models/CanvasModel";
 import { toast } from "sonner";
+import { Input } from "./ui/input";
 
 interface CanvasViewProps {
   editingDrawingId: string | null;
@@ -104,7 +105,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
       }
     }, [editingDrawingId, canvasStore, vaultStore]);
 
-    //   // beforeunload
+    //   ! beforeunload handling.
     // useEffect(() => {
     //   const handleBeforeUnload = (event: BeforeUnloadEvent) => {
 
@@ -297,7 +298,17 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           <input
             type="text"
             value={drawingName}
-            onChange={(e) => setDrawingName(e.target.value)}
+            onChange={(e) => {
+              e.stopPropagation();
+              setDrawingName(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Enter") {
+                handleSave();
+                e.currentTarget.blur();
+              }
+            }}
             className="text-lg font-semibold bg-transparent border-none outline-none focus:bg-gray-50 px-2 py-1 rounded"
           />
         </div>
