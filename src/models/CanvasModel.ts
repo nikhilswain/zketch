@@ -330,9 +330,21 @@ export const CanvasModel = types
           );
       },
       clear() {
+        // Clear legacy strokes
         self.clearStrokes();
+
+        // Clear all layers and reset to a single default layer
+        self.layers.clear();
+        self.activeLayerId = "";
+        self.focusedLayerId = null;
+
+        // Create a fresh default layer
+        const defaultLayer = createDefaultLayer("Layer 1");
+        self.layers.push(Layer.create(defaultLayer as any));
+        self.activeLayerId = defaultLayer.id;
+
         self.saveToHistory();
-        self.renderVersion++; // Force re-render
+        self.renderVersion++;
       },
       undo() {
         if (self.historyIndex > 0) {
@@ -575,6 +587,16 @@ export const CanvasModel = types
         const layer = self.layers.find((l) => l.id === layerId);
         if (layer) {
           layer.toggleLocked();
+          self.renderVersion++;
+        }
+      },
+
+      // Clear all strokes from a specific layer (keeps the layer)
+      clearLayer(layerId: string) {
+        const layer = self.layers.find((l) => l.id === layerId);
+        if (layer && !layer.locked) {
+          layer.clearStrokes();
+          self.saveToHistory();
           self.renderVersion++;
         }
       },

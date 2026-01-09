@@ -150,17 +150,20 @@ const Sidebar: React.FC<SidebarProps> = observer(
           createPortal(
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/20 backdrop-blur-sm">
               <div className="bg-white rounded shadow-lg p-6 w-80 border border-gray-200">
-                <h3 className="text-lg font-semibold mb-4">Clear Canvas?</h3>
+                <h3 className="text-lg font-semibold mb-4">
+                  Clear Entire Canvas?
+                </h3>
                 <p className="mb-6 text-sm text-gray-700">
-                  Are you sure you want to clear the canvas? This action cannot
-                  be undone.
+                  This will delete <strong>all layers and all strokes</strong>.
+                  A new empty layer will be created. This action cannot be
+                  undone.
                 </p>
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={cancelClear}>
                     Cancel
                   </Button>
                   <Button variant="destructive" onClick={confirmClear}>
-                    Clear
+                    Clear All
                   </Button>
                 </div>
               </div>

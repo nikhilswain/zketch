@@ -27,6 +27,7 @@ import {
   Layers,
   Merge,
   Focus,
+  Eraser,
 } from "lucide-react";
 import type { ILayer } from "@/models/LayerModel";
 import { getSnapshot } from "mobx-state-tree";
@@ -127,6 +128,7 @@ interface LayerItemProps {
   onToggleFocus: () => void;
   onRename: (name: string) => void;
   onDelete: () => void;
+  onClear: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onDuplicate: () => void;
@@ -148,6 +150,7 @@ const LayerItem: React.FC<LayerItemProps> = observer(
     onToggleFocus,
     onRename,
     onDelete,
+    onClear,
     onMoveUp,
     onMoveDown,
     onDuplicate,
@@ -362,6 +365,14 @@ const LayerItem: React.FC<LayerItemProps> = observer(
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
+                  onClick={onClear}
+                  disabled={layer.strokes.length === 0 || layer.locked}
+                  className="text-orange-600 focus:text-orange-600"
+                >
+                  <Eraser className="h-3.5 w-3.5 mr-2" />
+                  Clear Layer
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   onClick={onDelete}
                   disabled={!canDelete}
                   className="text-destructive focus:text-destructive"
@@ -516,6 +527,7 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
                 onToggleFocus={() => canvasStore.focusLayer(layer.id)}
                 onRename={(name) => canvasStore.renameLayer(layer.id, name)}
                 onDelete={() => canvasStore.removeLayer(layer.id)}
+                onClear={() => canvasStore.clearLayer(layer.id)}
                 onMoveUp={() => canvasStore.moveLayerUp(layer.id)}
                 onMoveDown={() => canvasStore.moveLayerDown(layer.id)}
                 onDuplicate={() => canvasStore.duplicateLayer(layer.id)}
