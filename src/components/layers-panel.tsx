@@ -243,16 +243,19 @@ const LayerItem: React.FC<LayerItemProps> = observer(
             {isEditing ? (
               <Input
                 value={editName}
-                onChange={(e) => setEditName(e.target.value)}
+                onChange={(e) => {
+                  setEditName(e.target.value);
+                }}
                 onBlur={handleNameSubmit}
                 onKeyDown={(e) => {
+                  e.stopPropagation();
                   if (e.key === "Enter") handleNameSubmit();
                   if (e.key === "Escape") {
                     setEditName(layer.name);
                     setIsEditing(false);
                   }
                 }}
-                className="h-6 text-xs"
+                className="h-6 text-xs outline-none border-none "
                 autoFocus
                 onClick={(e) => e.stopPropagation()}
               />

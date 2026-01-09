@@ -234,7 +234,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         {/* Layers Panel - Right side */}
         <div
           className={`fixed top-20 right-4 transition-all duration-300 z-10 ${
-            layersPanelCollapsed ? "w-10" : "w-64"
+            layersPanelCollapsed ? "w-16" : "w-64"
           }`}
         >
           {layersPanelCollapsed ? (
