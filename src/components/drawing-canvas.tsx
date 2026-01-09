@@ -48,23 +48,22 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         getStrokes: () => canvasStore.strokes as unknown as StrokeLike[],
         // Provide layers for multi-layer rendering - use snapshots to avoid MST detachment issues
         getLayers: () => {
-          if (canvasStore.layers.length === 0) return [];
-          // Use getSnapshot to get plain data and avoid accessing detached MST nodes
           try {
-            return canvasStore.layers.map((layer) => {
+            // Use visibleLayers which respects focus mode
+            return canvasStore.visibleLayers.map((layer) => {
               const snapshot = getSnapshot(layer);
               return {
                 id: snapshot.id,
                 name: snapshot.name,
-                strokes: snapshot.strokes as unknown as StrokeLike[],
                 visible: snapshot.visible,
                 locked: snapshot.locked,
                 opacity: snapshot.opacity,
+                strokes: snapshot.strokes as any,
               };
             });
           } catch (e) {
-            // If layers are being reordered, return empty to avoid crash
-            console.warn("Layer access during transition:", e);
+            // During layer reordering, nodes may be detached
+            console.warn("getLayers: layer access error", e);
             return [];
           }
         },

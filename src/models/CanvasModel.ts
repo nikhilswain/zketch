@@ -37,6 +37,8 @@ export const CanvasModel = types
     // New layers system
     layers: types.optional(types.array(Layer), []),
     activeLayerId: types.optional(types.string, ""),
+    // Focused layer ID - when set, only this layer is visible (solo mode)
+    focusedLayerId: types.optional(types.maybeNull(types.string), null),
     // Layer display mode: "normal" shows individual layers, "flattened" shows merged result
     layerDisplayMode: types.optional(
       types.enumeration("LayerDisplayMode", ["normal", "flattened"]),
@@ -86,9 +88,18 @@ export const CanvasModel = types
     get sortedLayers() {
       return self.layers.slice();
     },
-    // Get visible layers only
+    // Get visible layers only (respects focus mode)
     get visibleLayers() {
+      // If a layer is focused, only show that one
+      if (self.focusedLayerId) {
+        const focused = self.layers.find((l) => l.id === self.focusedLayerId);
+        return focused ? [focused] : [];
+      }
       return self.layers.filter((l) => l.visible);
+    },
+    // Check if a specific layer is focused (solo mode)
+    get isFocusMode() {
+      return self.focusedLayerId !== null;
     },
     // Check if we have any layers
     get hasLayers() {
@@ -532,6 +543,31 @@ export const CanvasModel = types
           layer.toggleVisible();
           self.renderVersion++;
         }
+      },
+
+      // Focus on a single layer (solo mode) - hides all other layers temporarily
+      focusLayer(layerId: string) {
+        const layer = self.layers.find((l) => l.id === layerId);
+        if (layer) {
+          // Toggle focus: if already focused, unfocus; otherwise focus this layer
+          if (self.focusedLayerId === layerId) {
+            self.focusedLayerId = null;
+          } else {
+            self.focusedLayerId = layerId;
+          }
+          self.renderVersion++;
+        }
+      },
+
+      // Unfocus layer (exit solo mode)
+      unfocusLayer() {
+        self.focusedLayerId = null;
+        self.renderVersion++;
+      },
+
+      // Check if a specific layer is the focused one
+      isLayerFocused(layerId: string) {
+        return self.focusedLayerId === layerId;
       },
 
       // Toggle layer lock

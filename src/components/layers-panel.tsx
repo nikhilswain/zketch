@@ -26,6 +26,7 @@ import {
   MoreHorizontal,
   Layers,
   Merge,
+  Focus,
 } from "lucide-react";
 import type { ILayer } from "@/models/LayerModel";
 import { getSnapshot } from "mobx-state-tree";
@@ -119,9 +120,11 @@ function generateLayerThumbnail(
 interface LayerItemProps {
   layer: ILayer;
   isActive: boolean;
+  isFocused: boolean;
   onSelect: () => void;
   onToggleVisibility: () => void;
   onToggleLock: () => void;
+  onToggleFocus: () => void;
   onRename: (name: string) => void;
   onDelete: () => void;
   onMoveUp: () => void;
@@ -138,9 +141,11 @@ const LayerItem: React.FC<LayerItemProps> = observer(
   ({
     layer,
     isActive,
+    isFocused,
     onSelect,
     onToggleVisibility,
     onToggleLock,
+    onToggleFocus,
     onRename,
     onDelete,
     onMoveUp,
@@ -265,6 +270,20 @@ const LayerItem: React.FC<LayerItemProps> = observer(
 
           {/* Quick Actions */}
           <div className="flex items-center gap-0.5">
+            {/* Focus/Solo Toggle */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`h-6 w-6 ${isFocused ? "bg-primary/20" : ""}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFocus();
+              }}
+              title={isFocused ? "Exit Focus Mode" : "Focus (Solo)"}
+            >
+              <Focus className={`h-3.5 w-3.5 ${isFocused ? "text-primary" : "text-muted-foreground"}`} />
+            </Button>
+
             {/* Visibility Toggle */}
             <Button
               variant="ghost"
@@ -406,10 +425,15 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
         className={`flex flex-col bg-background overflow-hidden ${className}`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/30">
+        <div className="flex items-center justify-between p-2 border-b border-border/50">
           <div className="flex items-center gap-2">
             <Layers className="h-4 w-4" />
-            <span className="font-medium text-sm">Layers</span>
+            <span className="text-sm font-medium">Layers</span>
+            {canvasStore.isFocusMode && (
+              <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded">
+                Focus
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1">
             {/* Add Layer Button */}
@@ -452,6 +476,21 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
           </div>
         </div>
 
+        {/* Exit Focus Mode Button - shown when in focus mode */}
+        {canvasStore.isFocusMode && (
+          <div className="p-2 border-b border-border/50">
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-xs"
+              onClick={() => canvasStore.unfocusLayer()}
+            >
+              <Focus className="h-3 w-3 mr-1" />
+              Exit Focus Mode
+            </Button>
+          </div>
+        )}
+
         {/* Layers List */}
         <div className="flex-1 overflow-y-auto max-h-72">
           {displayLayers.map((layer, displayIndex) => {
@@ -461,11 +500,13 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
                 key={layer.id}
                 layer={layer}
                 isActive={layer.id === canvasStore.activeLayerId}
+                isFocused={canvasStore.focusedLayerId === layer.id}
                 onSelect={() => canvasStore.setActiveLayer(layer.id)}
                 onToggleVisibility={() =>
                   canvasStore.toggleLayerVisibility(layer.id)
                 }
                 onToggleLock={() => canvasStore.toggleLayerLock(layer.id)}
+                onToggleFocus={() => canvasStore.focusLayer(layer.id)}
                 onRename={(name) => canvasStore.renameLayer(layer.id, name)}
                 onDelete={() => canvasStore.removeLayer(layer.id)}
                 onMoveUp={() => canvasStore.moveLayerUp(layer.id)}

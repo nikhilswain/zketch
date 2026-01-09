@@ -1,4 +1,4 @@
-export type BrushStyle = "ink" | "spray" | "texture" | "eraser";
+export type BrushStyle = "ink" | "eraser" | "spray" | "texture";
 
 export interface Point {
   x: number;
@@ -19,10 +19,10 @@ export interface StrokeLike {
 export interface LayerLike {
   id: string;
   name: string;
-  strokes: StrokeLike[];
   visible: boolean;
   locked: boolean;
   opacity: number;
+  strokes: readonly StrokeLike[];
 }
 
 export interface BrushOptions {
@@ -36,7 +36,7 @@ export interface BrushOptions {
 }
 
 export interface Brush {
-  key: BrushStyle;
+  key: string;
   render(
     ctx: CanvasRenderingContext2D,
     stroke: StrokeLike,

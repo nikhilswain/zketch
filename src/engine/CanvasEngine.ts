@@ -3,31 +3,42 @@ import { SprayBrush } from "./brushes/SprayBrush";
 import { TextureBrush } from "./brushes/TextureBrush";
 import { GridRenderer } from "./GridRenderer";
 import type {
-  Brush,
-  BrushStyle,
   EngineConfig,
-  LayerLike,
   PanZoom,
   StrokeLike,
+  BrushOptions,
+  LayerLike,
+  Brush,
 } from "./types";
 
 class BrushRegistry {
-  private brushes = new Map<BrushStyle, Brush>();
+  private brushes = new Map<string, Brush>();
   register(b: Brush) {
     this.brushes.set(b.key, b);
   }
-  get(k: BrushStyle) {
+  get(k: string) {
     return this.brushes.get(k);
   }
 }
 
 export class CanvasEngine {
-  private bg: HTMLCanvasElement;
-  private fg: HTMLCanvasElement;
+  // Main display canvases
+  private bg: HTMLCanvasElement;        // Background (white/grid/transparent)
+  private display: HTMLCanvasElement;   // Final composited result (renamed from fg)
   private ui: HTMLCanvasElement;
+  
   private bgCtx: CanvasRenderingContext2D;
-  private fgCtx: CanvasRenderingContext2D;
+  private displayCtx: CanvasRenderingContext2D;
   private uiCtx: CanvasRenderingContext2D;
+  
+  // Offscreen layer canvases - one per layer for true isolation
+  private layerCanvases: Map<string, HTMLCanvasElement> = new Map();
+  private layerContexts: Map<string, CanvasRenderingContext2D> = new Map();
+  
+  // Track which layers need re-rendering (dirty tracking)
+  private dirtyLayers: Set<string> = new Set();
+  private lastLayerVersions: Map<string, number> = new Map();
+
   private pz: PanZoom = { panX: 0, panY: 0, zoom: 1 };
   private registry = new BrushRegistry();
   private grid = new GridRenderer();
@@ -41,15 +52,16 @@ export class CanvasEngine {
 
   constructor(private root: HTMLElement, private config: EngineConfig) {
     this.bg = document.createElement("canvas");
-    this.fg = document.createElement("canvas");
+    this.display = document.createElement("canvas");
     this.ui = document.createElement("canvas");
+    
     Object.assign(this.bg.style, {
       position: "absolute",
       inset: "0",
       width: "100%",
       height: "100%",
     });
-    Object.assign(this.fg.style, {
+    Object.assign(this.display.style, {
       position: "absolute",
       inset: "0",
       width: "100%",
@@ -62,17 +74,18 @@ export class CanvasEngine {
       height: "100%",
       pointerEvents: "none",
     });
+    
     this.root.appendChild(this.bg);
-    this.root.appendChild(this.fg);
+    this.root.appendChild(this.display);
     this.root.appendChild(this.ui);
-    const bg = this.bg.getContext("2d");
-    const fg = this.fg.getContext("2d");
-    const ui = this.ui.getContext("2d");
-    if (!bg || !fg || !ui) throw new Error("Failed to get 2d context");
-    this.bgCtx = bg;
-    this.fgCtx = fg;
-    this.uiCtx = ui;
+    
+    this.bgCtx = this.bg.getContext("2d", { alpha: false })!;
+    this.displayCtx = this.display.getContext("2d", { alpha: true })!;
+    this.uiCtx = this.ui.getContext("2d", { alpha: true })!;
+    
     this.background = config.background;
+
+    // Register brushes
     this.registry.register(new FreehandBrush());
     this.registry.register(new SprayBrush());
     this.registry.register(new TextureBrush());
@@ -82,11 +95,17 @@ export class CanvasEngine {
   }
 
   destroy = () => {
-    window.removeEventListener("resize", this.resize);
     if (this.rafId) cancelAnimationFrame(this.rafId);
-    this.root.removeChild(this.bg);
-    this.root.removeChild(this.fg);
-    this.root.removeChild(this.ui);
+    window.removeEventListener("resize", this.resize);
+    this.bg.remove();
+    this.display.remove();
+    this.ui.remove();
+    
+    // Clean up layer canvases
+    this.layerCanvases.clear();
+    this.layerContexts.clear();
+    this.dirtyLayers.clear();
+    this.lastLayerVersions.clear();
   };
 
   setPanZoom(p: Partial<PanZoom>) {
@@ -111,17 +130,31 @@ export class CanvasEngine {
   };
 
   private resize = () => {
-    const r = this.root.getBoundingClientRect();
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    for (const c of [this.bg, this.fg, this.ui]) {
-      c.width = Math.floor(r.width * dpr);
-      c.height = Math.floor(r.height * dpr);
-      c.style.width = `${r.width}px`;
-      c.style.height = `${r.height}px`;
-      const ctx = c.getContext("2d")!;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = this.root.getBoundingClientRect();
+    const w = Math.floor(rect.width * dpr);
+    const h = Math.floor(rect.height * dpr);
+
+    // Resize all canvases
+    for (const canvas of [this.bg, this.display, this.ui]) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    
+    // Resize offscreen layer canvases
+    this.resizeLayerCanvases(w, h);
+
+    // Apply scaling for high DPI
+    this.bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.displayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.uiCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    
+    // Also scale layer contexts
+    for (const ctx of this.layerContexts.values()) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
-    this.invalidate();
+
+    this.invalid = true;
   };
 
   private loop = () => {
@@ -151,49 +184,68 @@ export class CanvasEngine {
   }
 
   private renderStrokes() {
-    const ctx = this.fgCtx;
-    const c = this.fg;
-    ctx.clearRect(0, 0, c.width, c.height);
-    ctx.save();
-    // Translate then scale -> effective order on points: scale then translate
-    // This matches screen = zoom * world + pan
-    ctx.translate(this.pz.panX, this.pz.panY);
-    ctx.scale(this.pz.zoom, this.pz.zoom);
-
-    // Check if we have layers to render
-    const layers = this.config.getLayers?.();
-    if (layers && layers.length > 0) {
-      // Render layers from bottom to top
-      for (const layer of layers) {
-        this.renderLayer(ctx, layer);
-      }
-    } else {
-      // Fallback to legacy stroke rendering
+    const layers = this.config.getLayers?.() || [];
+    
+    // Clear the display canvas
+    this.displayCtx.clearRect(0, 0, this.display.width, this.display.height);
+    
+    if (layers.length === 0) {
+      // Legacy mode: render strokes directly (no layers)
       const strokes = this.config.getStrokes();
-      for (const s of strokes) this.renderStroke(ctx, s, 1);
+      this.displayCtx.save();
+      this.displayCtx.translate(this.pz.panX, this.pz.panY);
+      this.displayCtx.scale(this.pz.zoom, this.pz.zoom);
+      
+      for (const stroke of strokes) {
+        this.renderStroke(this.displayCtx, stroke, 1);
+      }
+      this.displayCtx.restore();
+      return;
+    }
+    
+    // Get active layer IDs and clean up old canvases
+    const activeLayerIds = layers.map(l => l.id);
+    this.cleanupLayerCanvases(activeLayerIds);
+    
+    // Render each layer to its own offscreen canvas, then composite
+    for (const layer of layers) {
+      if (!layer.visible) continue;
+      
+      const layerCtx = this.getLayerContext(layer.id);
+      const layerCanvas = this.getLayerCanvas(layer.id);
+      
+      // Clear and render this layer
+      layerCtx.clearRect(0, 0, layerCanvas.width, layerCanvas.height);
+      layerCtx.save();
+      layerCtx.translate(this.pz.panX, this.pz.panY);
+      layerCtx.scale(this.pz.zoom, this.pz.zoom);
+      
+      // Render all strokes for this layer
+      this.renderLayer(layerCtx, layer);
+      
+      layerCtx.restore();
+      
+      // Composite this layer onto the display canvas with layer opacity
+      this.displayCtx.save();
+      this.displayCtx.globalAlpha = layer.opacity;
+      this.displayCtx.drawImage(layerCanvas, 0, 0);
+      this.displayCtx.restore();
     }
 
-    // Always render preview stroke on top
-    if (this.preview) this.renderStroke(ctx, this.preview, 1);
-    ctx.restore();
+    // Render preview stroke on top (for live drawing feedback)
+    if (this.preview) {
+      this.displayCtx.save();
+      this.displayCtx.translate(this.pz.panX, this.pz.panY);
+      this.displayCtx.scale(this.pz.zoom, this.pz.zoom);
+      this.renderStroke(this.displayCtx, this.preview, 1);
+      this.displayCtx.restore();
+    }
   }
 
   private renderLayer(ctx: CanvasRenderingContext2D, layer: LayerLike) {
-    // Skip invisible layers
-    if (!layer.visible) return;
-
-    // Save context state for layer-level transformations
-    ctx.save();
-
-    // Apply layer opacity
-    ctx.globalAlpha = layer.opacity;
-
-    // Render all strokes in this layer
     for (const stroke of layer.strokes) {
-      this.renderStroke(ctx, stroke, layer.opacity);
+      this.renderStroke(ctx, stroke, 1); // Layer opacity applied during compositing
     }
-
-    ctx.restore();
   }
 
   private renderStroke(
@@ -209,7 +261,7 @@ export class CanvasEngine {
       ctx.globalCompositeOperation = "destination-out";
     }
 
-    const key: BrushStyle = s.brushStyle === "eraser" ? "ink" : s.brushStyle;
+    const key = s.brushStyle === "eraser" ? "ink" : s.brushStyle;
     const brush = this.registry.get(key);
     if (!brush) return;
 
@@ -240,5 +292,46 @@ export class CanvasEngine {
     ctx.arc(this.cursor.x, this.cursor.y, this.cursor.r, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
+  }
+
+  // Get or create an offscreen canvas for a layer
+  private getLayerCanvas(layerId: string): HTMLCanvasElement {
+    let canvas = this.layerCanvases.get(layerId);
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.width = this.display.width;
+      canvas.height = this.display.height;
+      this.layerCanvases.set(layerId, canvas);
+      const ctx = canvas.getContext("2d", { alpha: true })!;
+      this.layerContexts.set(layerId, ctx);
+    }
+    return canvas;
+  }
+
+  private getLayerContext(layerId: string): CanvasRenderingContext2D {
+    this.getLayerCanvas(layerId); // Ensure canvas exists
+    return this.layerContexts.get(layerId)!;
+  }
+
+  // Resize all layer canvases when main canvas resizes
+  private resizeLayerCanvases(width: number, height: number) {
+    for (const [id, canvas] of this.layerCanvases) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+    // Mark all layers as dirty after resize
+    this.dirtyLayers = new Set(this.layerCanvases.keys());
+  }
+
+  // Clean up unused layer canvases
+  private cleanupLayerCanvases(activeLayerIds: string[]) {
+    const activeSet = new Set(activeLayerIds);
+    for (const [id, canvas] of this.layerCanvases) {
+      if (!activeSet.has(id)) {
+        this.layerCanvases.delete(id);
+        this.layerContexts.delete(id);
+        this.lastLayerVersions.delete(id);
+      }
+    }
   }
 }
