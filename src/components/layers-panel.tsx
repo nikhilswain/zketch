@@ -281,7 +281,11 @@ const LayerItem: React.FC<LayerItemProps> = observer(
               }}
               title={isFocused ? "Exit Focus Mode" : "Focus (Solo)"}
             >
-              <Focus className={`h-3.5 w-3.5 ${isFocused ? "text-primary" : "text-muted-foreground"}`} />
+              <Focus
+                className={`h-3.5 w-3.5 ${
+                  isFocused ? "text-primary" : "text-muted-foreground"
+                }`}
+              />
             </Button>
 
             {/* Visibility Toggle */}

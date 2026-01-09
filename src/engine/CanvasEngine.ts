@@ -23,18 +23,18 @@ class BrushRegistry {
 
 export class CanvasEngine {
   // Main display canvases
-  private bg: HTMLCanvasElement;        // Background (white/grid/transparent)
-  private display: HTMLCanvasElement;   // Final composited result (renamed from fg)
+  private bg: HTMLCanvasElement; // Background (white/grid/transparent)
+  private display: HTMLCanvasElement; // Final composited result (renamed from fg)
   private ui: HTMLCanvasElement;
-  
+
   private bgCtx: CanvasRenderingContext2D;
   private displayCtx: CanvasRenderingContext2D;
   private uiCtx: CanvasRenderingContext2D;
-  
+
   // Offscreen layer canvases - one per layer for true isolation
   private layerCanvases: Map<string, HTMLCanvasElement> = new Map();
   private layerContexts: Map<string, CanvasRenderingContext2D> = new Map();
-  
+
   // Track which layers need re-rendering (dirty tracking)
   private dirtyLayers: Set<string> = new Set();
   private lastLayerVersions: Map<string, number> = new Map();
@@ -54,7 +54,7 @@ export class CanvasEngine {
     this.bg = document.createElement("canvas");
     this.display = document.createElement("canvas");
     this.ui = document.createElement("canvas");
-    
+
     Object.assign(this.bg.style, {
       position: "absolute",
       inset: "0",
@@ -74,15 +74,15 @@ export class CanvasEngine {
       height: "100%",
       pointerEvents: "none",
     });
-    
+
     this.root.appendChild(this.bg);
     this.root.appendChild(this.display);
     this.root.appendChild(this.ui);
-    
+
     this.bgCtx = this.bg.getContext("2d", { alpha: false })!;
     this.displayCtx = this.display.getContext("2d", { alpha: true })!;
     this.uiCtx = this.ui.getContext("2d", { alpha: true })!;
-    
+
     this.background = config.background;
 
     // Register brushes
@@ -100,7 +100,7 @@ export class CanvasEngine {
     this.bg.remove();
     this.display.remove();
     this.ui.remove();
-    
+
     // Clean up layer canvases
     this.layerCanvases.clear();
     this.layerContexts.clear();
@@ -140,7 +140,7 @@ export class CanvasEngine {
       canvas.width = w;
       canvas.height = h;
     }
-    
+
     // Resize offscreen layer canvases
     this.resizeLayerCanvases(w, h);
 
@@ -148,7 +148,7 @@ export class CanvasEngine {
     this.bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.displayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.uiCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    
+
     // Also scale layer contexts
     for (const ctx of this.layerContexts.values()) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -185,46 +185,46 @@ export class CanvasEngine {
 
   private renderStrokes() {
     const layers = this.config.getLayers?.() || [];
-    
+
     // Clear the display canvas
     this.displayCtx.clearRect(0, 0, this.display.width, this.display.height);
-    
+
     if (layers.length === 0) {
       // Legacy mode: render strokes directly (no layers)
       const strokes = this.config.getStrokes();
       this.displayCtx.save();
       this.displayCtx.translate(this.pz.panX, this.pz.panY);
       this.displayCtx.scale(this.pz.zoom, this.pz.zoom);
-      
+
       for (const stroke of strokes) {
         this.renderStroke(this.displayCtx, stroke, 1);
       }
       this.displayCtx.restore();
       return;
     }
-    
+
     // Get active layer IDs and clean up old canvases
-    const activeLayerIds = layers.map(l => l.id);
+    const activeLayerIds = layers.map((l) => l.id);
     this.cleanupLayerCanvases(activeLayerIds);
-    
+
     // Render each layer to its own offscreen canvas, then composite
     for (const layer of layers) {
       if (!layer.visible) continue;
-      
+
       const layerCtx = this.getLayerContext(layer.id);
       const layerCanvas = this.getLayerCanvas(layer.id);
-      
+
       // Clear and render this layer
       layerCtx.clearRect(0, 0, layerCanvas.width, layerCanvas.height);
       layerCtx.save();
       layerCtx.translate(this.pz.panX, this.pz.panY);
       layerCtx.scale(this.pz.zoom, this.pz.zoom);
-      
+
       // Render all strokes for this layer
       this.renderLayer(layerCtx, layer);
-      
+
       layerCtx.restore();
-      
+
       // Composite this layer onto the display canvas with layer opacity
       this.displayCtx.save();
       this.displayCtx.globalAlpha = layer.opacity;
