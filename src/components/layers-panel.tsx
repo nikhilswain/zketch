@@ -28,9 +28,11 @@ import {
   Merge,
   Focus,
   Eraser,
+  Image as ImageIcon,
 } from "lucide-react";
 import type { ILayer } from "@/models/LayerModel";
 import { getSnapshot } from "mobx-state-tree";
+import { BlobStorageService } from "@/services/BlobStorageService";
 
 // Generate a small thumbnail preview of a layer's strokes (simplified for performance)
 function generateLayerThumbnail(
@@ -183,15 +185,26 @@ const LayerItem: React.FC<LayerItemProps> = observer(
       }
 
       // Debounce thumbnail generation to prevent hanging on rapid updates
-      thumbnailTimeoutRef.current = setTimeout(() => {
+      thumbnailTimeoutRef.current = setTimeout(async () => {
         try {
           // Use snapshot to avoid accessing detached MST nodes
           const snapshot = getSnapshot(layer) as any;
+
+          // Handle image layers - get thumbnail from blob
+          if (snapshot.type === "image" && snapshot.blobId) {
+            const blobUrl = await BlobStorageService.getBlobUrl(
+              snapshot.blobId
+            );
+            if (blobUrl && layerIdRef.current === layerId) {
+              setThumbnail(blobUrl);
+            }
+            return;
+          }
+
           // Only generate thumbnails for stroke layers
-          if (snapshot.type === "image" || !snapshot.strokes) {
-            // For image layers, we could show a placeholder or the actual image
+          if (!snapshot.strokes) {
             if (layerIdRef.current === layerId) {
-              setThumbnail(""); // TODO: Generate image layer thumbnail
+              setThumbnail("");
             }
             return;
           }
@@ -234,16 +247,18 @@ const LayerItem: React.FC<LayerItemProps> = observer(
         <div className="flex items-center gap-2 p-2">
           {/* Thumbnail Preview */}
           <div
-            className="w-12 h-9 rounded border border-border overflow-hidden cursor-pointer flex-shrink-0"
+            className="w-12 h-9 rounded border border-border overflow-hidden cursor-pointer flex-shrink-0 bg-muted/30 flex items-center justify-center"
             onClick={onSelect}
           >
-            {thumbnail && (
+            {thumbnail ? (
               <img
                 src={thumbnail}
                 alt={layer.name}
                 className="w-full h-full object-cover"
               />
-            )}
+            ) : layer.type === "image" ? (
+              <ImageIcon className="w-5 h-5 text-muted-foreground" />
+            ) : null}
           </div>
 
           {/* Layer Info */}

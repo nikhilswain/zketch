@@ -21,12 +21,14 @@ import {
   Square,
   SquareDot,
   ChevronLeft,
+  ImagePlus,
 } from "lucide-react";
 import type { BackgroundType } from "@/models/CanvasModel";
 
 interface SidebarProps {
   onSave: () => void;
   onExport: () => void;
+  onImport?: () => void;
   onCollapse?: () => void;
   className?: string;
   isDrawingMode?: boolean;
@@ -37,6 +39,7 @@ const Sidebar: React.FC<SidebarProps> = observer(
   ({
     onSave,
     onExport,
+    onImport,
     onCollapse,
     className,
     isDrawingMode,
@@ -439,6 +442,28 @@ const Sidebar: React.FC<SidebarProps> = observer(
               </CardContent>
             </Card>
 
+            {/* Import */}
+            {onImport && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <ImagePlus className="w-4 h-4" />
+                    Import
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    onClick={onImport}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    <ImagePlus className="w-4 h-4 mr-2" />
+                    Import Image
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Export */}
             <Card>
               <CardHeader className="pb-3">
@@ -454,7 +479,7 @@ const Sidebar: React.FC<SidebarProps> = observer(
                   className="w-full"
                 >
                   <Download className="w-4 h-4 mr-2" />
-                  Export Drawing
+                  Export Zketch
                 </Button>
               </CardContent>
             </Card>

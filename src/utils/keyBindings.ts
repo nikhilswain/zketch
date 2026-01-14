@@ -105,7 +105,7 @@ export const KEY_BINDINGS: Record<string, KeyBinding> = {
   EXPORT: {
     key: "e",
     ctrlKey: true,
-    description: "Export drawing",
+    description: "Export zketch",
     action: "export",
   },
   NEW_DRAWING: {

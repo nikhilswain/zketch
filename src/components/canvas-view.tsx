@@ -13,6 +13,7 @@ import Sidebar from "./slider";
 import DrawingCanvas from "./drawing-canvas";
 import FloatingDock from "./floating-dock";
 import ExportDialog from "./export-dialog";
+import ImportDialog from "./import-dialog";
 import LayersPanel from "./layers-panel";
 import { ExportService } from "@/services/ExportService";
 import { ThumbnailService } from "@/services/ThumbnailService";
@@ -36,6 +37,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     const [drawingName, setDrawingName] = useState("Untitled Drawing");
     const [isDrawingMode, setIsDrawingMode] = useState(true);
     const [showExportDialog, setShowExportDialog] = useState(false);
+    const [showImportDialog, setShowImportDialog] = useState(false);
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [layersPanelCollapsed, setLayersPanelCollapsed] = useState(false);
 
@@ -325,6 +327,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               <Sidebar
                 onSave={handleSave}
                 onExport={handleShowExportDialog}
+                onImport={() => setShowImportDialog(true)}
                 onCollapse={() => setSidebarCollapsed(true)}
                 isDrawingMode={isDrawingMode}
                 onForceDrawingMode={() => setIsDrawingMode(true)}
@@ -417,6 +420,14 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           drawingName={drawingName}
           layerCount={canvasStore.layerCount}
           onFlattenLayers={() => canvasStore.flattenAllLayers()}
+        />
+
+        {/* Import Dialog */}
+        <ImportDialog
+          isOpen={showImportDialog}
+          onClose={() => setShowImportDialog(false)}
+          canvasWidth={1920}
+          canvasHeight={1080}
         />
       </div>
     );

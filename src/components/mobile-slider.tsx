@@ -298,7 +298,7 @@ const MobileSidebar: React.FC<MobileSidebarProps> = observer(
               className="w-full bg-transparent"
             >
               <Download className="w-4 h-4 mr-2" />
-              Export Drawing
+              Export Zketch
             </Button>
           </div>
         </div>

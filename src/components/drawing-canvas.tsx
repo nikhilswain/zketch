@@ -386,7 +386,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     );
 
     const handleWheel = useCallback(
-      (e: React.WheelEvent) => {
+      (e: WheelEvent) => {
         e.preventDefault();
         e.stopPropagation();
         // mouse wheel event handling for panning and zooming.
@@ -446,6 +446,17 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       },
       [canvasStore]
     );
+
+    // Attach wheel event with passive: false to allow preventDefault
+    useEffect(() => {
+      const root = rootRef.current;
+      if (!root) return;
+
+      root.addEventListener("wheel", handleWheel, { passive: false });
+      return () => {
+        root.removeEventListener("wheel", handleWheel);
+      };
+    }, [handleWheel]);
 
     useEffect(() => {
       renderStrokes();
@@ -563,7 +574,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerLeave}
-        onWheel={handleWheel}
         onContextMenu={(e) => e.preventDefault()}
         style={{
           outline: "none",

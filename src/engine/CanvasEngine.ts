@@ -2,6 +2,7 @@ import { FreehandBrush } from "./brushes/FreehandBrush";
 import { SprayBrush } from "./brushes/SprayBrush";
 import { TextureBrush } from "./brushes/TextureBrush";
 import { GridRenderer } from "./GridRenderer";
+import { BlobStorageService } from "@/services/BlobStorageService";
 import type {
   EngineConfig,
   PanZoom,
@@ -9,6 +10,7 @@ import type {
   BrushOptions,
   LayerLike,
   Brush,
+  ImageLayerLike,
 } from "./types";
 
 class BrushRegistry {
@@ -38,6 +40,10 @@ export class CanvasEngine {
   // Track which layers need re-rendering (dirty tracking)
   private dirtyLayers: Set<string> = new Set();
   private lastLayerVersions: Map<string, number> = new Map();
+
+  // Image cache for rendering image layers
+  private imageCache: Map<string, HTMLImageElement> = new Map();
+  private loadingImages: Set<string> = new Set();
 
   private pz: PanZoom = { panX: 0, panY: 0, zoom: 1 };
   private registry = new BrushRegistry();
@@ -106,6 +112,10 @@ export class CanvasEngine {
     this.layerContexts.clear();
     this.dirtyLayers.clear();
     this.lastLayerVersions.clear();
+
+    // Clean up image cache
+    this.imageCache.clear();
+    this.loadingImages.clear();
   };
 
   setPanZoom(p: Partial<PanZoom>) {
@@ -250,9 +260,81 @@ export class CanvasEngine {
         this.renderStroke(ctx, stroke, 1); // Layer opacity applied during compositing
       }
     } else if (layer.type === "image") {
-      // Image layer - TODO: implement in Phase 4
-      // For now, skip image layers
+      // Image layer - render the image
+      this.renderImageLayer(ctx, layer as ImageLayerLike);
     }
+  }
+
+  private renderImageLayer(
+    ctx: CanvasRenderingContext2D,
+    layer: ImageLayerLike
+  ) {
+    const { blobId, x, y, width, height, rotation } = layer;
+
+    // Check if image is already cached
+    const cachedImage = this.imageCache.get(blobId);
+
+    if (cachedImage) {
+      // Draw the cached image
+      this.drawImage(ctx, cachedImage, x, y, width, height, rotation);
+    } else if (!this.loadingImages.has(blobId)) {
+      // Start loading the image
+      this.loadingImages.add(blobId);
+      this.loadImageForLayer(blobId);
+    }
+    // If loading, we skip rendering for now - will render on next frame after load
+  }
+
+  private async loadImageForLayer(blobId: string) {
+    try {
+      const blobUrl = await BlobStorageService.getBlobUrl(blobId);
+      if (!blobUrl) {
+        console.warn(`No blob found for blobId: ${blobId}`);
+        this.loadingImages.delete(blobId);
+        return;
+      }
+
+      const img = new Image();
+      img.onload = () => {
+        this.imageCache.set(blobId, img);
+        this.loadingImages.delete(blobId);
+        // Trigger a re-render now that the image is loaded
+        this.invalidate();
+      };
+      img.onerror = () => {
+        console.error(`Failed to load image for blobId: ${blobId}`);
+        this.loadingImages.delete(blobId);
+      };
+      img.src = blobUrl;
+    } catch (error) {
+      console.error(`Error loading image for blobId: ${blobId}`, error);
+      this.loadingImages.delete(blobId);
+    }
+  }
+
+  private drawImage(
+    ctx: CanvasRenderingContext2D,
+    img: HTMLImageElement,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    rotation: number
+  ) {
+    ctx.save();
+
+    if (rotation !== 0) {
+      // Rotate around the center of the image
+      const centerX = x + width / 2;
+      const centerY = y + height / 2;
+      ctx.translate(centerX, centerY);
+      ctx.rotate((rotation * Math.PI) / 180);
+      ctx.drawImage(img, -width / 2, -height / 2, width, height);
+    } else {
+      ctx.drawImage(img, x, y, width, height);
+    }
+
+    ctx.restore();
   }
 
   private renderStroke(

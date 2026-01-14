@@ -166,7 +166,7 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Download className="w-5 h-5" />
-              Export Drawing: {drawingName}
+              Export Zketch: {drawingName}
             </DialogTitle>
           </DialogHeader>
 
