@@ -18,8 +18,9 @@ export interface IStrokeData {
   timestamp: number;
 }
 
-// Layer data interface for persistence
-export interface ILayerData {
+// Stroke layer data interface for persistence
+export interface IStrokeLayerData {
+  type: "stroke";
   id: string;
   name: string;
   strokes: IStrokeData[];
@@ -27,6 +28,28 @@ export interface ILayerData {
   locked: boolean;
   opacity: number;
 }
+
+// Image layer data interface for persistence
+export interface IImageLayerData {
+  type: "image";
+  id: string;
+  name: string;
+  blobId: string;
+  naturalWidth: number;
+  naturalHeight: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  aspectLocked: boolean;
+  visible: boolean;
+  locked: boolean;
+  opacity: number;
+}
+
+// Union type for layer data
+export type ILayerData = IStrokeLayerData | IImageLayerData;
 
 // Plain data interfaces for persistence
 export interface ISavedDrawingData {
@@ -142,16 +165,21 @@ export const VaultModel = types
         if (layers && layers.length > 0) {
           drawing.layers.clear();
           layers.forEach((layerData) => {
-            drawing.layers.push(
-              SavedLayer.create({
-                id: layerData.id,
-                name: layerData.name,
-                visible: layerData.visible,
-                locked: layerData.locked,
-                opacity: layerData.opacity,
-                strokes: layerData.strokes as any,
-              })
-            );
+            // Only load stroke layers for now - image layers will be handled in Phase 3
+            if (layerData.type === "stroke" || !("type" in layerData)) {
+              const strokeLayerData = layerData as IStrokeLayerData;
+              drawing.layers.push(
+                SavedLayer.create({
+                  id: strokeLayerData.id,
+                  name: strokeLayerData.name,
+                  visible: strokeLayerData.visible,
+                  locked: strokeLayerData.locked,
+                  opacity: strokeLayerData.opacity,
+                  strokes: strokeLayerData.strokes as any,
+                })
+              );
+            }
+            // TODO: Handle image layers in Phase 3
           });
           drawing.activeLayerId = activeLayerId || layers[0]?.id || "";
         }
@@ -211,27 +239,49 @@ export const VaultModel = types
               brushStyle: stroke.brushStyle,
               timestamp: stroke.timestamp,
             })),
-            // New layers data
-            layers: drawing.layers.map((layer) => ({
-              id: layer.id,
-              name: layer.name,
-              visible: layer.visible,
-              locked: layer.locked,
-              opacity: layer.opacity,
-              strokes: layer.strokes.map((stroke) => ({
-                id: stroke.id,
-                points: stroke.points.map((p) => ({
-                  x: p.x,
-                  y: p.y,
-                  pressure: p.pressure,
+            // New layers data - handle both stroke and image layers
+            layers: drawing.layers.map((layer: any) => {
+              const baseLayerData = {
+                id: layer.id,
+                name: layer.name,
+                type: layer.type || "stroke",
+                visible: layer.visible,
+                locked: layer.locked,
+                opacity: layer.opacity,
+              };
+
+              if (layer.type === "image") {
+                return {
+                  ...baseLayerData,
+                  blobId: layer.blobId,
+                  naturalWidth: layer.naturalWidth,
+                  naturalHeight: layer.naturalHeight,
+                  x: layer.x,
+                  y: layer.y,
+                  width: layer.width,
+                  height: layer.height,
+                  rotation: layer.rotation,
+                  aspectLocked: layer.aspectLocked,
+                };
+              }
+
+              return {
+                ...baseLayerData,
+                strokes: (layer.strokes || []).map((stroke: any) => ({
+                  id: stroke.id,
+                  points: stroke.points.map((p: any) => ({
+                    x: p.x,
+                    y: p.y,
+                    pressure: p.pressure,
+                  })),
+                  color: stroke.color,
+                  size: stroke.size,
+                  opacity: stroke.opacity ?? 1,
+                  brushStyle: stroke.brushStyle,
+                  timestamp: stroke.timestamp,
                 })),
-                color: stroke.color,
-                size: stroke.size,
-                opacity: (stroke as any).opacity ?? 1,
-                brushStyle: stroke.brushStyle,
-                timestamp: stroke.timestamp,
-              })),
-            })),
+              };
+            }),
             activeLayerId: drawing.activeLayerId,
             thumbnail: drawing.thumbnail,
             createdAt: new Date(drawing.createdAt),
@@ -346,26 +396,29 @@ export const VaultModel = types
               brushStyle: stroke.brushStyle,
               timestamp: stroke.timestamp,
             })),
-            layers: drawing.layers.map((layer) => ({
-              id: layer.id,
-              name: layer.name,
-              visible: layer.visible,
-              locked: layer.locked,
-              opacity: layer.opacity,
-              strokes: layer.strokes.map((stroke) => ({
-                id: stroke.id,
-                points: stroke.points.map((p) => ({
-                  x: p.x,
-                  y: p.y,
-                  pressure: p.pressure,
+            layers: drawing.layers.map(
+              (layer): IStrokeLayerData => ({
+                type: "stroke",
+                id: layer.id,
+                name: layer.name,
+                visible: layer.visible,
+                locked: layer.locked,
+                opacity: layer.opacity,
+                strokes: layer.strokes.map((stroke) => ({
+                  id: stroke.id,
+                  points: stroke.points.map((p) => ({
+                    x: p.x,
+                    y: p.y,
+                    pressure: p.pressure,
+                  })),
+                  color: stroke.color,
+                  size: stroke.size,
+                  opacity: (stroke as any).opacity ?? 1,
+                  brushStyle: stroke.brushStyle,
+                  timestamp: stroke.timestamp,
                 })),
-                color: stroke.color,
-                size: stroke.size,
-                opacity: (stroke as any).opacity ?? 1,
-                brushStyle: stroke.brushStyle,
-                timestamp: stroke.timestamp,
-              })),
-            })),
+              })
+            ),
             activeLayerId: drawing.activeLayerId,
             thumbnail: drawing.thumbnail,
             createdAt: new Date(drawing.createdAt),

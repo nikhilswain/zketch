@@ -51,17 +51,40 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           try {
             // Use visibleLayers which respects focus mode
             return canvasStore.visibleLayers.map((layer) => {
-              const snapshot = getSnapshot(layer);
-              return {
+              const snapshot = getSnapshot(layer) as any;
+              const layerType = snapshot.type || "stroke";
+
+              // Base layer properties
+              const baseLayer = {
                 id: snapshot.id,
                 name: snapshot.name,
-                type: (snapshot as any).type || "stroke", // Default to stroke for backward compatibility
+                type: layerType,
                 visible: snapshot.visible,
                 locked: snapshot.locked,
                 opacity: snapshot.opacity,
-                strokes: snapshot.strokes as any,
               };
-            });
+
+              if (layerType === "image") {
+                return {
+                  ...baseLayer,
+                  blobId: snapshot.blobId,
+                  naturalWidth: snapshot.naturalWidth,
+                  naturalHeight: snapshot.naturalHeight,
+                  x: snapshot.x,
+                  y: snapshot.y,
+                  width: snapshot.width,
+                  height: snapshot.height,
+                  rotation: snapshot.rotation,
+                  aspectLocked: snapshot.aspectLocked,
+                };
+              }
+
+              // Stroke layer (default)
+              return {
+                ...baseLayer,
+                strokes: snapshot.strokes || [],
+              };
+            }) as any;
           } catch (e) {
             // During layer reordering, nodes may be detached
             console.warn("getLayers: layer access error", e);

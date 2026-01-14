@@ -172,7 +172,8 @@ const LayerItem: React.FC<LayerItemProps> = observer(
 
     // Generate thumbnail when layer strokes change (debounced)
     // Use snapshot to avoid MST detachment issues during reordering
-    const strokeCount = layer.strokes.length;
+    const strokeCount =
+      layer.type === "stroke" ? (layer as any).strokes.length : 0;
     const layerId = layer.id;
 
     useEffect(() => {
@@ -185,7 +186,15 @@ const LayerItem: React.FC<LayerItemProps> = observer(
       thumbnailTimeoutRef.current = setTimeout(() => {
         try {
           // Use snapshot to avoid accessing detached MST nodes
-          const snapshot = getSnapshot(layer);
+          const snapshot = getSnapshot(layer) as any;
+          // Only generate thumbnails for stroke layers
+          if (snapshot.type === "image" || !snapshot.strokes) {
+            // For image layers, we could show a placeholder or the actual image
+            if (layerIdRef.current === layerId) {
+              setThumbnail(""); // TODO: Generate image layer thumbnail
+            }
+            return;
+          }
           const thumb = generateLayerThumbnail(snapshot);
           // Only update if this is still the same layer
           if (layerIdRef.current === layerId) {
@@ -268,7 +277,9 @@ const LayerItem: React.FC<LayerItemProps> = observer(
                   {layer.name}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {layer.strokeCount} strokes
+                  {layer.type === "stroke"
+                    ? `${(layer as any).strokes?.length || 0} strokes`
+                    : "Image"}
                 </span>
               </div>
             )}
@@ -366,7 +377,11 @@ const LayerItem: React.FC<LayerItemProps> = observer(
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={onClear}
-                  disabled={layer.strokes.length === 0 || layer.locked}
+                  disabled={
+                    layer.type !== "stroke" ||
+                    (layer as any).strokes?.length === 0 ||
+                    layer.locked
+                  }
                   className="text-orange-600 focus:text-orange-600"
                 >
                   <Eraser className="h-3.5 w-3.5 mr-2" />

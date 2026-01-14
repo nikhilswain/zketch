@@ -7,6 +7,7 @@ import {
   isStateTreeNode,
 } from "mobx-state-tree";
 import { Stroke } from "./SharedModels";
+import { ImageLayer } from "./ImageLayerModel";
 
 // Layer type discriminator
 export const LayerType = types.enumeration("LayerType", ["stroke", "image"]);
@@ -21,10 +22,10 @@ const BaseLayerProps = {
 };
 
 // Stroke Layer - contains drawing strokes
-export const Layer = types
-  .model("Layer", {
+export const StrokeLayer = types
+  .model("StrokeLayer", {
     ...BaseLayerProps,
-    type: types.optional(LayerType, "stroke"), // Discriminator with default for backward compatibility
+    type: types.optional(types.literal("stroke"), "stroke"),
     strokes: types.optional(types.array(Stroke), []),
   })
   .views((self) => ({
@@ -95,9 +96,34 @@ export const Layer = types
     },
   }));
 
-export interface ILayer extends Instance<typeof Layer> {}
-export interface ILayerSnapshot extends SnapshotOut<typeof Layer> {}
-export interface ILayerSnapshotIn extends SnapshotIn<typeof Layer> {}
+/**
+ * Union type for all layer types
+ * Uses a dispatcher to determine which model to use based on the 'type' property
+ */
+export const Layer = types.union(
+  {
+    dispatcher: (snapshot: any) => {
+      if (snapshot?.type === "image") {
+        return ImageLayer;
+      }
+      // Default to StrokeLayer for backward compatibility
+      return StrokeLayer;
+    },
+  },
+  StrokeLayer,
+  ImageLayer
+);
+
+// Type exports for StrokeLayer
+export interface IStrokeLayer extends Instance<typeof StrokeLayer> {}
+export interface IStrokeLayerSnapshot extends SnapshotOut<typeof StrokeLayer> {}
+export interface IStrokeLayerSnapshotIn
+  extends SnapshotIn<typeof StrokeLayer> {}
+
+// Union layer type exports
+export type ILayer = Instance<typeof Layer>;
+export type ILayerSnapshot = SnapshotOut<typeof Layer>;
+export type ILayerSnapshotIn = SnapshotIn<typeof Layer>;
 
 // Utility to create a new layer with a unique ID
 export function createLayerId(): string {
@@ -106,7 +132,7 @@ export function createLayerId(): string {
 
 export function createDefaultLayer(
   name: string = "Layer 1"
-): SnapshotIn<typeof Layer> {
+): SnapshotIn<typeof StrokeLayer> {
   return {
     id: createLayerId(),
     name,
@@ -120,5 +146,12 @@ export function createDefaultLayer(
 
 // Type exports
 export type LayerTypeValue = "stroke" | "image";
+
+// Re-export ImageLayer utilities
+export {
+  createImageLayer,
+  createBlobId,
+  createImageLayerId,
+} from "./ImageLayerModel";
 
 export default Layer;

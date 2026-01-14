@@ -14,6 +14,7 @@ import FloatingDock from "./floating-dock";
 import ExportDialog from "./export-dialog";
 import { ExportService } from "@/services/ExportService";
 import { ThumbnailService } from "@/services/ThumbnailService";
+import type { BackgroundType } from "@/models/CanvasModel";
 import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
 import { ArrowLeft, Menu, Save } from "lucide-react";
@@ -45,27 +46,50 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
 
           // Check if drawing has layers (new format)
           if (drawing.layers && drawing.layers.length > 0) {
-            // Load layers from saved drawing
-            const layersData = drawing.layers.map((layer) => ({
-              id: layer.id,
-              name: layer.name,
-              visible: layer.visible,
-              locked: layer.locked,
-              opacity: layer.opacity,
-              strokes: layer.strokes.map((stroke) => ({
-                id: stroke.id,
-                points: stroke.points.map((p) => ({
-                  x: p.x,
-                  y: p.y,
-                  pressure: p.pressure,
+            // Load layers from saved drawing - handle both stroke and image layers
+            const layersData = drawing.layers.map((layer: any) => {
+              const baseLayerData = {
+                id: layer.id,
+                name: layer.name,
+                type: layer.type || "stroke", // Default to stroke for backward compatibility
+                visible: layer.visible,
+                locked: layer.locked,
+                opacity: layer.opacity,
+              };
+
+              if (layer.type === "image") {
+                return {
+                  ...baseLayerData,
+                  blobId: layer.blobId,
+                  naturalWidth: layer.naturalWidth,
+                  naturalHeight: layer.naturalHeight,
+                  x: layer.x,
+                  y: layer.y,
+                  width: layer.width,
+                  height: layer.height,
+                  rotation: layer.rotation,
+                  aspectLocked: layer.aspectLocked,
+                };
+              }
+
+              // Stroke layer (default)
+              return {
+                ...baseLayerData,
+                strokes: (layer.strokes || []).map((stroke: any) => ({
+                  id: stroke.id,
+                  points: stroke.points.map((p: any) => ({
+                    x: p.x,
+                    y: p.y,
+                    pressure: p.pressure,
+                  })),
+                  color: stroke.color,
+                  size: stroke.size,
+                  opacity: stroke.opacity ?? 1,
+                  brushStyle: stroke.brushStyle,
+                  timestamp: stroke.timestamp,
                 })),
-                color: stroke.color,
-                size: stroke.size,
-                opacity: (stroke as any).opacity ?? 1,
-                brushStyle: stroke.brushStyle,
-                timestamp: stroke.timestamp,
-              })),
-            }));
+              };
+            });
             canvasStore.loadLayers(layersData as any, drawing.activeLayerId);
           } else {
             // Legacy format - just strokes, create a single layer
@@ -158,12 +182,13 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
 
       try {
         let dataUrl: string;
+        const background = canvasStore.background as BackgroundType;
 
         switch (format) {
           case "png":
             dataUrl = await ExportService.exportToPNG(
               canvasStore.strokes,
-              canvasStore.background,
+              background,
               canvasSize.width,
               canvasSize.height,
               settingsStore.exportSettings
@@ -172,7 +197,7 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
           case "jpg":
             dataUrl = await ExportService.exportToJPG(
               canvasStore.strokes,
-              canvasStore.background,
+              background,
               canvasSize.width,
               canvasSize.height,
               settingsStore.exportSettings
@@ -181,7 +206,7 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
           case "svg":
             dataUrl = await ExportService.exportToSVG(
               canvasStore.strokes,
-              canvasStore.background,
+              background,
               canvasSize.width,
               canvasSize.height,
               settingsStore.exportSettings
@@ -289,7 +314,10 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
           isOpen={showExportDialog}
           onClose={() => setShowExportDialog(false)}
           onExport={handleExport}
-          strokeCount={canvasStore.strokes.length}
+          strokes={canvasStore.strokes}
+          background={canvasStore.background as BackgroundType}
+          drawingName={drawingName}
+          layerCount={canvasStore.layers.length}
         />
       </div>
     );
