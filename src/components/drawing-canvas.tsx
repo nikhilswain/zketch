@@ -55,6 +55,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               return {
                 id: snapshot.id,
                 name: snapshot.name,
+                type: (snapshot as any).type || "stroke", // Default to stroke for backward compatibility
                 visible: snapshot.visible,
                 locked: snapshot.locked,
                 opacity: snapshot.opacity,

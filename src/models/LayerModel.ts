@@ -8,14 +8,24 @@ import {
 } from "mobx-state-tree";
 import { Stroke } from "./SharedModels";
 
+// Layer type discriminator
+export const LayerType = types.enumeration("LayerType", ["stroke", "image"]);
+
+// Base layer properties shared by all layer types
+const BaseLayerProps = {
+  id: types.identifier,
+  name: types.string,
+  visible: types.optional(types.boolean, true),
+  locked: types.optional(types.boolean, false),
+  opacity: types.optional(types.number, 1), // 0-1
+};
+
+// Stroke Layer - contains drawing strokes
 export const Layer = types
   .model("Layer", {
-    id: types.identifier,
-    name: types.string,
+    ...BaseLayerProps,
+    type: types.optional(LayerType, "stroke"), // Discriminator with default for backward compatibility
     strokes: types.optional(types.array(Stroke), []),
-    visible: types.optional(types.boolean, true),
-    locked: types.optional(types.boolean, false),
-    opacity: types.optional(types.number, 1), // 0-1
   })
   .views((self) => ({
     get isEmpty() {
@@ -100,11 +110,15 @@ export function createDefaultLayer(
   return {
     id: createLayerId(),
     name,
+    type: "stroke",
     strokes: [],
     visible: true,
     locked: false,
     opacity: 1,
   };
 }
+
+// Type exports
+export type LayerTypeValue = "stroke" | "image";
 
 export default Layer;

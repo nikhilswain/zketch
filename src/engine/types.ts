@@ -1,5 +1,8 @@
 export type BrushStyle = "ink" | "eraser" | "spray" | "texture";
 
+// Layer types
+export type LayerType = "stroke" | "image";
+
 export interface Point {
   x: number;
   y: number;
@@ -16,7 +19,41 @@ export interface StrokeLike {
   timestamp: number;
 }
 
-export interface LayerLike {
+// Base layer interface (shared properties)
+export interface BaseLayerLike {
+  id: string;
+  name: string;
+  type: LayerType;
+  visible: boolean;
+  locked: boolean;
+  opacity: number;
+}
+
+// Stroke layer - contains drawing strokes
+export interface StrokeLayerLike extends BaseLayerLike {
+  type: "stroke";
+  strokes: readonly StrokeLike[];
+}
+
+// Image layer - contains an imported image (to be implemented in Phase 2)
+export interface ImageLayerLike extends BaseLayerLike {
+  type: "image";
+  blobId: string;
+  naturalWidth: number;
+  naturalHeight: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  aspectLocked: boolean;
+}
+
+// Union type for all layer types
+export type LayerLike = StrokeLayerLike | ImageLayerLike;
+
+// Legacy interface for backward compatibility (deprecated, use LayerLike)
+export interface LegacyLayerLike {
   id: string;
   name: string;
   visible: boolean;

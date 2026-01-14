@@ -243,8 +243,15 @@ export class CanvasEngine {
   }
 
   private renderLayer(ctx: CanvasRenderingContext2D, layer: LayerLike) {
-    for (const stroke of layer.strokes) {
-      this.renderStroke(ctx, stroke, 1); // Layer opacity applied during compositing
+    // Handle different layer types
+    if (layer.type === "stroke") {
+      // Stroke layer - render all strokes
+      for (const stroke of layer.strokes) {
+        this.renderStroke(ctx, stroke, 1); // Layer opacity applied during compositing
+      }
+    } else if (layer.type === "image") {
+      // Image layer - TODO: implement in Phase 4
+      // For now, skip image layers
     }
   }
 
