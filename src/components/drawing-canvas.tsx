@@ -7,6 +7,8 @@ import type { IPoint, IStroke } from "@/models/CanvasModel";
 import { CanvasEngine } from "@/engine";
 import type { StrokeLike, LayerLike } from "@/engine";
 import { createGetBrushOptions } from "@/engine/brushOptions";
+import { ImportService } from "@/services/ImportService";
+import { toast } from "sonner";
 
 interface DrawingCanvasProps {
   isDrawingMode: boolean;
@@ -457,6 +459,119 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         root.removeEventListener("wheel", handleWheel);
       };
     }, [handleWheel]);
+
+    // Handle clipboard paste for image import
+    const handleImagePaste = useCallback(
+      async (file: File) => {
+        try {
+          const result = await ImportService.importFromFile(file);
+
+          if (
+            result.success &&
+            result.blobId &&
+            result.width &&
+            result.height
+          ) {
+            // Get canvas dimensions for centering
+            const root = rootRef.current;
+            const canvasWidth = root?.clientWidth || 1920;
+            const canvasHeight = root?.clientHeight || 1080;
+
+            canvasStore.addImageLayer(
+              result.blobId,
+              result.originalWidth || result.width,
+              result.originalHeight || result.height,
+              canvasWidth,
+              canvasHeight,
+              "Pasted Image"
+            );
+
+            toast.success("Image pasted successfully!");
+            return true;
+          } else {
+            toast.error(result.error || "Failed to paste image");
+            return false;
+          }
+        } catch (error) {
+          console.error("Paste import failed:", error);
+          toast.error("Failed to paste image");
+          return false;
+        }
+      },
+      [canvasStore]
+    );
+
+    useEffect(() => {
+      const handlePaste = async (e: ClipboardEvent) => {
+        if (!e.clipboardData) {
+          return;
+        }
+
+        // Look for image items in clipboard
+        const items = Array.from(e.clipboardData.items);
+        const imageItem = items.find((item) => item.type.startsWith("image/"));
+
+        if (!imageItem) {
+          return;
+        }
+
+        const file = imageItem.getAsFile();
+        if (!file) {
+          return;
+        }
+
+        e.preventDefault();
+        await handleImagePaste(file);
+      };
+
+      // Handle Ctrl+V/Cmd+V using Clipboard API (more reliable)
+      const handleKeyDown = async (e: KeyboardEvent) => {
+        // Check for Ctrl+V or Cmd+V
+        if ((e.ctrlKey || e.metaKey) && e.key === "v") {
+          // Don't handle if in an input/textarea
+          if (
+            e.target instanceof HTMLInputElement ||
+            e.target instanceof HTMLTextAreaElement
+          ) {
+            return;
+          }
+
+          // Use Clipboard API to read images
+          try {
+            if (navigator.clipboard && navigator.clipboard.read) {
+              const clipboardItems = await navigator.clipboard.read();
+              for (const clipboardItem of clipboardItems) {
+                const imageType = clipboardItem.types.find((type) =>
+                  type.startsWith("image/")
+                );
+                if (imageType) {
+                  const blob = await clipboardItem.getType(imageType);
+                  const file = new File([blob], "pasted-image", {
+                    type: imageType,
+                  });
+
+                  const success = await handleImagePaste(file);
+                  if (success) {
+                    e.preventDefault();
+                  }
+                  return;
+                }
+              }
+            }
+          } catch (err) {
+            // Clipboard API might fail due to permissions, fall through to paste event
+          }
+        }
+      };
+
+      // Listen on window for paste events and keydown
+      window.addEventListener("paste", handlePaste);
+      window.addEventListener("keydown", handleKeyDown);
+      return () => {
+        window.removeEventListener("paste", handlePaste);
+        window.removeEventListener("keydown", handleKeyDown);
+      };
+    }, [canvasStore, handleImagePaste]);
 
     useEffect(() => {
       renderStrokes();
