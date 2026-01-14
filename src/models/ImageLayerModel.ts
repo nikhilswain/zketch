@@ -208,6 +208,8 @@ export function createBlobId(): string {
  * @param canvasWidth - Canvas width for centering
  * @param canvasHeight - Canvas height for centering
  * @param name - Optional layer name
+ * @param centerX - Optional X position to center the image at (in canvas coordinates)
+ * @param centerY - Optional Y position to center the image at (in canvas coordinates)
  */
 export function createImageLayer(
   blobId: string,
@@ -215,7 +217,9 @@ export function createImageLayer(
   naturalHeight: number,
   canvasWidth: number,
   canvasHeight: number,
-  name?: string
+  name?: string,
+  centerX?: number,
+  centerY?: number
 ): SnapshotIn<typeof ImageLayer> {
   // Scale to fit 60-70% of canvas
   const targetSize = Math.min(canvasWidth, canvasHeight) * 0.65;
@@ -224,9 +228,11 @@ export function createImageLayer(
   const width = naturalWidth * scale;
   const height = naturalHeight * scale;
 
-  // Center on canvas
-  const x = (canvasWidth - width) / 2;
-  const y = (canvasHeight - height) / 2;
+  // Position: use provided center point, or center on canvas
+  const x =
+    centerX !== undefined ? centerX - width / 2 : (canvasWidth - width) / 2;
+  const y =
+    centerY !== undefined ? centerY - height / 2 : (canvasHeight - height) / 2;
 
   return {
     id: createImageLayerId(),

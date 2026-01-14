@@ -499,7 +499,9 @@ export const CanvasModel = types
         naturalHeight: number,
         canvasWidth: number,
         canvasHeight: number,
-        name?: string
+        name?: string,
+        centerX?: number,
+        centerY?: number
       ) {
         const newLayer = createImageLayer(
           blobId,
@@ -508,7 +510,9 @@ export const CanvasModel = types
           canvasWidth,
           canvasHeight,
           name ||
-            `Image ${self.layers.filter((l) => l.type === "image").length + 1}`
+            `Image ${self.layers.filter((l) => l.type === "image").length + 1}`,
+          centerX,
+          centerY
         );
         self.layers.push(Layer.create(newLayer as any));
         self.activeLayerId = newLayer.id;

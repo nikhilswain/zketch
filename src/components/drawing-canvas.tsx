@@ -472,10 +472,23 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             result.width &&
             result.height
           ) {
-            // Get canvas dimensions for centering
+            // Get canvas dimensions for sizing
             const root = rootRef.current;
             const canvasWidth = root?.clientWidth || 1920;
             const canvasHeight = root?.clientHeight || 1080;
+
+            // Convert mouse position to canvas coordinates if available
+            let centerX: number | undefined;
+            let centerY: number | undefined;
+
+            if (mousePosition && root) {
+              const rect = root.getBoundingClientRect();
+              const localX = mousePosition.x - rect.left;
+              const localY = mousePosition.y - rect.top;
+              // Convert screen coords to world coords
+              centerX = (localX - canvasStore.panX) / canvasStore.zoom;
+              centerY = (localY - canvasStore.panY) / canvasStore.zoom;
+            }
 
             canvasStore.addImageLayer(
               result.blobId,
@@ -483,7 +496,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               result.originalHeight || result.height,
               canvasWidth,
               canvasHeight,
-              "Pasted Image"
+              "Pasted Image",
+              centerX,
+              centerY
             );
 
             toast.success("Image pasted successfully!");
@@ -498,7 +513,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           return false;
         }
       },
-      [canvasStore]
+      [canvasStore, mousePosition]
     );
 
     useEffect(() => {
