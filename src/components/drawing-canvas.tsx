@@ -4,8 +4,14 @@ import { observer } from "mobx-react-lite";
 import { getSnapshot } from "mobx-state-tree";
 import { useCanvasStore } from "../hooks/useStores";
 import type { IPoint, IStroke } from "@/models/CanvasModel";
-import { CanvasEngine } from "@/engine";
-import type { StrokeLike, LayerLike } from "@/engine";
+import { CanvasEngine, transformController } from "@/engine";
+import type {
+  StrokeLike,
+  LayerLike,
+  TransformHandleType,
+  ImageLayerLike,
+} from "@/engine";
+import type { TransformStartState } from "@/engine/TransformController";
 import { createGetBrushOptions } from "@/engine/brushOptions";
 import { ImportService } from "@/services/ImportService";
 import { toast } from "sonner";
@@ -40,6 +46,13 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       x: number;
       y: number;
     } | null>(null);
+
+    // Transform interaction state
+    const [isTransforming, setIsTransforming] = useState(false);
+    const [transformHandle, setTransformHandle] =
+      useState<TransformHandleType | null>(null);
+    const [transformStart, setTransformStart] =
+      useState<TransformStartState | null>(null);
 
     // Mount layered engine (background + strokes). Engine handles its own resizing.
     useEffect(() => {
@@ -180,6 +193,38 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         return null;
       },
       [canvasStore.visibleLayers]
+    );
+
+    // Hit test transform handles - returns handle type if hit, null otherwise
+    const hitTestTransformHandles = useCallback(
+      (screenX: number, screenY: number): TransformHandleType | null => {
+        const selectedLayer = canvasStore.selectedImageLayer;
+        if (!selectedLayer) return null;
+
+        const root = rootRef.current;
+        if (!root) return null;
+        const rect = root.getBoundingClientRect();
+        const localX = screenX - rect.left;
+        const localY = screenY - rect.top;
+
+        const viewport = {
+          panX: canvasStore.panX,
+          panY: canvasStore.panY,
+          zoom: canvasStore.zoom,
+        };
+
+        return transformController.hitTest(
+          { x: localX, y: localY },
+          selectedLayer as ImageLayerLike,
+          viewport
+        );
+      },
+      [
+        canvasStore.selectedImageLayer,
+        canvasStore.zoom,
+        canvasStore.panX,
+        canvasStore.panY,
+      ]
     );
 
     // Preview RAF coalescing
@@ -327,6 +372,37 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         if (isDrawingMode && e.button === 0) {
           const point = screenToCanvas(e.clientX, e.clientY);
 
+          // If in transform mode, check for handle interactions first
+          if (canvasStore.isTransformMode && canvasStore.selectedImageLayer) {
+            const handle = hitTestTransformHandles(e.clientX, e.clientY);
+
+            if (handle) {
+              // Start transform operation using TransformController
+              const root = rootRef.current;
+              if (!root) return;
+              const rect = root.getBoundingClientRect();
+              const localX = e.clientX - rect.left;
+              const localY = e.clientY - rect.top;
+
+              const viewport = {
+                panX: canvasStore.panX,
+                panY: canvasStore.panY,
+                zoom: canvasStore.zoom,
+              };
+
+              const startState = transformController.captureStartState(
+                { x: localX, y: localY },
+                canvasStore.selectedImageLayer as ImageLayerLike,
+                viewport
+              );
+
+              setIsTransforming(true);
+              setTransformHandle(handle);
+              setTransformStart(startState);
+              return;
+            }
+          }
+
           // Check if clicking on an image layer
           const hitLayerId = hitTestImageLayers(point.x, point.y);
 
@@ -352,6 +428,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         isDrawingMode,
         spacePressed,
         hitTestImageLayers,
+        hitTestTransformHandles,
         canvasStore,
       ]
     );
@@ -370,6 +447,53 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             canvasStore.panY + deltaY
           );
           setLastPanPoint({ x: e.clientX, y: e.clientY });
+        } else if (
+          isTransforming &&
+          transformHandle &&
+          transformStart &&
+          canvasStore.selectedImageLayer
+        ) {
+          // Handle transform operations using TransformController
+          const layer = canvasStore.selectedImageLayer as any;
+          const root = rootRef.current;
+          if (!root) return;
+          const rect = root.getBoundingClientRect();
+          const localX = e.clientX - rect.left;
+          const localY = e.clientY - rect.top;
+
+          const viewport = {
+            panX: canvasStore.panX,
+            panY: canvasStore.panY,
+            zoom: canvasStore.zoom,
+          };
+
+          let result;
+          if (transformHandle === "move") {
+            result = transformController.applyMove(
+              { x: localX, y: localY },
+              transformStart,
+              viewport
+            );
+            layer.setPosition(result.x, result.y);
+          } else if (transformHandle === "rotate") {
+            result = transformController.applyRotation(
+              { x: localX, y: localY },
+              transformStart,
+              viewport
+            );
+            layer.setRotation(result.rotation);
+          } else if (["nw", "ne", "se", "sw"].includes(transformHandle)) {
+            const maintainAspect = !e.shiftKey; // Shift to free resize
+            result = transformController.applyResize(
+              transformHandle as "nw" | "ne" | "se" | "sw",
+              { x: localX, y: localY },
+              transformStart,
+              viewport,
+              maintainAspect
+            );
+            layer.setPosition(result.x, result.y);
+            layer.setSize(result.width, result.height, false);
+          }
         } else if (isDrawing && isDrawingMode) {
           // Drawing
           const point = screenToCanvas(e.clientX, e.clientY);
@@ -395,9 +519,11 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       [
         isDrawing,
         isPanning,
+        isTransforming,
+        transformHandle,
+        transformStart,
         isDrawingMode,
         lastPanPoint,
-        screenToCanvas,
         canvasStore,
       ]
     );
@@ -405,6 +531,14 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     const handlePointerUp = useCallback(
       (e: React.PointerEvent) => {
         // no pointer capture on root div
+
+        // End transform operation
+        if (isTransforming) {
+          setIsTransforming(false);
+          setTransformHandle(null);
+          setTransformStart(null);
+          return;
+        }
 
         if (isDrawing && isDrawingMode) {
           setIsDrawing(false);
@@ -440,7 +574,14 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           setLastPanPoint(null);
         }
       },
-      [isDrawing, isPanning, isDrawingMode, currentPoints, canvasStore]
+      [
+        isDrawing,
+        isPanning,
+        isTransforming,
+        isDrawingMode,
+        currentPoints,
+        canvasStore,
+      ]
     );
 
     const handleWheel = useCallback(
@@ -714,6 +855,29 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     const getCursorStyle = () => {
       if (spacePressed || isPanning) return "cursor-grabbing";
       if (!isDrawingMode) return "cursor-grab";
+
+      // Transform mode cursors
+      if (isTransforming) {
+        if (transformHandle === "move") return "cursor-move";
+        if (transformHandle === "rotate") return "cursor-alias";
+        if (transformHandle === "nw" || transformHandle === "se")
+          return "cursor-nwse-resize";
+        if (transformHandle === "ne" || transformHandle === "sw")
+          return "cursor-nesw-resize";
+      }
+
+      // Check if hovering over transform handles
+      if (canvasStore.isTransformMode && mousePosition) {
+        const handle = hitTestTransformHandles(
+          mousePosition.x,
+          mousePosition.y
+        );
+        if (handle === "move") return "cursor-move";
+        if (handle === "rotate") return "cursor-alias";
+        if (handle === "nw" || handle === "se") return "cursor-nwse-resize";
+        if (handle === "ne" || handle === "sw") return "cursor-nesw-resize";
+      }
+
       if (canvasStore.currentBrushStyle === "eraser") return "cursor-none"; // Hide cursor for eraser
       return "cursor-crosshair";
     };

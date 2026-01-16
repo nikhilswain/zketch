@@ -3,6 +3,7 @@ import { SprayBrush } from "./brushes/SprayBrush";
 import { TextureBrush } from "./brushes/TextureBrush";
 import { GridRenderer } from "./GridRenderer";
 import { BlobStorageService } from "@/services/BlobStorageService";
+import { transformController } from "./TransformController";
 import type {
   EngineConfig,
   PanZoom,
@@ -397,78 +398,10 @@ export class CanvasEngine {
     if (!selectedLayer || selectedLayer.type !== "image") return;
 
     const imgLayer = selectedLayer as ImageLayerLike;
-    const { x, y, width, height, rotation } = imgLayer;
-
-    // Convert world coordinates to screen coordinates
     const dpr = window.devicePixelRatio || 1;
-    const screenX = (x * this.pz.zoom + this.pz.panX) * dpr;
-    const screenY = (y * this.pz.zoom + this.pz.panY) * dpr;
-    const screenW = width * this.pz.zoom * dpr;
-    const screenH = height * this.pz.zoom * dpr;
 
-    ctx.save();
-
-    // Handle size (in screen pixels)
-    const handleSize = 10 * dpr;
-    const rotateHandleDistance = 30 * dpr;
-
-    // Apply rotation transform around center
-    const centerX = screenX + screenW / 2;
-    const centerY = screenY + screenH / 2;
-
-    ctx.translate(centerX, centerY);
-    ctx.rotate(rotation);
-    ctx.translate(-centerX, -centerY);
-
-    // Draw bounding box
-    ctx.strokeStyle = "#0ea5e9"; // Sky blue
-    ctx.lineWidth = 2 * dpr;
-    ctx.setLineDash([]);
-    ctx.strokeRect(screenX, screenY, screenW, screenH);
-
-    // Draw corner handles
-    const corners = [
-      { type: "nw", x: screenX, y: screenY },
-      { type: "ne", x: screenX + screenW, y: screenY },
-      { type: "se", x: screenX + screenW, y: screenY + screenH },
-      { type: "sw", x: screenX, y: screenY + screenH },
-    ];
-
-    ctx.fillStyle = "#ffffff";
-    ctx.strokeStyle = "#0ea5e9";
-    ctx.lineWidth = 2 * dpr;
-
-    for (const corner of corners) {
-      ctx.beginPath();
-      ctx.rect(
-        corner.x - handleSize / 2,
-        corner.y - handleSize / 2,
-        handleSize,
-        handleSize
-      );
-      ctx.fill();
-      ctx.stroke();
-    }
-
-    // Draw rotation handle (top center)
-    const rotateX = screenX + screenW / 2;
-    const rotateY = screenY - rotateHandleDistance;
-
-    // Line from top edge to rotation handle
-    ctx.beginPath();
-    ctx.setLineDash([4 * dpr, 4 * dpr]);
-    ctx.moveTo(screenX + screenW / 2, screenY);
-    ctx.lineTo(rotateX, rotateY);
-    ctx.stroke();
-
-    // Rotation handle circle
-    ctx.setLineDash([]);
-    ctx.beginPath();
-    ctx.arc(rotateX, rotateY, handleSize / 2 + 2 * dpr, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.restore();
+    // Use TransformController for rendering
+    transformController.renderHandles(ctx, imgLayer, this.pz, dpr);
   }
 
   // Get or create an offscreen canvas for a layer
