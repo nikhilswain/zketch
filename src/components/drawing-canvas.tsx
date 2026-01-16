@@ -153,6 +153,33 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       [canvasStore.panX, canvasStore.panY, canvasStore.zoom]
     );
 
+    // Hit test image layers - returns the topmost image layer at the given canvas coordinates
+    const hitTestImageLayers = useCallback(
+      (canvasX: number, canvasY: number): string | null => {
+        // Iterate layers from top to bottom (reverse order)
+        const layers = canvasStore.visibleLayers;
+        for (let i = layers.length - 1; i >= 0; i--) {
+          const layer = layers[i];
+          if (layer.type !== "image" || layer.locked) continue;
+
+          const imgLayer = layer as any;
+          const { x, y, width, height } = imgLayer;
+
+          // Simple bounding box hit test (no rotation for now)
+          if (
+            canvasX >= x &&
+            canvasX <= x + width &&
+            canvasY >= y &&
+            canvasY <= y + height
+          ) {
+            return layer.id;
+          }
+        }
+        return null;
+      },
+      [canvasStore.visibleLayers]
+    );
+
     // Preview RAF coalescing
     const previewRafRef = useRef<number | null>(null);
 
@@ -204,6 +231,11 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         }
         if (e.key === "Shift") {
           shiftDownRef.current = true;
+        }
+        // ESC to exit transform mode
+        if (e.key === "Escape" && canvasStore.isTransformMode) {
+          e.preventDefault();
+          canvasStore.deselectLayer();
         }
       };
 
@@ -289,15 +321,37 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           return;
         }
 
-        // Drawing mode
+        // Left click in drawing mode
         if (isDrawingMode && e.button === 0) {
-          setIsDrawing(true);
           const point = screenToCanvas(e.clientX, e.clientY);
+
+          // Check if clicking on an image layer
+          const hitLayerId = hitTestImageLayers(point.x, point.y);
+
+          if (hitLayerId) {
+            // Select the image layer and enter transform mode
+            canvasStore.selectLayer(hitLayerId);
+            return;
+          }
+
+          // If in transform mode but clicked outside any image, deselect
+          if (canvasStore.isTransformMode) {
+            canvasStore.deselectLayer();
+          }
+
+          // Start drawing
+          setIsDrawing(true);
           point.pressure = e.pressure || 0.5;
           setCurrentPoints([point]);
         }
       },
-      [screenToCanvas, isDrawingMode, spacePressed]
+      [
+        screenToCanvas,
+        isDrawingMode,
+        spacePressed,
+        hitTestImageLayers,
+        canvasStore,
+      ]
     );
 
     const handlePointerMove = useCallback(

@@ -3,6 +3,9 @@ export type BrushStyle = "ink" | "eraser" | "spray" | "texture";
 // Layer types
 export type LayerType = "stroke" | "image";
 
+// Interaction modes
+export type InteractionMode = "draw" | "transform";
+
 export interface Point {
   x: number;
   y: number;

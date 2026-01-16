@@ -62,6 +62,13 @@ export const CanvasModel = types
     brushSettings: types.optional(BrushSettings, {}),
     // Eraser configuration - use optimized advanced eraser for all backgrounds
     useAdvancedEraserForAllBackgrounds: types.optional(types.boolean, true),
+    // Interaction mode: "draw" for normal drawing, "transform" for moving/resizing images
+    interactionMode: types.optional(
+      types.enumeration("InteractionMode", ["draw", "transform"]),
+      "draw"
+    ),
+    // Currently selected layer for transformation
+    selectedLayerId: types.optional(types.maybeNull(types.string), null),
   })
   .volatile((self) => ({
     history: [] as SnapshotOut<typeof CanvasState>[],
@@ -150,6 +157,28 @@ export const CanvasModel = types
         return "#000000"; // Color doesn't matter for destination-out
       }
       return "white"; // White paint for white/grid backgrounds
+    },
+    // Get the currently selected layer
+    get selectedLayer() {
+      if (!self.selectedLayerId) return null;
+      return self.layers.find((l) => l.id === self.selectedLayerId) || null;
+    },
+    // Get selected layer if it's an image layer
+    get selectedImageLayer() {
+      if (!self.selectedLayerId) return null;
+      const layer = self.layers.find((l) => l.id === self.selectedLayerId);
+      if (layer && layer.type === "image") {
+        return layer;
+      }
+      return null;
+    },
+    // Check if we're in transform mode
+    get isTransformMode() {
+      return self.interactionMode === "transform";
+    },
+    // Find a layer by ID (for selection purposes)
+    findLayerById(id: string) {
+      return self.layers.find((l) => l.id === id) || null;
     },
   }))
   .actions((self) => {
@@ -548,6 +577,40 @@ export const CanvasModel = types
           self.activeLayerId = layerId;
           self.renderVersion++;
         }
+      },
+
+      // Set interaction mode (draw or transform)
+      setInteractionMode(mode: "draw" | "transform") {
+        self.interactionMode = mode;
+        // If switching to draw mode, clear selection
+        if (mode === "draw") {
+          self.selectedLayerId = null;
+        }
+        self.renderVersion++;
+      },
+
+      // Select a layer for transformation
+      selectLayer(layerId: string | null) {
+        if (layerId === null) {
+          self.selectedLayerId = null;
+          self.interactionMode = "draw";
+        } else {
+          const layer = self.layers.find((l) => l.id === layerId);
+          if (layer) {
+            self.selectedLayerId = layerId;
+            self.interactionMode = "transform";
+            // Also make it the active layer
+            self.activeLayerId = layerId;
+          }
+        }
+        self.renderVersion++;
+      },
+
+      // Deselect current layer and return to draw mode
+      deselectLayer() {
+        self.selectedLayerId = null;
+        self.interactionMode = "draw";
+        self.renderVersion++;
       },
 
       // Move layer to a new position (index)
