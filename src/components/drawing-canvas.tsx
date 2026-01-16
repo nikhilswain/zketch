@@ -94,6 +94,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           }
         },
         getActiveLayerId: () => canvasStore.activeLayerId,
+        // Provide selected layer ID for transform handles
+        getSelectedLayerId: () => canvasStore.selectedLayerId,
         // Use a dynamic brush options builder bound to the latest settings
         getBrushOptions: (brush, size) =>
           createGetBrushOptions(canvasStore.brushSettings as any)(

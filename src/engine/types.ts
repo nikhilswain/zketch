@@ -91,6 +91,8 @@ export interface EngineConfig {
   getLayers?: () => LayerLike[];
   // Which layer is currently active (for visual indication)
   getActiveLayerId?: () => string;
+  // Which layer is selected for transformation
+  getSelectedLayerId?: () => string | null;
   // Optional: provide per-brush rendering options (size, smoothing, taper, etc.)
   getBrushOptions?: (
     brush: BrushStyle,
@@ -110,4 +112,31 @@ export interface CursorOverlay {
   x?: number;
   y?: number;
   r?: number;
+}
+
+// Transform handle types for image manipulation
+export type TransformHandleType =
+  | "move" // Entire bounding box (for moving)
+  | "nw"
+  | "ne"
+  | "se"
+  | "sw" // Corner handles (for resizing)
+  | "rotate"; // Rotation handle (top center)
+
+export interface TransformHandles {
+  // Bounding box in canvas (world) coordinates
+  bounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    rotation: number;
+  };
+  // Handle positions in screen coordinates (for hit testing)
+  handles: {
+    type: TransformHandleType;
+    x: number;
+    y: number;
+    size: number;
+  }[];
 }
