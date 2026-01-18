@@ -76,7 +76,7 @@ const VaultView: React.FC<VaultViewProps> = observer(
 
     const filteredDrawings: FilteredDrawing[] = vaultStore.sortedDrawings
       .filter((drawing: ISavedDrawing) =>
-        drawing.name.toLowerCase().includes(searchQuery.toLowerCase())
+        drawing.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
       )
       .sort((a: ISavedDrawing, b: ISavedDrawing) => {
         switch (sortBy as SortOrder) {
