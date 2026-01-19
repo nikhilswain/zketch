@@ -1,5 +1,5 @@
 import type React from "react";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { observer } from "mobx-react-lite";
 import { useVaultStore } from "../hooks/useStores";
 import { Button } from "./ui/button";
@@ -23,6 +23,7 @@ import {
   HardDrive,
 } from "lucide-react";
 import { IndexedDBService } from "@/services/IndexedDBService";
+import { BlobStorageService } from "@/services/BlobStorageService";
 import type { ISavedDrawing } from "@/models/VaultModel";
 import { toast } from "sonner";
 
@@ -32,6 +33,65 @@ interface VaultViewProps {
   onNewDrawing: () => void;
   onEditDrawing: (drawingId: string) => void;
 }
+
+// Thumbnail component that handles async loading from blob storage
+const ThumbnailImage: React.FC<{
+  thumbnailId: string;
+  alt: string;
+  className?: string;
+}> = ({ thumbnailId, alt, className }) => {
+  const [src, setSrc] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadThumbnail = async () => {
+      if (!thumbnailId) {
+        setLoading(false);
+        return;
+      }
+
+      // Check if it's a blob ID or legacy base64
+      if (BlobStorageService.isThumbnailId(thumbnailId)) {
+        const dataUrl =
+          await BlobStorageService.getThumbnailDataUrl(thumbnailId);
+        if (mounted && dataUrl) {
+          setSrc(dataUrl);
+        }
+      } else {
+        // Legacy base64 thumbnail
+        if (mounted) {
+          setSrc(thumbnailId);
+        }
+      }
+      if (mounted) {
+        setLoading(false);
+      }
+    };
+
+    loadThumbnail();
+    return () => {
+      mounted = false;
+    };
+  }, [thumbnailId]);
+
+  if (loading) {
+    return <div className={`${className} bg-gray-100 animate-pulse`} />;
+  }
+
+  if (!src) {
+    return (
+      <div
+        className={`${className} bg-gray-100 flex items-center justify-center`}
+      >
+        <Palette className="w-4 sm:w-6 h-4 sm:h-6 text-gray-400" />
+      </div>
+    );
+  }
+
+  return <img src={src} alt={alt} className={className} loading="lazy" />;
+};
 
 const VaultView: React.FC<VaultViewProps> = observer(
   ({ onNewDrawing, onEditDrawing }) => {
@@ -296,18 +356,11 @@ const VaultView: React.FC<VaultViewProps> = observer(
                           : "w-12 h-12 sm:w-16 sm:h-16 flex-shrink-0"
                       }`}
                     >
-                      {drawing.thumbnail ? (
-                        <img
-                          src={drawing.thumbnail || "/placeholder.svg"}
-                          alt={drawing.name}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                          <Palette className="w-4 sm:w-6 h-4 sm:h-6 text-gray-400" />
-                        </div>
-                      )}
+                      <ThumbnailImage
+                        thumbnailId={drawing.thumbnail}
+                        alt={drawing.name}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
 
                     {/* Content */}

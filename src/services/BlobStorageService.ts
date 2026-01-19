@@ -51,7 +51,7 @@ export class BlobStorageService {
     blob: Blob,
     width: number,
     height: number,
-    originalName?: string
+    originalName?: string,
   ): Promise<string> {
     const id = this.generateBlobId();
 
@@ -185,7 +185,7 @@ export class BlobStorageService {
    * Get blob metadata without loading the actual blob data
    */
   static async getBlobMetadata(
-    id: string
+    id: string,
   ): Promise<Omit<IStoredBlob, "blob"> | null> {
     const stored = await this.db.blobs.get(id);
     if (!stored) {
@@ -210,7 +210,74 @@ export class BlobStorageService {
       stored.blob,
       stored.width,
       stored.height,
-      stored.originalName
+      stored.originalName,
     );
+  }
+
+  // ============================================
+  // Thumbnail-specific methods
+  // ============================================
+
+  /**
+   * Generate a thumbnail blob ID
+   */
+  static generateThumbnailId(): string {
+    return `thumb_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+  }
+
+  /**
+   * Store a thumbnail from a data URL and return its ID
+   */
+  static async storeThumbnail(dataUrl: string): Promise<string> {
+    const id = this.generateThumbnailId();
+
+    // Convert data URL to blob
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+
+    // Thumbnails are typically 200x150
+    const storedBlob: IStoredBlob = {
+      id,
+      blob,
+      mimeType: blob.type || "image/png",
+      originalName: "thumbnail",
+      width: 200,
+      height: 150,
+      size: blob.size,
+      createdAt: new Date(),
+    };
+
+    await this.db.blobs.put(storedBlob);
+    return id;
+  }
+
+  /**
+   * Get thumbnail as data URL (for backward compatibility with existing code)
+   * This loads the blob and converts it back to base64
+   */
+  static async getThumbnailDataUrl(id: string): Promise<string | null> {
+    if (!id || !id.startsWith("thumb_")) {
+      // If it's not a thumbnail ID, it might be a legacy base64 string
+      return id || null;
+    }
+
+    const stored = await this.getBlob(id);
+    if (!stored) {
+      return null;
+    }
+
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(stored.blob);
+    });
+  }
+
+  /**
+   * Check if a string is a thumbnail ID (vs legacy base64)
+   */
+  static isThumbnailId(value: string): boolean {
+    return value?.startsWith("thumb_") || false;
   }
 }

@@ -14,6 +14,7 @@ import FloatingDock from "./floating-dock";
 import ExportDialog from "./export-dialog";
 import { ExportService } from "@/services/ExportService";
 import { ThumbnailService } from "@/services/ThumbnailService";
+import { BlobStorageService } from "@/services/BlobStorageService";
 import { optimizeStrokes } from "@/utils/StrokeOptimizer";
 import type { BackgroundType } from "@/models/CanvasModel";
 import { Button } from "./ui/button";
@@ -124,12 +125,17 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
       // Get all strokes from visible layers for thumbnail
       const allStrokes = canvasStore.flattenedStrokes;
 
-      const thumbnail = ThumbnailService.generateThumbnail(
+      // Generate thumbnail data URL
+      const thumbnailDataUrl = ThumbnailService.generateThumbnail(
         allStrokes as any,
         canvasStore.background,
         200,
         150,
       );
+
+      // Store thumbnail as blob and get ID
+      const thumbnailId =
+        await BlobStorageService.storeThumbnail(thumbnailDataUrl);
 
       // Map layers to save format with optimized strokes
       const layersToSave = canvasStore.layers.map((layer) => {
@@ -187,7 +193,7 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
       if (editingDrawingId) {
         await vaultStore.updateDrawing(
           editingDrawingId,
-          thumbnail,
+          thumbnailId,
           canvasStore.background as any,
           layersToSave as any,
           canvasStore.activeLayerId,
@@ -195,7 +201,7 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
       } else {
         await vaultStore.addDrawing(
           drawingName,
-          thumbnail,
+          thumbnailId,
           canvasStore.background as any,
           layersToSave as any,
           canvasStore.activeLayerId,

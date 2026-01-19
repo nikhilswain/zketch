@@ -17,6 +17,7 @@ import ImportDialog from "./import-dialog";
 import LayersPanel from "./layers-panel";
 import { ExportService } from "@/services/ExportService";
 import { ThumbnailService } from "@/services/ThumbnailService";
+import { BlobStorageService } from "@/services/BlobStorageService";
 import { optimizeStrokes } from "@/utils/StrokeOptimizer";
 import { Button } from "./ui/button";
 import { ArrowLeft, ChevronRight, ChevronLeft, Layers } from "lucide-react";
@@ -130,12 +131,17 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
       // Get all strokes from visible layers for thumbnail (flattened preview)
       const allStrokes = canvasStore.flattenedStrokes;
 
-      const thumbnail = ThumbnailService.generateThumbnail(
+      // Generate thumbnail data URL
+      const thumbnailDataUrl = ThumbnailService.generateThumbnail(
         allStrokes as any,
         canvasStore.background,
         200,
         150,
       );
+
+      // Store thumbnail as blob and get ID
+      const thumbnailId =
+        await BlobStorageService.storeThumbnail(thumbnailDataUrl);
 
       // Map layers to save format with optimized strokes
       const layersToSave = canvasStore.layers.map((layer) => {
@@ -193,7 +199,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
       if (editingDrawingId) {
         await vaultStore.updateDrawing(
           editingDrawingId,
-          thumbnail,
+          thumbnailId,
           canvasStore.background as any,
           layersToSave as any,
           canvasStore.activeLayerId,
@@ -201,7 +207,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
       } else {
         await vaultStore.addDrawing(
           drawingName,
-          thumbnail,
+          thumbnailId,
           canvasStore.background as any,
           layersToSave as any,
           canvasStore.activeLayerId,
