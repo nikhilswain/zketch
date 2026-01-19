@@ -39,7 +39,7 @@ const VaultView: React.FC<VaultViewProps> = observer(
     const [searchQuery, setSearchQuery] = useState("");
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
     const [sortBy, setSortBy] = useState<"updated" | "created" | "name">(
-      "updated"
+      "updated",
     );
     const [editingName, setEditingName] = useState<string | null>(null);
     const [newName, setNewName] = useState("");
@@ -76,7 +76,7 @@ const VaultView: React.FC<VaultViewProps> = observer(
 
     const filteredDrawings: FilteredDrawing[] = vaultStore.sortedDrawings
       .filter((drawing: ISavedDrawing) =>
-        drawing.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
+        drawing.name.toLowerCase().includes(searchQuery.trim().toLowerCase()),
       )
       .sort((a: ISavedDrawing, b: ISavedDrawing) => {
         switch (sortBy as SortOrder) {
@@ -107,11 +107,23 @@ const VaultView: React.FC<VaultViewProps> = observer(
     };
 
     const getStrokeCount = (drawing: ISavedDrawing) => {
-      return drawing.strokes.length;
+      // Count strokes from all stroke layers
+      return drawing.layers.reduce((total, layer) => {
+        if (layer.strokes) {
+          return total + layer.strokes.length;
+        }
+        return total;
+      }, 0);
     };
 
     const getColorCount = (drawing: ISavedDrawing) => {
-      const colors = new Set(drawing.strokes.map((stroke) => stroke.color));
+      // Get unique colors from all stroke layers
+      const colors = new Set<string>();
+      drawing.layers.forEach((layer) => {
+        if (layer.strokes) {
+          layer.strokes.forEach((stroke) => colors.add(stroke.color));
+        }
+      });
       return colors.size;
     };
 
@@ -147,7 +159,7 @@ const VaultView: React.FC<VaultViewProps> = observer(
                     <HardDrive className="w-4 h-4" />
                     <span>
                       {IndexedDBService.formatBytes(
-                        vaultStore.storageInfo.used
+                        vaultStore.storageInfo.used,
                       )}{" "}
                       used
                     </span>
@@ -205,8 +217,8 @@ const VaultView: React.FC<VaultViewProps> = observer(
                       {sortBy === "updated"
                         ? "Updated"
                         : sortBy === "created"
-                        ? "Created"
-                        : "Name"}
+                          ? "Created"
+                          : "Name"}
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
@@ -396,7 +408,7 @@ const VaultView: React.FC<VaultViewProps> = observer(
         </div>
       </div>
     );
-  }
+  },
 );
 
 export default VaultView;

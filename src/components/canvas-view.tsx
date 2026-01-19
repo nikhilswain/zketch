@@ -53,14 +53,13 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           setDrawingName(drawing.name);
           canvasStore.setBackground(drawing.background as any);
 
-          // Check if drawing has layers (new format)
+          // Load layers from saved drawing - handle both stroke and image layers
           if (drawing.layers && drawing.layers.length > 0) {
-            // Load layers from saved drawing - handle both stroke and image layers
             const layersData = drawing.layers.map((layer: any) => {
               const baseLayerData = {
                 id: layer.id,
                 name: layer.name,
-                type: layer.type || "stroke", // Default to stroke for backward compatibility
+                type: layer.type || "stroke",
                 visible: layer.visible,
                 locked: layer.locked,
                 opacity: layer.opacity,
@@ -101,27 +100,8 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             });
             canvasStore.loadLayers(layersData as any, drawing.activeLayerId);
           } else {
-            // Legacy format - just strokes, create a single layer
+            // No layers - start fresh
             canvasStore.clear();
-            if (drawing.strokes.length > 0) {
-              const strokesData = drawing.strokes.map((stroke) => ({
-                id: stroke.id,
-                points: stroke.points.map((p) => ({
-                  x: p.x,
-                  y: p.y,
-                  pressure: p.pressure,
-                })),
-                color: stroke.color,
-                size: stroke.size,
-                opacity: (stroke as any).opacity ?? 1,
-                brushStyle: stroke.brushStyle,
-                timestamp: stroke.timestamp,
-              }));
-              // Add strokes to the default layer
-              strokesData.forEach((stroke) => {
-                canvasStore.addStrokeToActiveLayer(stroke as any);
-              });
-            }
           }
         }
       } else {
@@ -153,25 +133,10 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         allStrokes as any,
         canvasStore.background,
         200,
-        150
+        150,
       );
 
-      // Map strokes to save format (legacy - for backward compatibility)
-      const strokesToSave = allStrokes.map((stroke) => ({
-        id: stroke.id,
-        points: stroke.points.map((p) => ({
-          x: p.x,
-          y: p.y,
-          pressure: p.pressure,
-        })),
-        color: stroke.color,
-        size: stroke.size,
-        opacity: stroke.opacity ?? 1,
-        brushStyle: stroke.brushStyle,
-        timestamp: stroke.timestamp,
-      }));
-
-      // Map layers to save format (new - preserves layer structure)
+      // Map layers to save format (preserves layer structure)
       const layersToSave = canvasStore.layers.map((layer) => {
         const baseLayerData = {
           id: layer.id,
@@ -221,20 +186,18 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
       if (editingDrawingId) {
         await vaultStore.updateDrawing(
           editingDrawingId,
-          strokesToSave as any,
           thumbnail,
           canvasStore.background as any,
           layersToSave as any,
-          canvasStore.activeLayerId
+          canvasStore.activeLayerId,
         );
       } else {
         await vaultStore.addDrawing(
           drawingName,
-          strokesToSave as any,
           thumbnail,
           canvasStore.background as any,
           layersToSave as any,
-          canvasStore.activeLayerId
+          canvasStore.activeLayerId,
         );
       }
 
@@ -257,7 +220,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               canvasStore.background as BackgroundType,
               exportSize.width,
               exportSize.height,
-              settingsStore.exportSettings
+              settingsStore.exportSettings,
             );
             break;
           case "jpg":
@@ -266,7 +229,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               canvasStore.background as BackgroundType,
               exportSize.width,
               exportSize.height,
-              settingsStore.exportSettings
+              settingsStore.exportSettings,
             );
             break;
           case "svg":
@@ -275,7 +238,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               canvasStore.background as BackgroundType,
               exportSize.width,
               exportSize.height,
-              settingsStore.exportSettings
+              settingsStore.exportSettings,
             );
             break;
           default:
@@ -431,7 +394,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         />
       </div>
     );
-  }
+  },
 );
 
 export default CanvasView;

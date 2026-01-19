@@ -44,14 +44,13 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
           setDrawingName(drawing.name);
           canvasStore.setBackground(drawing.background as any);
 
-          // Check if drawing has layers (new format)
+          // Load layers from saved drawing - handle both stroke and image layers
           if (drawing.layers && drawing.layers.length > 0) {
-            // Load layers from saved drawing - handle both stroke and image layers
             const layersData = drawing.layers.map((layer: any) => {
               const baseLayerData = {
                 id: layer.id,
                 name: layer.name,
-                type: layer.type || "stroke", // Default to stroke for backward compatibility
+                type: layer.type || "stroke",
                 visible: layer.visible,
                 locked: layer.locked,
                 opacity: layer.opacity,
@@ -92,27 +91,8 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
             });
             canvasStore.loadLayers(layersData as any, drawing.activeLayerId);
           } else {
-            // Legacy format - just strokes, create a single layer
+            // No layers - start fresh
             canvasStore.clear();
-            if (drawing.strokes.length > 0) {
-              const strokesData = drawing.strokes.map((stroke) => ({
-                id: stroke.id,
-                points: stroke.points.map((p) => ({
-                  x: p.x,
-                  y: p.y,
-                  pressure: p.pressure,
-                })),
-                color: stroke.color,
-                size: stroke.size,
-                opacity: (stroke as any).opacity ?? 1,
-                brushStyle: stroke.brushStyle,
-                timestamp: stroke.timestamp,
-              }));
-              // Add strokes to the default layer
-              strokesData.forEach((stroke) => {
-                canvasStore.addStrokeToActiveLayer(stroke as any);
-              });
-            }
           }
         }
       } else {
@@ -140,37 +120,78 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
     const handleSave = async () => {
       if (canvasStore.isEmpty) return;
 
+      // Get all strokes from visible layers for thumbnail
+      const allStrokes = canvasStore.flattenedStrokes;
+
       const thumbnail = ThumbnailService.generateThumbnail(
-        canvasStore.strokes,
+        allStrokes as any,
         canvasStore.background,
         200,
-        150
+        150,
       );
+
+      // Map layers to save format
+      const layersToSave = canvasStore.layers.map((layer) => {
+        const baseLayerData = {
+          id: layer.id,
+          name: layer.name,
+          type: layer.type,
+          visible: layer.visible,
+          locked: layer.locked,
+          opacity: layer.opacity,
+        };
+
+        if (layer.type === "stroke") {
+          const strokeLayer = layer as any;
+          return {
+            ...baseLayerData,
+            strokes: strokeLayer.strokes.map((stroke: any) => ({
+              id: stroke.id,
+              points: stroke.points.map((p: any) => ({
+                x: p.x,
+                y: p.y,
+                pressure: p.pressure,
+              })),
+              color: stroke.color,
+              size: stroke.size,
+              opacity: stroke.opacity ?? 1,
+              brushStyle: stroke.brushStyle,
+              timestamp: stroke.timestamp,
+            })),
+          };
+        } else if (layer.type === "image") {
+          const imageLayer = layer as any;
+          return {
+            ...baseLayerData,
+            blobId: imageLayer.blobId,
+            naturalWidth: imageLayer.naturalWidth,
+            naturalHeight: imageLayer.naturalHeight,
+            x: imageLayer.x,
+            y: imageLayer.y,
+            width: imageLayer.width,
+            height: imageLayer.height,
+            rotation: imageLayer.rotation,
+            aspectLocked: imageLayer.aspectLocked,
+          };
+        }
+        return baseLayerData;
+      });
 
       if (editingDrawingId) {
         await vaultStore.updateDrawing(
           editingDrawingId,
-          canvasStore.strokes,
           thumbnail,
-          canvasStore.background
+          canvasStore.background as any,
+          layersToSave as any,
+          canvasStore.activeLayerId,
         );
       } else {
         await vaultStore.addDrawing(
           drawingName,
-          canvasStore.strokes.map((stroke) => ({
-            id: stroke.id,
-            points: stroke.points.map((p) => ({
-              x: p.x,
-              y: p.y,
-              pressure: p.pressure,
-            })),
-            color: stroke.color,
-            size: stroke.size,
-            brushStyle: stroke.brushStyle,
-            timestamp: stroke.timestamp,
-          })),
           thumbnail,
-          canvasStore.background as any
+          canvasStore.background as any,
+          layersToSave as any,
+          canvasStore.activeLayerId,
         );
       }
 
@@ -191,7 +212,7 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
               background,
               canvasSize.width,
               canvasSize.height,
-              settingsStore.exportSettings
+              settingsStore.exportSettings,
             );
             break;
           case "jpg":
@@ -200,7 +221,7 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
               background,
               canvasSize.width,
               canvasSize.height,
-              settingsStore.exportSettings
+              settingsStore.exportSettings,
             );
             break;
           case "svg":
@@ -209,7 +230,7 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
               background,
               canvasSize.width,
               canvasSize.height,
-              settingsStore.exportSettings
+              settingsStore.exportSettings,
             );
             break;
           default:
@@ -321,7 +342,7 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
         />
       </div>
     );
-  }
+  },
 );
 
 export default MobileCanvasView;

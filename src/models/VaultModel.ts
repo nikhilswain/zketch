@@ -1,7 +1,6 @@
 import { types, type Instance, type SnapshotIn } from "mobx-state-tree";
 import { DexieService } from "@/services/DexieService";
 import { Stroke } from "./CanvasModel";
-import { Layer } from "./LayerModel";
 
 // Stroke data interface for persistence
 export interface IStrokeData {
@@ -55,11 +54,9 @@ export type ILayerData = IStrokeLayerData | IImageLayerData;
 export interface ISavedDrawingData {
   id: string;
   name: string;
-  // Legacy strokes - kept for backward compatibility
-  strokes: IStrokeData[];
-  // New layers array
-  layers?: ILayerData[];
-  activeLayerId?: string;
+  // Layers array (all drawing data is stored in layers)
+  layers: ILayerData[];
+  activeLayerId: string;
   thumbnail: string;
   createdAt: Date;
   updatedAt: Date;
@@ -79,9 +76,7 @@ export const SavedLayer = types.model("SavedLayer", {
 export const SavedDrawing = types.model("SavedDrawing", {
   id: types.identifier,
   name: types.string,
-  // Legacy strokes - kept for backward compatibility with old drawings
-  strokes: types.optional(types.array(Stroke), []),
-  // New layers system
+  // All drawing data is stored in layers
   layers: types.optional(types.array(SavedLayer), []),
   activeLayerId: types.optional(types.string, ""),
   thumbnail: types.string,
@@ -107,7 +102,7 @@ export const VaultModel = types
   .views((self) => ({
     get sortedDrawings() {
       return [...self.drawings].sort(
-        (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()
+        (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
       );
     },
     get isEmpty() {
@@ -145,44 +140,35 @@ export const VaultModel = types
         drawing.updatedAt = new Date();
       }
     },
-    replaceDrawingStrokes(
+    replaceDrawingLayers(
       id: string,
-      strokes: SnapshotIn<typeof Stroke>[],
       thumbnail: string,
       background: string,
-      layers?: ILayerData[],
-      activeLayerId?: string
+      layers: ILayerData[],
+      activeLayerId: string,
     ) {
       const drawing = self.drawings.find((d) => d.id === id);
       if (drawing) {
-        // Update legacy strokes (for backward compatibility)
-        drawing.strokes.clear();
-        strokes.forEach((strokeData) => {
-          drawing.strokes.push(Stroke.create(strokeData));
+        // Update layers
+        drawing.layers.clear();
+        layers.forEach((layerData) => {
+          // Only load stroke layers for now - image layers will be handled in Phase 3
+          if (layerData.type === "stroke" || !("type" in layerData)) {
+            const strokeLayerData = layerData as IStrokeLayerData;
+            drawing.layers.push(
+              SavedLayer.create({
+                id: strokeLayerData.id,
+                name: strokeLayerData.name,
+                visible: strokeLayerData.visible,
+                locked: strokeLayerData.locked,
+                opacity: strokeLayerData.opacity,
+                strokes: strokeLayerData.strokes as any,
+              }),
+            );
+          }
+          // TODO: Handle image layers in Phase 3
         });
-
-        // Update layers if provided
-        if (layers && layers.length > 0) {
-          drawing.layers.clear();
-          layers.forEach((layerData) => {
-            // Only load stroke layers for now - image layers will be handled in Phase 3
-            if (layerData.type === "stroke" || !("type" in layerData)) {
-              const strokeLayerData = layerData as IStrokeLayerData;
-              drawing.layers.push(
-                SavedLayer.create({
-                  id: strokeLayerData.id,
-                  name: strokeLayerData.name,
-                  visible: strokeLayerData.visible,
-                  locked: strokeLayerData.locked,
-                  opacity: strokeLayerData.opacity,
-                  strokes: strokeLayerData.strokes as any,
-                })
-              );
-            }
-            // TODO: Handle image layers in Phase 3
-          });
-          drawing.activeLayerId = activeLayerId || layers[0]?.id || "";
-        }
+        drawing.activeLayerId = activeLayerId || layers[0]?.id || "";
 
         drawing.thumbnail = thumbnail;
         drawing.background = background;
@@ -225,21 +211,7 @@ export const VaultModel = types
           (drawing) => ({
             id: drawing.id,
             name: drawing.name,
-            // Legacy strokes (for backward compatibility)
-            strokes: drawing.strokes.map((stroke) => ({
-              id: stroke.id,
-              points: stroke.points.map((p) => ({
-                x: p.x,
-                y: p.y,
-                pressure: p.pressure,
-              })),
-              color: stroke.color,
-              size: stroke.size,
-              opacity: (stroke as any).opacity ?? 1,
-              brushStyle: stroke.brushStyle,
-              timestamp: stroke.timestamp,
-            })),
-            // New layers data - handle both stroke and image layers
+            // Layers data - handle both stroke and image layers
             layers: drawing.layers.map((layer: any) => {
               const baseLayerData = {
                 id: layer.id,
@@ -287,7 +259,7 @@ export const VaultModel = types
             createdAt: new Date(drawing.createdAt),
             updatedAt: new Date(drawing.updatedAt),
             background: drawing.background,
-          })
+          }),
         );
         await DexieService.saveAllDrawings(drawingsData);
       } catch (error) {
@@ -298,16 +270,14 @@ export const VaultModel = types
   .actions((self) => ({
     async addDrawing(
       name: string,
-      strokes: SnapshotIn<typeof Stroke>[],
       thumbnail: string,
       background: string,
-      layers?: ILayerData[],
-      activeLayerId?: string
+      layers: ILayerData[],
+      activeLayerId: string,
     ) {
       const drawingData = {
         id: crypto.randomUUID(),
         name,
-        strokes,
         layers: layers || [],
         activeLayerId: activeLayerId || "",
         thumbnail,
@@ -332,104 +302,27 @@ export const VaultModel = types
     },
     async renameDrawing(id: string, newName: string) {
       self.updateDrawingInList(id, newName);
-      const drawing = self.drawings.find((d) => d.id === id);
-      if (drawing) {
-        try {
-          await DexieService.saveDrawing({
-            id: drawing.id,
-            name: drawing.name,
-            strokes: drawing.strokes.map((stroke) => ({
-              id: stroke.id,
-              points: stroke.points.map((p) => ({
-                x: p.x,
-                y: p.y,
-                pressure: p.pressure,
-              })),
-              color: stroke.color,
-              size: stroke.size,
-              brushStyle: stroke.brushStyle,
-              timestamp: stroke.timestamp,
-            })),
-            thumbnail: drawing.thumbnail,
-            createdAt: new Date(drawing.createdAt),
-            updatedAt: new Date(drawing.updatedAt),
-            background: drawing.background,
-          });
-          await self.updateStorageInfo();
-        } catch (error) {
-          console.error("Failed to rename drawing:", error);
-        }
-      }
+      // Just persist all drawings - the name has been updated in memory
+      await self.persistToDB();
+      await self.updateStorageInfo();
     },
     async updateDrawing(
       id: string,
-      strokes: SnapshotIn<typeof Stroke>[],
       thumbnail: string,
       background: string,
-      layers?: ILayerData[],
-      activeLayerId?: string
+      layers: ILayerData[],
+      activeLayerId: string,
     ) {
-      self.replaceDrawingStrokes(
+      self.replaceDrawingLayers(
         id,
-        strokes,
         thumbnail,
         background,
         layers,
-        activeLayerId
+        activeLayerId,
       );
-      const drawing = self.drawings.find((d) => d.id === id);
-      if (drawing) {
-        try {
-          await DexieService.saveDrawing({
-            id: drawing.id,
-            name: drawing.name,
-            strokes: drawing.strokes.map((stroke) => ({
-              id: stroke.id,
-              points: stroke.points.map((p) => ({
-                x: p.x,
-                y: p.y,
-                pressure: p.pressure,
-              })),
-              color: stroke.color,
-              size: stroke.size,
-              opacity: (stroke as any).opacity ?? 1,
-              brushStyle: stroke.brushStyle,
-              timestamp: stroke.timestamp,
-            })),
-            layers: drawing.layers.map(
-              (layer): IStrokeLayerData => ({
-                type: "stroke",
-                id: layer.id,
-                name: layer.name,
-                visible: layer.visible,
-                locked: layer.locked,
-                opacity: layer.opacity,
-                strokes: layer.strokes.map((stroke) => ({
-                  id: stroke.id,
-                  points: stroke.points.map((p) => ({
-                    x: p.x,
-                    y: p.y,
-                    pressure: p.pressure,
-                  })),
-                  color: stroke.color,
-                  size: stroke.size,
-                  opacity: (stroke as any).opacity ?? 1,
-                  brushStyle: stroke.brushStyle,
-                  timestamp: stroke.timestamp,
-                })),
-              })
-            ),
-            activeLayerId: drawing.activeLayerId,
-            thumbnail: drawing.thumbnail,
-            createdAt: new Date(drawing.createdAt),
-            updatedAt: new Date(drawing.updatedAt),
-            background: drawing.background,
-          });
-          await self.updateStorageInfo();
-        } catch (error) {
-          console.error("Failed to update drawing:", error);
-        }
-      }
+      // Persist all drawings to DB
+      await self.persistToDB();
+      await self.updateStorageInfo();
     },
     loadDrawing(id: string) {
       return self.drawings.find((d) => d.id === id) || null;
