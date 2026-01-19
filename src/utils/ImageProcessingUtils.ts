@@ -131,7 +131,7 @@ export class ImageProcessingUtils {
    * Validate an image file
    */
   static async validateImage(
-    file: File | Blob
+    file: File | Blob,
   ): Promise<ImageValidationResult> {
     // Check MIME type
     if (!this.isSupportedType(file.type)) {
@@ -147,7 +147,7 @@ export class ImageProcessingUtils {
       return {
         valid: false,
         error: `File too large: ${this.formatFileSize(
-          file.size
+          file.size,
         )}. Maximum size: ${this.formatFileSize(maxSize)}`,
       };
     }
@@ -177,7 +177,7 @@ export class ImageProcessingUtils {
     width: number,
     height: number,
     maxWidth: number,
-    maxHeight: number
+    maxHeight: number,
   ): { width: number; height: number; scale: number } {
     const widthRatio = maxWidth / width;
     const heightRatio = maxHeight / height;
@@ -198,7 +198,7 @@ export class ImageProcessingUtils {
     maxWidth: number,
     maxHeight: number,
     outputFormat: string = "image/png",
-    quality: number = 0.92
+    quality: number = 0.92,
   ): Promise<{ blob: Blob; width: number; height: number }> {
     // Load image if needed
     const img =
@@ -210,7 +210,7 @@ export class ImageProcessingUtils {
       img.naturalWidth,
       img.naturalHeight,
       maxWidth,
-      maxHeight
+      maxHeight,
     );
 
     // Create canvas and draw resized image
@@ -237,7 +237,7 @@ export class ImageProcessingUtils {
           else reject(new Error("Failed to create blob"));
         },
         outputFormat,
-        quality
+        quality,
       );
     });
 
@@ -249,7 +249,7 @@ export class ImageProcessingUtils {
    */
   static async processImage(
     source: File | Blob,
-    options: ImageProcessingOptions = {}
+    options: ImageProcessingOptions = {},
   ): Promise<ProcessedImage> {
     const opts = { ...DEFAULT_OPTIONS, ...options };
 
@@ -274,7 +274,7 @@ export class ImageProcessingUtils {
         opts.maxWidth,
         opts.maxHeight,
         opts.outputFormat,
-        opts.quality
+        opts.quality,
       );
       resultBlob = resized.blob;
       resultWidth = resized.width;
@@ -294,7 +294,7 @@ export class ImageProcessingUtils {
         resultWidth,
         resultHeight,
         "image/jpeg",
-        0.8
+        0.8,
       );
       if (compressed.blob.size < resultBlob.size) {
         resultBlob = compressed.blob;
@@ -319,14 +319,14 @@ export class ImageProcessingUtils {
   static async createThumbnail(
     source: HTMLImageElement | File | Blob,
     maxWidth: number = 200,
-    maxHeight: number = 150
+    maxHeight: number = 150,
   ): Promise<{ blob: Blob; dataUrl: string; width: number; height: number }> {
     const { blob, width, height } = await this.resizeImage(
       source,
       maxWidth,
       maxHeight,
       "image/png",
-      0.9
+      0.9,
     );
 
     const dataUrl = await this.blobToDataUrl(blob);
@@ -381,7 +381,7 @@ export class ImageProcessingUtils {
    * Get image dimensions from a file without fully loading it
    */
   static async getImageDimensions(
-    file: File | Blob
+    file: File | Blob,
   ): Promise<{ width: number; height: number }> {
     const img = await this.loadImage(file);
     return {

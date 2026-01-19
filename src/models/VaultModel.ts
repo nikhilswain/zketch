@@ -1,5 +1,6 @@
 import { types, type Instance, type SnapshotIn } from "mobx-state-tree";
 import { DexieService } from "@/services/DexieService";
+import { BlobStorageService } from "@/services/BlobStorageService";
 import { Stroke } from "./CanvasModel";
 
 // Stroke data interface for persistence
@@ -292,9 +293,36 @@ export const VaultModel = types
       return self.drawings.find((d) => d.id === drawingData.id);
     },
     async deleteDrawing(id: string) {
+      // Get the drawing before removing to collect blob IDs for cleanup
+      const drawing = self.drawings.find((d) => d.id === id);
+      const blobsToDelete: string[] = [];
+
+      if (drawing) {
+        // Collect thumbnail blob ID if it's a blob reference
+        if (BlobStorageService.isThumbnailId(drawing.thumbnail)) {
+          blobsToDelete.push(drawing.thumbnail);
+        }
+
+        // Collect image layer blob IDs
+        drawing.layers.forEach((layer: any) => {
+          if (layer.type === "image" && layer.blobId) {
+            blobsToDelete.push(layer.blobId);
+          }
+        });
+      }
+
+      // Remove from list
       self.removeDrawingFromList(id);
+
       try {
+        // Delete drawing from database
         await DexieService.deleteDrawing(id);
+
+        // Clean up associated blobs
+        if (blobsToDelete.length > 0) {
+          await BlobStorageService.deleteBlobs(blobsToDelete);
+        }
+
         await self.updateStorageInfo();
       } catch (error) {
         console.error("Failed to delete drawing:", error);
@@ -313,6 +341,10 @@ export const VaultModel = types
       layers: ILayerData[],
       activeLayerId: string,
     ) {
+      // Get old thumbnail to clean up if it changed
+      const drawing = self.drawings.find((d) => d.id === id);
+      const oldThumbnail = drawing?.thumbnail;
+
       self.replaceDrawingLayers(
         id,
         thumbnail,
@@ -320,6 +352,20 @@ export const VaultModel = types
         layers,
         activeLayerId,
       );
+
+      // Clean up old thumbnail blob if it changed
+      if (
+        oldThumbnail &&
+        oldThumbnail !== thumbnail &&
+        BlobStorageService.isThumbnailId(oldThumbnail)
+      ) {
+        try {
+          await BlobStorageService.deleteBlob(oldThumbnail);
+        } catch (error) {
+          console.error("Failed to delete old thumbnail:", error);
+        }
+      }
+
       // Persist all drawings to DB
       await self.persistToDB();
       await self.updateStorageInfo();
@@ -350,6 +396,39 @@ export const VaultModel = types
     },
     loadDrawings() {
       return self.loadFromDB();
+    },
+    /**
+     * Clean up orphaned blobs that are no longer referenced by any drawing.
+     * This can be called periodically or manually to reclaim storage space.
+     */
+    async cleanupOrphanedBlobs(): Promise<number> {
+      // Collect all blob IDs that are currently in use
+      const usedBlobIds: string[] = [];
+
+      for (const drawing of self.drawings) {
+        // Add thumbnail blob ID if it's a blob reference
+        if (BlobStorageService.isThumbnailId(drawing.thumbnail)) {
+          usedBlobIds.push(drawing.thumbnail);
+        }
+
+        // Add image layer blob IDs
+        drawing.layers.forEach((layer: any) => {
+          if (layer.type === "image" && layer.blobId) {
+            usedBlobIds.push(layer.blobId);
+          }
+        });
+      }
+
+      // Use BlobStorageService to clean up orphans
+      const deletedCount =
+        await BlobStorageService.cleanupOrphanedBlobs(usedBlobIds);
+
+      if (deletedCount > 0) {
+        await self.updateStorageInfo();
+        console.log(`Cleaned up ${deletedCount} orphaned blob(s)`);
+      }
+
+      return deletedCount;
     },
   }))
   .actions((self) => ({
