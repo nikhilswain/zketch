@@ -14,6 +14,7 @@ import FloatingDock from "./floating-dock";
 import ExportDialog from "./export-dialog";
 import { ExportService } from "@/services/ExportService";
 import { ThumbnailService } from "@/services/ThumbnailService";
+import { optimizeStrokes } from "@/utils/StrokeOptimizer";
 import type { BackgroundType } from "@/models/CanvasModel";
 import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
@@ -130,7 +131,7 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
         150,
       );
 
-      // Map layers to save format
+      // Map layers to save format with optimized strokes
       const layersToSave = canvasStore.layers.map((layer) => {
         const baseLayerData = {
           id: layer.id,
@@ -143,21 +144,27 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
 
         if (layer.type === "stroke") {
           const strokeLayer = layer as any;
+          // Map strokes to plain objects first
+          const strokesData = strokeLayer.strokes.map((stroke: any) => ({
+            id: stroke.id,
+            points: stroke.points.map((p: any) => ({
+              x: p.x,
+              y: p.y,
+              pressure: p.pressure,
+            })),
+            color: stroke.color,
+            size: stroke.size,
+            opacity: stroke.opacity ?? 1,
+            brushStyle: stroke.brushStyle,
+            timestamp: stroke.timestamp,
+          }));
+
+          // Optimize strokes using RDP algorithm
+          const optimizedStrokes = optimizeStrokes(strokesData);
+
           return {
             ...baseLayerData,
-            strokes: strokeLayer.strokes.map((stroke: any) => ({
-              id: stroke.id,
-              points: stroke.points.map((p: any) => ({
-                x: p.x,
-                y: p.y,
-                pressure: p.pressure,
-              })),
-              color: stroke.color,
-              size: stroke.size,
-              opacity: stroke.opacity ?? 1,
-              brushStyle: stroke.brushStyle,
-              timestamp: stroke.timestamp,
-            })),
+            strokes: optimizedStrokes,
           };
         } else if (layer.type === "image") {
           const imageLayer = layer as any;
