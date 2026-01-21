@@ -113,7 +113,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         getBrushOptions: (brush, size) =>
           createGetBrushOptions(canvasStore.brushSettings as any)(
             brush as any,
-            size
+            size,
           ),
       });
       engine.setPanZoom({
@@ -165,7 +165,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         const y = (localY - canvasStore.panY) / canvasStore.zoom;
         return { x, y, pressure: 0.5 };
       },
-      [canvasStore.panX, canvasStore.panY, canvasStore.zoom]
+      [canvasStore.panX, canvasStore.panY, canvasStore.zoom],
     );
 
     // Hit test image layers - returns the topmost image layer at the given canvas coordinates
@@ -192,7 +192,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         }
         return null;
       },
-      [canvasStore.visibleLayers]
+      [canvasStore.visibleLayers],
     );
 
     // Hit test transform handles - returns handle type if hit, null otherwise
@@ -216,7 +216,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         return transformController.hitTest(
           { x: localX, y: localY },
           selectedLayer as ImageLayerLike,
-          viewport
+          viewport,
         );
       },
       [
@@ -224,7 +224,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         canvasStore.zoom,
         canvasStore.panX,
         canvasStore.panY,
-      ]
+      ],
     );
 
     // Preview RAF coalescing
@@ -252,6 +252,12 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             opacity: canvasStore.brushSettings.opacity ?? 1,
             brushStyle: canvasStore.currentBrushStyle as any,
             timestamp: Date.now(),
+            // Include brush settings for accurate preview rendering
+            thinning: canvasStore.brushSettings.thinning,
+            smoothing: canvasStore.brushSettings.smoothing,
+            streamline: canvasStore.brushSettings.streamline,
+            taperStart: canvasStore.brushSettings.taperStart,
+            taperEnd: canvasStore.brushSettings.taperEnd,
           };
           engineRef.current.setPreviewStroke(temp);
         } else {
@@ -393,7 +399,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               const startState = transformController.captureStartState(
                 { x: localX, y: localY },
                 canvasStore.selectedImageLayer as ImageLayerLike,
-                viewport
+                viewport,
               );
 
               setIsTransforming(true);
@@ -430,7 +436,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         hitTestImageLayers,
         hitTestTransformHandles,
         canvasStore,
-      ]
+      ],
     );
 
     const handlePointerMove = useCallback(
@@ -444,7 +450,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           const deltaY = e.clientY - lastPanPoint.y;
           canvasStore.setPan(
             canvasStore.panX + deltaX,
-            canvasStore.panY + deltaY
+            canvasStore.panY + deltaY,
           );
           setLastPanPoint({ x: e.clientX, y: e.clientY });
         } else if (
@@ -472,14 +478,14 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             result = transformController.applyMove(
               { x: localX, y: localY },
               transformStart,
-              viewport
+              viewport,
             );
             layer.setPosition(result.x, result.y);
           } else if (transformHandle === "rotate") {
             result = transformController.applyRotation(
               { x: localX, y: localY },
               transformStart,
-              viewport
+              viewport,
             );
             layer.setRotation(result.rotation);
           } else if (["nw", "ne", "se", "sw"].includes(transformHandle)) {
@@ -489,7 +495,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               { x: localX, y: localY },
               transformStart,
               viewport,
-              maintainAspect
+              maintainAspect,
             );
             layer.setPosition(result.x, result.y);
             layer.setSize(result.width, result.height, false);
@@ -525,7 +531,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         isDrawingMode,
         lastPanPoint,
         canvasStore,
-      ]
+      ],
     );
 
     const handlePointerUp = useCallback(
@@ -559,6 +565,12 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               opacity: canvasStore.brushSettings.opacity ?? 1,
               brushStyle: canvasStore.currentBrushStyle,
               timestamp: Date.now(),
+              // Store brush settings per-stroke for correct rendering
+              thinning: canvasStore.brushSettings.thinning,
+              smoothing: canvasStore.brushSettings.smoothing,
+              streamline: canvasStore.brushSettings.streamline,
+              taperStart: canvasStore.brushSettings.taperStart,
+              taperEnd: canvasStore.brushSettings.taperEnd,
             };
 
             // Use layer-aware stroke addition if layers exist
@@ -581,7 +593,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         isDrawingMode,
         currentPoints,
         canvasStore,
-      ]
+      ],
     );
 
     const handleWheel = useCallback(
@@ -595,7 +607,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
           const newZoom = Math.max(
             0.1,
-            Math.min(5, canvasStore.zoom * zoomFactor)
+            Math.min(5, canvasStore.zoom * zoomFactor),
           );
           const rect = rootRef.current?.getBoundingClientRect();
           if (rect) {
@@ -633,7 +645,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           // Horizontal pan: use deltaY to move X (natural feel: scroll down moves right => subtract)
           canvasStore.setPan(
             canvasStore.panX - e.deltaY * 0.5,
-            canvasStore.panY
+            canvasStore.panY,
           );
         } else {
           // Vertical + incidental horizontal from trackpads: prioritize vertical scroll for panY
@@ -643,7 +655,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           canvasStore.setPan(nextPanX, nextPanY);
         }
       },
-      [canvasStore]
+      [canvasStore],
     );
 
     // Attach wheel event with passive: false to allow preventDefault
@@ -695,7 +707,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               canvasHeight,
               "Pasted Image",
               centerX,
-              centerY
+              centerY,
             );
 
             toast.success("Image pasted successfully!");
@@ -710,7 +722,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           return false;
         }
       },
-      [canvasStore, mousePosition]
+      [canvasStore, mousePosition],
     );
 
     useEffect(() => {
@@ -754,7 +766,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               const clipboardItems = await navigator.clipboard.read();
               for (const clipboardItem of clipboardItems) {
                 const imageType = clipboardItem.types.find((type) =>
-                  type.startsWith("image/")
+                  type.startsWith("image/"),
                 );
                 if (imageType) {
                   const blob = await clipboardItem.getType(imageType);
@@ -833,6 +845,12 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             opacity: canvasStore.brushSettings.opacity ?? 1,
             brushStyle: canvasStore.currentBrushStyle,
             timestamp: Date.now(),
+            // Store brush settings per-stroke for correct rendering
+            thinning: canvasStore.brushSettings.thinning,
+            smoothing: canvasStore.brushSettings.smoothing,
+            streamline: canvasStore.brushSettings.streamline,
+            taperStart: canvasStore.brushSettings.taperStart,
+            taperEnd: canvasStore.brushSettings.taperEnd,
           } as IStroke;
 
           // Use layer-aware stroke addition if layers exist
@@ -870,7 +888,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       if (canvasStore.isTransformMode && mousePosition) {
         const handle = hitTestTransformHandles(
           mousePosition.x,
-          mousePosition.y
+          mousePosition.y,
         );
         if (handle === "move") return "cursor-move";
         if (handle === "rotate") return "cursor-alias";
@@ -943,7 +961,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         }}
       />
     );
-  }
+  },
 );
 
 export default DrawingCanvas;

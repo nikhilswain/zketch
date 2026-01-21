@@ -7,17 +7,18 @@ export class FreehandBrush implements Brush {
   render(
     ctx: CanvasRenderingContext2D,
     stroke: StrokeLike,
-    options?: BrushOptions
+    options?: BrushOptions,
   ) {
     const pts = stroke.points.map((p) => [p.x, p.y, p.pressure ?? 0.5]);
+    // Use stroke's own settings first, then fallback to options, then defaults
     const outline = getStroke(pts, {
       size: stroke.size,
-      thinning: options?.thinning ?? 0.5,
-      smoothing: options?.smoothing ?? 0.5,
-      streamline: options?.streamline ?? 0.5,
+      thinning: stroke.thinning ?? options?.thinning ?? 0.5,
+      smoothing: stroke.smoothing ?? options?.smoothing ?? 0.5,
+      streamline: stroke.streamline ?? options?.streamline ?? 0.5,
       easing: options?.easing ?? ((t: number) => t),
-      start: options?.start ?? { taper: 0 },
-      end: options?.end ?? { taper: 0 },
+      start: { taper: stroke.taperStart ?? options?.start?.taper ?? 0 },
+      end: { taper: stroke.taperEnd ?? options?.end?.taper ?? 0 },
       last: true,
     } as any);
     if (outline.length < 3) return;
@@ -38,7 +39,7 @@ export class FreehandBrush implements Brush {
       c = points[2];
     let result = `M${a[0]},${a[1]} Q${b[0]},${b[1]} ${average(
       b[0],
-      c[0]
+      c[0],
     )},${average(b[1], c[1])} T`;
     for (let i = 2; i < len - 1; i++) {
       a = points[i];

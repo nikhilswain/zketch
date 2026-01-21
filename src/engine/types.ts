@@ -20,6 +20,12 @@ export interface StrokeLike {
   opacity?: number;
   brushStyle: BrushStyle;
   timestamp: number;
+  // Brush settings stored per-stroke for correct rendering
+  thinning?: number;
+  smoothing?: number;
+  streamline?: number;
+  taperStart?: number;
+  taperEnd?: number;
 }
 
 // Base layer interface (shared properties)
@@ -80,7 +86,7 @@ export interface Brush {
   render(
     ctx: CanvasRenderingContext2D,
     stroke: StrokeLike,
-    options?: BrushOptions
+    options?: BrushOptions,
   ): void;
 }
 
@@ -96,7 +102,7 @@ export interface EngineConfig {
   // Optional: provide per-brush rendering options (size, smoothing, taper, etc.)
   getBrushOptions?: (
     brush: BrushStyle,
-    size: number
+    size: number,
   ) => BrushOptions | undefined;
   onInvalidate?: () => void;
 }

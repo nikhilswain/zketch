@@ -11,7 +11,7 @@ export class TextureBrush implements Brush {
   render(
     ctx: CanvasRenderingContext2D,
     stroke: StrokeLike,
-    options?: BrushOptions
+    options?: BrushOptions,
   ) {
     const baseAlpha = ctx.globalAlpha;
     const pts = stroke.points.map((p) => [p.x, p.y, p.pressure ?? 0.5]);
@@ -27,17 +27,18 @@ export class TextureBrush implements Brush {
           pr,
         ];
       });
+      // Use stroke's own settings first, then fallback to options, then defaults
       const outline = getStroke(
         offsetPts as any,
         {
           size: stroke.size * (0.8 + layer * 0.1),
-          thinning: options?.thinning ?? 0.7,
-          smoothing: options?.smoothing ?? 0.5,
-          streamline: options?.streamline ?? 0.5,
-          start: { cap: false, taper: 10 },
-          end: { cap: false, taper: 10 },
+          thinning: stroke.thinning ?? options?.thinning ?? 0.7,
+          smoothing: stroke.smoothing ?? options?.smoothing ?? 0.5,
+          streamline: stroke.streamline ?? options?.streamline ?? 0.5,
+          start: { cap: false, taper: stroke.taperStart ?? 10 },
+          end: { cap: false, taper: stroke.taperEnd ?? 10 },
           last: true,
-        } as any
+        } as any,
       );
       if (outline.length < 3) continue;
       ctx.globalAlpha = (stroke.opacity ?? 1) * layerOpacity * baseAlpha;
@@ -56,7 +57,7 @@ export class TextureBrush implements Brush {
       c = points[2];
     let result = `M${a[0]},${a[1]} Q${b[0]},${b[1]} ${average(
       b[0],
-      c[0]
+      c[0],
     )},${average(b[1], c[1])} T`;
     for (let i = 2; i < len - 1; i++) {
       a = points[i];

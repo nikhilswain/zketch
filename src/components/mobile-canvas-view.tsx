@@ -37,6 +37,15 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
     const [isDrawingMode, setIsDrawingMode] = useState(true);
     const [showExportDialog, setShowExportDialog] = useState(false);
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    // Track the current drawing ID (may differ from prop after first save of new drawing)
+    const [currentDrawingId, setCurrentDrawingId] = useState<string | null>(
+      editingDrawingId,
+    );
+
+    // Sync with prop when it changes (e.g., navigating to edit a different drawing)
+    useEffect(() => {
+      setCurrentDrawingId(editingDrawingId);
+    }, [editingDrawingId]);
 
     // Load drawing if editing existing one
     useEffect(() => {
@@ -88,6 +97,12 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
                   opacity: stroke.opacity ?? 1,
                   brushStyle: stroke.brushStyle,
                   timestamp: stroke.timestamp,
+                  // Brush settings per-stroke
+                  thinning: stroke.thinning,
+                  smoothing: stroke.smoothing,
+                  streamline: stroke.streamline,
+                  taperStart: stroke.taperStart,
+                  taperEnd: stroke.taperEnd,
                 })),
               };
             });
@@ -163,6 +178,12 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
             opacity: stroke.opacity ?? 1,
             brushStyle: stroke.brushStyle,
             timestamp: stroke.timestamp,
+            // Brush settings per-stroke
+            thinning: stroke.thinning,
+            smoothing: stroke.smoothing,
+            streamline: stroke.streamline,
+            taperStart: stroke.taperStart,
+            taperEnd: stroke.taperEnd,
           }));
 
           // Optimize strokes using RDP algorithm
@@ -190,22 +211,27 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
         return baseLayerData;
       });
 
-      if (editingDrawingId) {
+      if (currentDrawingId) {
         await vaultStore.updateDrawing(
-          editingDrawingId,
+          currentDrawingId,
           thumbnailId,
           canvasStore.background as any,
           layersToSave as any,
           canvasStore.activeLayerId,
+          drawingName,
         );
       } else {
-        await vaultStore.addDrawing(
+        const newDrawing = await vaultStore.addDrawing(
           drawingName,
           thumbnailId,
           canvasStore.background as any,
           layersToSave as any,
           canvasStore.activeLayerId,
         );
+        // Update currentDrawingId so subsequent saves update instead of creating new
+        if (newDrawing) {
+          setCurrentDrawingId(newDrawing.id);
+        }
       }
 
       onBackToVault();

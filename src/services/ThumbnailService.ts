@@ -1,11 +1,12 @@
 import type { IStroke } from "../models/CanvasModel";
+import { getStroke } from "perfect-freehand";
 
 export class ThumbnailService {
   static generateThumbnail(
     strokes: IStroke[],
     background: string,
     width = 200,
-    height = 150
+    height = 150,
   ): string {
     const canvas = document.createElement("canvas");
     canvas.width = width;
@@ -101,26 +102,40 @@ export class ThumbnailService {
         }
         ctx.globalAlpha = prevAlpha;
       } else {
-        // approximate PF outline by stroking a thicker line (fast for thumbnails)
-        ctx.beginPath();
-        ctx.strokeStyle = stroke.color;
-        ctx.globalAlpha = (stroke as any).opacity ?? 1;
-        ctx.lineWidth = Math.max(1, stroke.size * scale);
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        const first = stroke.points[0];
-        ctx.moveTo(
-          (first.x - minX) * scale + offsetX,
-          (first.y - minY) * scale + offsetY
-        );
-        for (let i = 1; i < stroke.points.length; i++) {
-          const p = stroke.points[i];
-          ctx.lineTo(
-            (p.x - minX) * scale + offsetX,
-            (p.y - minY) * scale + offsetY
-          );
+        // Use perfect-freehand for accurate rendering with stroke's brush settings
+        const scaledPoints = stroke.points.map((p) => [
+          (p.x - minX) * scale + offsetX,
+          (p.y - minY) * scale + offsetY,
+          p.pressure ?? 0.5,
+        ]);
+
+        const outline = getStroke(scaledPoints, {
+          size: Math.max(1, stroke.size * scale),
+          thinning: (stroke as any).thinning ?? 0.5,
+          smoothing: (stroke as any).smoothing ?? 0.5,
+          streamline: (stroke as any).streamline ?? 0.5,
+          start: { taper: (stroke as any).taperStart ?? 0 },
+          end: { taper: (stroke as any).taperEnd ?? 0 },
+          last: true,
+        });
+
+        if (outline.length < 3) {
+          ctx.globalCompositeOperation = prevComposite;
+          return;
         }
-        ctx.stroke();
+
+        // Convert outline to path
+        ctx.beginPath();
+        ctx.fillStyle = stroke.color;
+        ctx.globalAlpha = (stroke as any).opacity ?? 1;
+
+        const [first, ...rest] = outline;
+        ctx.moveTo(first[0], first[1]);
+        for (const [x, y] of rest) {
+          ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fill();
       }
 
       ctx.globalCompositeOperation = prevComposite;
@@ -132,7 +147,7 @@ export class ThumbnailService {
   private static drawGrid(
     ctx: CanvasRenderingContext2D,
     width: number,
-    height: number
+    height: number,
   ) {
     const gridSize = 10;
     ctx.strokeStyle = "#f0f0f0";

@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { observer } from "mobx-react-lite";
 import {
   useCanvasStore,
@@ -42,6 +42,17 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     const [showImportDialog, setShowImportDialog] = useState(false);
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [layersPanelCollapsed, setLayersPanelCollapsed] = useState(false);
+    // Track the current drawing ID (may differ from prop after first save of new drawing)
+    const [currentDrawingId, setCurrentDrawingId] = useState<string | null>(
+      editingDrawingId,
+    );
+    // Track if rename was just done (to prevent double toast from Enter + blur)
+    const justRenamedRef = useRef(false);
+
+    // Sync with prop when it changes (e.g., navigating to edit a different drawing)
+    useEffect(() => {
+      setCurrentDrawingId(editingDrawingId);
+    }, [editingDrawingId]);
 
     useEffect(() => {
       canvasStore.clearHistory();
@@ -97,6 +108,12 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
                   opacity: stroke.opacity ?? 1,
                   brushStyle: stroke.brushStyle,
                   timestamp: stroke.timestamp,
+                  // Brush settings per-stroke
+                  thinning: stroke.thinning,
+                  smoothing: stroke.smoothing,
+                  streamline: stroke.streamline,
+                  taperStart: stroke.taperStart,
+                  taperEnd: stroke.taperEnd,
                 })),
               };
             });
@@ -169,6 +186,12 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             opacity: stroke.opacity ?? 1,
             brushStyle: stroke.brushStyle,
             timestamp: stroke.timestamp,
+            // Brush settings per-stroke
+            thinning: stroke.thinning,
+            smoothing: stroke.smoothing,
+            streamline: stroke.streamline,
+            taperStart: stroke.taperStart,
+            taperEnd: stroke.taperEnd,
           }));
 
           // Optimize strokes using RDP algorithm
@@ -196,25 +219,40 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         return baseLayerData;
       });
 
-      if (editingDrawingId) {
+      if (currentDrawingId) {
         await vaultStore.updateDrawing(
-          editingDrawingId,
+          currentDrawingId,
           thumbnailId,
           canvasStore.background as any,
           layersToSave as any,
           canvasStore.activeLayerId,
+          drawingName,
         );
       } else {
-        await vaultStore.addDrawing(
+        const newDrawing = await vaultStore.addDrawing(
           drawingName,
           thumbnailId,
           canvasStore.background as any,
           layersToSave as any,
           canvasStore.activeLayerId,
         );
+        // Update currentDrawingId so subsequent saves update instead of creating new
+        if (newDrawing) {
+          setCurrentDrawingId(newDrawing.id);
+        }
       }
 
       toast.success("Drawing saved successfully!");
+    };
+
+    // Rename drawing (without saving all content)
+    const handleRename = async (showToast = true) => {
+      if (currentDrawingId && drawingName.trim()) {
+        await vaultStore.renameDrawing(currentDrawingId, drawingName.trim());
+        if (showToast) {
+          toast.success("Drawing renamed!");
+        }
+      }
     };
 
     const handleExport = async (format: ExportFormat) => {
@@ -332,8 +370,21 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             onKeyDown={(e) => {
               e.stopPropagation();
               if (e.key === "Enter") {
-                handleSave();
+                // Just rename on Enter, don't save entire drawing
+                justRenamedRef.current = true;
+                handleRename(true);
                 e.currentTarget.blur();
+              }
+            }}
+            onBlur={() => {
+              // Also rename when losing focus (if drawing exists)
+              // Skip if we just renamed via Enter key
+              if (justRenamedRef.current) {
+                justRenamedRef.current = false;
+                return;
+              }
+              if (currentDrawingId && drawingName.trim()) {
+                handleRename(false); // Silent on blur, just persist
               }
             }}
             className="text-lg font-semibold bg-transparent border-none outline-none focus:bg-gray-50 px-2 py-1 rounded"

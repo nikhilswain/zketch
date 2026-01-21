@@ -16,6 +16,12 @@ export interface IStrokeData {
   opacity?: number;
   brushStyle: string;
   timestamp: number;
+  // Brush settings per-stroke
+  thinning?: number;
+  smoothing?: number;
+  streamline?: number;
+  taperStart?: number;
+  taperEnd?: number;
 }
 
 // Stroke layer data interface for persistence
@@ -252,6 +258,12 @@ export const VaultModel = types
                   opacity: stroke.opacity ?? 1,
                   brushStyle: stroke.brushStyle,
                   timestamp: stroke.timestamp,
+                  // Brush settings per-stroke
+                  thinning: stroke.thinning,
+                  smoothing: stroke.smoothing,
+                  streamline: stroke.streamline,
+                  taperStart: stroke.taperStart,
+                  taperEnd: stroke.taperEnd,
                 })),
               };
             }),
@@ -340,10 +352,16 @@ export const VaultModel = types
       background: string,
       layers: ILayerData[],
       activeLayerId: string,
+      name?: string,
     ) {
       // Get old thumbnail to clean up if it changed
       const drawing = self.drawings.find((d) => d.id === id);
       const oldThumbnail = drawing?.thumbnail;
+
+      // Update name if provided
+      if (name !== undefined && drawing) {
+        drawing.name = name;
+      }
 
       self.replaceDrawingLayers(
         id,

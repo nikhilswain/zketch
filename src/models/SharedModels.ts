@@ -26,6 +26,12 @@ export const Stroke = types.model("Stroke", {
     "texture",
   ]),
   timestamp: types.number,
+  // Brush settings stored per-stroke for correct rendering
+  thinning: types.optional(types.number, 0.5),
+  smoothing: types.optional(types.number, 0.5),
+  streamline: types.optional(types.number, 0.5),
+  taperStart: types.optional(types.number, 30),
+  taperEnd: types.optional(types.number, 30),
 });
 
 // Brush settings model
