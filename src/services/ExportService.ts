@@ -8,7 +8,7 @@ export class ExportService {
     background: BackgroundType,
     width: number,
     height: number,
-    settings: IExportSettings
+    settings: IExportSettings,
   ): Promise<string> {
     const canvas = document.createElement("canvas");
     canvas.width = width * settings.scale;
@@ -21,7 +21,10 @@ export class ExportService {
     ctx.scale(settings.scale, settings.scale);
 
     // Set background
-    if (!settings.transparentBackground) {
+    // Keep transparent if: export setting says transparent OR canvas background is transparent
+    const shouldBeTransparent =
+      settings.transparentBackground || background === "transparent";
+    if (!shouldBeTransparent) {
       if (background === "white") {
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, width, height);
@@ -29,9 +32,6 @@ export class ExportService {
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, width, height);
         this.drawGrid(ctx, width, height);
-      } else {
-        ctx.fillStyle = "#f8f9fa";
-        ctx.fillRect(0, 0, width, height);
       }
     }
 
@@ -66,7 +66,7 @@ export class ExportService {
     background: BackgroundType,
     width: number,
     height: number,
-    settings: IExportSettings
+    settings: IExportSettings,
   ): Promise<string> {
     const canvas = document.createElement("canvas");
     canvas.width = width * settings.scale;
@@ -78,16 +78,15 @@ export class ExportService {
     // Scale context for high-resolution export
     ctx.scale(settings.scale, settings.scale);
 
-    // JPG doesn't support transparency, always use background
-    if (background === "white" || settings.transparentBackground) {
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, width, height);
-    } else if (background === "grid") {
+    // JPG doesn't support transparency, always fill background
+    // Use white for transparent backgrounds
+    if (background === "grid") {
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, width, height);
       this.drawGrid(ctx, width, height);
     } else {
-      ctx.fillStyle = "#f8f9fa";
+      // White background for both "white" and "transparent" (JPG can't be transparent)
+      ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, width, height);
     }
 
@@ -122,7 +121,7 @@ export class ExportService {
     background: BackgroundType,
     width: number,
     height: number,
-    settings: IExportSettings
+    settings: IExportSettings,
   ): Promise<string> {
     const scaledWidth = width * settings.scale;
     const scaledHeight = height * settings.scale;
@@ -177,7 +176,7 @@ export class ExportService {
     ctx: CanvasRenderingContext2D,
     strokes: IStroke[],
     width: number,
-    height: number
+    height: number,
   ) {
     strokes.forEach((stroke) => {
       if (stroke.points.length < 2) return;
@@ -213,7 +212,7 @@ export class ExportService {
   private static getStrokePath(
     stroke: IStroke,
     canvasWidth: number,
-    canvasHeight: number
+    canvasHeight: number,
   ): string {
     const screenPoints = stroke.points.map((p) => [
       p.x,
@@ -245,7 +244,7 @@ export class ExportService {
         acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
         return acc;
       },
-      ["M", ...strokePath[0], "Q"]
+      ["M", ...strokePath[0], "Q"],
     );
 
     d.push("Z");
@@ -256,7 +255,7 @@ export class ExportService {
     stroke: IStroke,
     canvasWidth: number,
     canvasHeight: number,
-    scale: number
+    scale: number,
   ): string {
     const screenPoints = stroke.points.map((p) => [
       p.x * scale,
@@ -288,7 +287,7 @@ export class ExportService {
         acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
         return acc;
       },
-      ["M", ...strokePath[0], "Q"]
+      ["M", ...strokePath[0], "Q"],
     );
 
     d.push("Z");
@@ -352,7 +351,7 @@ export class ExportService {
           start: { cap: false, taper: 10 },
           end: { cap: false, taper: 10 },
           last: true,
-        } as any
+        } as any,
       );
       if (outline.length < 3) continue;
       ctx.globalAlpha = (stroke.opacity ?? 1) * layerOpacity * baseAlpha;
@@ -364,9 +363,9 @@ export class ExportService {
               acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
               return acc;
             },
-            ["M", ...outline[0], "Q"] as any
+            ["M", ...outline[0], "Q"] as any,
           )
-          .join(" ") + " Z"
+          .join(" ") + " Z",
       );
       ctx.fillStyle = stroke.color;
       ctx.fill(path2);
@@ -377,7 +376,7 @@ export class ExportService {
   private static drawGrid(
     ctx: CanvasRenderingContext2D,
     width: number,
-    height: number
+    height: number,
   ) {
     const gridSize = 20;
     ctx.strokeStyle = "#f0f0f0";

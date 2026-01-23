@@ -57,7 +57,10 @@ export class CanvasEngine {
     visible: false,
   };
 
-  constructor(private root: HTMLElement, private config: EngineConfig) {
+  constructor(
+    private root: HTMLElement,
+    private config: EngineConfig,
+  ) {
     this.bg = document.createElement("canvas");
     this.display = document.createElement("canvas");
     this.ui = document.createElement("canvas");
@@ -191,6 +194,27 @@ export class CanvasEngine {
       ctx.fillRect(0, 0, c.width, c.height);
     } else if (this.background === "grid") {
       this.grid.draw(ctx, c, this.pz);
+    } else if (this.background === "transparent") {
+      // Draw checkerboard pattern to indicate transparency
+      this.drawCheckerboard(ctx, c.width, c.height);
+    }
+  }
+
+  private drawCheckerboard(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+  ) {
+    const size = 20; // Size of each checker square
+    const lightColor = "#ffffff";
+    const darkColor = "#f0f0f0";
+
+    for (let y = 0; y < height; y += size) {
+      for (let x = 0; x < width; x += size) {
+        const isLight = (x / size + y / size) % 2 === 0;
+        ctx.fillStyle = isLight ? lightColor : darkColor;
+        ctx.fillRect(x, y, size, size);
+      }
     }
   }
 
@@ -268,7 +292,7 @@ export class CanvasEngine {
 
   private renderImageLayer(
     ctx: CanvasRenderingContext2D,
-    layer: ImageLayerLike
+    layer: ImageLayerLike,
   ) {
     const { blobId, x, y, width, height, rotation } = layer;
 
@@ -320,7 +344,7 @@ export class CanvasEngine {
     y: number,
     width: number,
     height: number,
-    rotation: number
+    rotation: number,
   ) {
     ctx.save();
 
@@ -341,7 +365,7 @@ export class CanvasEngine {
   private renderStroke(
     ctx: CanvasRenderingContext2D,
     s: StrokeLike,
-    layerOpacity: number
+    layerOpacity: number,
   ) {
     // For eraser strokes, use destination-out composite
     const isEraser = s.brushStyle === "eraser";
