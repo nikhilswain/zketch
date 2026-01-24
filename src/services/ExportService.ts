@@ -37,26 +37,17 @@ export class ExportService {
 
     // Calculate stroke bounds and scale factor
     const bounds = this.calculateStrokeBounds(strokes);
-    if (bounds) {
-      const scaleX = width / bounds.width;
-      const scaleY = height / bounds.height;
-      const scale = Math.min(scaleX, scaleY) * 0.9; // Leave some padding
 
-      const offsetX = (width - bounds.width * scale) / 2 - bounds.minX * scale;
-      const offsetY =
-        (height - bounds.height * scale) / 2 - bounds.minY * scale;
+    // Render strokes to an offscreen canvas first so erasers work correctly
+    const strokeCanvas = this.renderStrokesToOffscreenCanvas(
+      strokes,
+      bounds,
+      width,
+      height,
+    );
 
-      ctx.save();
-      ctx.translate(offsetX, offsetY);
-      ctx.scale(scale, scale);
-    }
-
-    // Render strokes
-    this.renderStrokesToCanvas(ctx, strokes, width, height);
-
-    if (bounds) {
-      ctx.restore();
-    }
+    // Draw the stroke canvas onto the main canvas
+    ctx.drawImage(strokeCanvas, 0, 0, width, height);
 
     return canvas.toDataURL("image/png");
   }
@@ -92,26 +83,17 @@ export class ExportService {
 
     // Calculate stroke bounds and scale factor
     const bounds = this.calculateStrokeBounds(strokes);
-    if (bounds) {
-      const scaleX = width / bounds.width;
-      const scaleY = height / bounds.height;
-      const scale = Math.min(scaleX, scaleY) * 0.9; // Leave some padding
 
-      const offsetX = (width - bounds.width * scale) / 2 - bounds.minX * scale;
-      const offsetY =
-        (height - bounds.height * scale) / 2 - bounds.minY * scale;
+    // Render strokes to an offscreen canvas first so erasers work correctly
+    const strokeCanvas = this.renderStrokesToOffscreenCanvas(
+      strokes,
+      bounds,
+      width,
+      height,
+    );
 
-      ctx.save();
-      ctx.translate(offsetX, offsetY);
-      ctx.scale(scale, scale);
-    }
-
-    // Render strokes
-    this.renderStrokesToCanvas(ctx, strokes, width, height);
-
-    if (bounds) {
-      ctx.restore();
-    }
+    // Draw the stroke canvas onto the main canvas
+    ctx.drawImage(strokeCanvas, 0, 0, width, height);
 
     return canvas.toDataURL("image/jpeg", settings.quality);
   }
@@ -170,6 +152,53 @@ export class ExportService {
     svgContent += "</svg>";
 
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgContent)}`;
+  }
+
+  /**
+   * Renders strokes to an offscreen canvas with proper eraser support.
+   * Erasers use destination-out which only works correctly when erasing from
+   * existing content, so we render all strokes to a separate canvas first.
+   */
+  private static renderStrokesToOffscreenCanvas(
+    strokes: IStroke[],
+    bounds: {
+      minX: number;
+      minY: number;
+      maxX: number;
+      maxY: number;
+      width: number;
+      height: number;
+    } | null,
+    width: number,
+    height: number,
+  ): HTMLCanvasElement {
+    const strokeCanvas = document.createElement("canvas");
+    strokeCanvas.width = width;
+    strokeCanvas.height = height;
+    const strokeCtx = strokeCanvas.getContext("2d");
+
+    if (!strokeCtx) {
+      return strokeCanvas;
+    }
+
+    // Apply transform if we have bounds
+    if (bounds) {
+      const scaleX = width / bounds.width;
+      const scaleY = height / bounds.height;
+      const scale = Math.min(scaleX, scaleY) * 0.9; // Leave some padding
+
+      const offsetX = (width - bounds.width * scale) / 2 - bounds.minX * scale;
+      const offsetY =
+        (height - bounds.height * scale) / 2 - bounds.minY * scale;
+
+      strokeCtx.translate(offsetX, offsetY);
+      strokeCtx.scale(scale, scale);
+    }
+
+    // Render all strokes - erasers will work correctly here
+    this.renderStrokesToCanvas(strokeCtx, strokes, width, height);
+
+    return strokeCanvas;
   }
 
   private static renderStrokesToCanvas(
