@@ -1,14 +1,86 @@
 import { getStroke } from "perfect-freehand";
 import type { IStroke, BackgroundType } from "../models/CanvasModel";
 import type { IExportSettings } from "../models/SettingsModel";
+import { BlobStorageService } from "./BlobStorageService";
+
+// Image layer data needed for export
+export interface IExportImageLayer {
+  blobId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  opacity: number;
+  visible: boolean;
+}
+
+// Generic layer for export (maintains z-order)
+export interface IExportLayer {
+  type: "stroke" | "image";
+  visible: boolean;
+  opacity: number;
+  // For stroke layers
+  strokes?: IStroke[];
+  // For image layers
+  imageData?: IExportImageLayer;
+}
 
 export class ExportService {
+  // Cache for loaded images during export
+  private static imageCache = new Map<string, HTMLImageElement>();
+
+  /**
+   * Load an image from blob storage
+   */
+  private static async loadImage(
+    blobId: string,
+  ): Promise<HTMLImageElement | null> {
+    // Check cache first
+    if (this.imageCache.has(blobId)) {
+      return this.imageCache.get(blobId)!;
+    }
+
+    try {
+      const blobUrl = await BlobStorageService.getBlobUrl(blobId);
+      if (!blobUrl) return null;
+
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          this.imageCache.set(blobId, img);
+          resolve(img);
+        };
+        img.onerror = () => resolve(null);
+        img.src = blobUrl;
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Pre-load all images needed for export
+   */
+  private static async preloadImages(layers: IExportLayer[]): Promise<void> {
+    const imagePromises: Promise<HTMLImageElement | null>[] = [];
+
+    for (const layer of layers) {
+      if (layer.type === "image" && layer.imageData && layer.visible) {
+        imagePromises.push(this.loadImage(layer.imageData.blobId));
+      }
+    }
+
+    await Promise.all(imagePromises);
+  }
+
   static async exportToPNG(
     strokes: IStroke[],
     background: BackgroundType,
     width: number,
     height: number,
     settings: IExportSettings,
+    layers?: IExportLayer[],
   ): Promise<string> {
     const canvas = document.createElement("canvas");
     canvas.width = width * settings.scale;
@@ -35,19 +107,21 @@ export class ExportService {
       }
     }
 
-    // Calculate stroke bounds and scale factor
-    const bounds = this.calculateStrokeBounds(strokes);
-
-    // Render strokes to an offscreen canvas first so erasers work correctly
-    const strokeCanvas = this.renderStrokesToOffscreenCanvas(
-      strokes,
-      bounds,
-      width,
-      height,
-    );
-
-    // Draw the stroke canvas onto the main canvas
-    ctx.drawImage(strokeCanvas, 0, 0, width, height);
+    // If we have layers, render them in order (preserves z-order with images)
+    if (layers && layers.length > 0) {
+      await this.preloadImages(layers);
+      await this.renderLayersToCanvas(ctx, layers, width, height);
+    } else {
+      // Legacy: just render strokes
+      const bounds = this.calculateStrokeBounds(strokes);
+      const strokeCanvas = this.renderStrokesToOffscreenCanvas(
+        strokes,
+        bounds,
+        width,
+        height,
+      );
+      ctx.drawImage(strokeCanvas, 0, 0, width, height);
+    }
 
     return canvas.toDataURL("image/png");
   }
@@ -58,6 +132,7 @@ export class ExportService {
     width: number,
     height: number,
     settings: IExportSettings,
+    layers?: IExportLayer[],
   ): Promise<string> {
     const canvas = document.createElement("canvas");
     canvas.width = width * settings.scale;
@@ -81,19 +156,21 @@ export class ExportService {
       ctx.fillRect(0, 0, width, height);
     }
 
-    // Calculate stroke bounds and scale factor
-    const bounds = this.calculateStrokeBounds(strokes);
-
-    // Render strokes to an offscreen canvas first so erasers work correctly
-    const strokeCanvas = this.renderStrokesToOffscreenCanvas(
-      strokes,
-      bounds,
-      width,
-      height,
-    );
-
-    // Draw the stroke canvas onto the main canvas
-    ctx.drawImage(strokeCanvas, 0, 0, width, height);
+    // If we have layers, render them in order (preserves z-order with images)
+    if (layers && layers.length > 0) {
+      await this.preloadImages(layers);
+      await this.renderLayersToCanvas(ctx, layers, width, height);
+    } else {
+      // Legacy: just render strokes
+      const bounds = this.calculateStrokeBounds(strokes);
+      const strokeCanvas = this.renderStrokesToOffscreenCanvas(
+        strokes,
+        bounds,
+        width,
+        height,
+      );
+      ctx.drawImage(strokeCanvas, 0, 0, width, height);
+    }
 
     return canvas.toDataURL("image/jpeg", settings.quality);
   }
@@ -152,6 +229,166 @@ export class ExportService {
     svgContent += "</svg>";
 
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgContent)}`;
+  }
+
+  /**
+   * Calculate bounds that include both strokes and images
+   */
+  private static calculateLayerBounds(layers: IExportLayer[]): {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+    width: number;
+    height: number;
+  } | null {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    let hasContent = false;
+
+    for (const layer of layers) {
+      if (!layer.visible) continue;
+
+      if (layer.type === "stroke" && layer.strokes) {
+        for (const stroke of layer.strokes) {
+          for (const point of stroke.points) {
+            minX = Math.min(minX, point.x);
+            minY = Math.min(minY, point.y);
+            maxX = Math.max(maxX, point.x);
+            maxY = Math.max(maxY, point.y);
+            hasContent = true;
+          }
+        }
+      } else if (layer.type === "image" && layer.imageData) {
+        const img = layer.imageData;
+        minX = Math.min(minX, img.x);
+        minY = Math.min(minY, img.y);
+        maxX = Math.max(maxX, img.x + img.width);
+        maxY = Math.max(maxY, img.y + img.height);
+        hasContent = true;
+      }
+    }
+
+    if (!hasContent) return null;
+
+    return {
+      minX,
+      minY,
+      maxX,
+      maxY,
+      width: maxX - minX,
+      height: maxY - minY,
+    };
+  }
+
+  /**
+   * Render all layers to canvas in order, supporting both stroke and image layers.
+   * This preserves the z-order so images can be above or below strokes.
+   */
+  private static async renderLayersToCanvas(
+    ctx: CanvasRenderingContext2D,
+    layers: IExportLayer[],
+    width: number,
+    height: number,
+  ): Promise<void> {
+    // Calculate combined bounds of all content
+    const bounds = this.calculateLayerBounds(layers);
+
+    // Calculate transform to fit content in export canvas
+    let scale = 1;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (bounds && bounds.width > 0 && bounds.height > 0) {
+      const scaleX = width / bounds.width;
+      const scaleY = height / bounds.height;
+      scale = Math.min(scaleX, scaleY) * 0.9; // Leave some padding
+
+      offsetX = (width - bounds.width * scale) / 2 - bounds.minX * scale;
+      offsetY = (height - bounds.height * scale) / 2 - bounds.minY * scale;
+    }
+
+    // Apply transform
+    ctx.save();
+    ctx.translate(offsetX, offsetY);
+    ctx.scale(scale, scale);
+
+    for (const layer of layers) {
+      if (!layer.visible) continue;
+
+      const prevAlpha = ctx.globalAlpha;
+      ctx.globalAlpha = layer.opacity * prevAlpha;
+
+      if (layer.type === "stroke" && layer.strokes) {
+        // Render stroke layer - erasers need offscreen canvas
+        const strokeCanvas = document.createElement("canvas");
+        // Use a large canvas to accommodate original coordinates
+        const canvasSize =
+          Math.max(
+            bounds?.maxX || width,
+            bounds?.maxY || height,
+            width,
+            height,
+          ) + 100;
+        strokeCanvas.width = canvasSize;
+        strokeCanvas.height = canvasSize;
+        const strokeCtx = strokeCanvas.getContext("2d");
+
+        if (strokeCtx) {
+          this.renderStrokesToCanvas(
+            strokeCtx,
+            layer.strokes,
+            canvasSize,
+            canvasSize,
+          );
+          // Draw at origin - the main ctx transform handles positioning
+          ctx.drawImage(strokeCanvas, 0, 0);
+        }
+      } else if (layer.type === "image" && layer.imageData) {
+        // Render image layer at its position
+        await this.renderImageLayer(ctx, layer.imageData);
+      }
+
+      ctx.globalAlpha = prevAlpha;
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Render a single image layer to the canvas
+   */
+  private static async renderImageLayer(
+    ctx: CanvasRenderingContext2D,
+    imageData: IExportImageLayer,
+  ): Promise<void> {
+    const img = await this.loadImage(imageData.blobId);
+    if (!img) return;
+
+    const { x, y, width, height, rotation, opacity } = imageData;
+
+    ctx.save();
+
+    // Apply opacity
+    const prevAlpha = ctx.globalAlpha;
+    ctx.globalAlpha = opacity * prevAlpha;
+
+    // Apply rotation around center
+    if (rotation !== 0) {
+      const centerX = x + width / 2;
+      const centerY = y + height / 2;
+      ctx.translate(centerX, centerY);
+      ctx.rotate((rotation * Math.PI) / 180);
+      ctx.translate(-centerX, -centerY);
+    }
+
+    // Draw the image
+    ctx.drawImage(img, x, y, width, height);
+
+    ctx.globalAlpha = prevAlpha;
+    ctx.restore();
   }
 
   /**

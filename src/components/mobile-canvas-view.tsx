@@ -243,29 +243,33 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
       try {
         let dataUrl: string;
         const background = canvasStore.background as BackgroundType;
+        const allStrokes = canvasStore.flattenedStrokes;
+        const exportLayers = canvasStore.exportLayers;
 
         switch (format) {
           case "png":
             dataUrl = await ExportService.exportToPNG(
-              canvasStore.strokes,
+              allStrokes as any,
               background,
               canvasSize.width,
               canvasSize.height,
               settingsStore.exportSettings,
+              exportLayers as any,
             );
             break;
           case "jpg":
             dataUrl = await ExportService.exportToJPG(
-              canvasStore.strokes,
+              allStrokes as any,
               background,
               canvasSize.width,
               canvasSize.height,
               settingsStore.exportSettings,
+              exportLayers as any,
             );
             break;
           case "svg":
             dataUrl = await ExportService.exportToSVG(
-              canvasStore.strokes,
+              allStrokes as any,
               background,
               canvasSize.width,
               canvasSize.height,
@@ -374,10 +378,11 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
           isOpen={showExportDialog}
           onClose={() => setShowExportDialog(false)}
           onExport={handleExport}
-          strokes={canvasStore.strokes}
+          strokes={canvasStore.flattenedStrokes as any}
           background={canvasStore.background as BackgroundType}
           drawingName={drawingName}
           layerCount={canvasStore.layers.length}
+          layers={canvasStore.exportLayers as any}
         />
       </div>
     );

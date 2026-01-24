@@ -12,7 +12,7 @@ import { Checkbox } from "./ui/checkbox";
 import { Download, Share2, Copy, FileImage, File, Loader2 } from "lucide-react";
 import type { ExportFormat } from "@/models/SettingsModel";
 import type { IStroke, BackgroundType } from "@/models/CanvasModel";
-import { ExportService } from "@/services/ExportService";
+import { ExportService, type IExportLayer } from "@/services/ExportService";
 import { ShareService } from "@/services/ShareService";
 import { toast } from "sonner";
 
@@ -25,6 +25,7 @@ interface ExportDialogProps {
   drawingName: string;
   layerCount?: number;
   onFlattenLayers?: () => void;
+  layers?: IExportLayer[];
 }
 
 const ExportDialog: React.FC<ExportDialogProps> = observer(
@@ -37,21 +38,27 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
     drawingName,
     layerCount = 1,
     onFlattenLayers,
+    layers,
   }) => {
     const settingsStore = useSettingsStore();
     const [previewDataUrl, setPreviewDataUrl] = useState<string>("");
     const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
     const [isSharing, setIsSharing] = useState(false);
 
+    // Check if we have any content (strokes or image layers)
+    const hasContent =
+      strokes.length > 0 ||
+      (layers && layers.some((l) => l.type === "image" && l.visible));
+
     // Generate preview whenever dialog opens or settings change
     useEffect(() => {
       if (isOpen) {
         generatePreview();
       }
-    }, [isOpen, settingsStore.exportSettings, strokes, background]);
+    }, [isOpen, settingsStore.exportSettings, strokes, background, layers]);
 
     const generatePreview = async () => {
-      if (strokes.length === 0) return;
+      if (!hasContent) return;
 
       setIsGeneratingPreview(true);
       try {
@@ -60,7 +67,8 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
           background,
           400, // Small preview size
           300,
-          { ...settingsStore.exportSettings, scale: 1 }
+          { ...settingsStore.exportSettings, scale: 1 },
+          layers,
         );
         setPreviewDataUrl(dataUrl);
       } catch (error) {
@@ -92,7 +100,8 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
             scale: 1,
             quality: 0.8, // Good quality but still compressed
             transparentBackground: false, // JPG doesn't support transparency
-          }
+          },
+          layers,
         );
 
         // Create share data
@@ -131,11 +140,11 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
         if (error instanceof Error) {
           if (error.message.includes("too large")) {
             toast.error(
-              "Drawing is too large to share. Try reducing complexity or export as a file instead."
+              "Drawing is too large to share. Try reducing complexity or export as a file instead.",
             );
           } else if (error.message.includes("not available")) {
             toast.error(
-              "Sharing service is temporarily unavailable. Please try again later."
+              "Sharing service is temporarily unavailable. Please try again later.",
             );
           } else {
             toast.error(error.message);
@@ -361,7 +370,7 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
         </DialogContent>
       </Dialog>
     );
-  }
+  },
 );
 
 export default ExportDialog;
