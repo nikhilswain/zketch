@@ -543,6 +543,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           setIsTransforming(false);
           setTransformHandle(null);
           setTransformStart(null);
+          // Save history after image transform completes (for undo/redo)
+          canvasStore.saveCurrentStateToHistory();
           return;
         }
 
