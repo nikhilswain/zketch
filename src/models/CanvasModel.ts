@@ -957,15 +957,27 @@ export const CanvasModel = types
         self.renderVersion++;
       },
 
-      // Load layers from saved drawing data
+      // Load layers from saved drawing data (supports both stroke and image layers)
       loadLayers(
         layersData: Array<{
           id: string;
           name: string;
+          type?: string;
           visible: boolean;
           locked: boolean;
           opacity: number;
-          strokes: SnapshotIn<typeof Stroke>[];
+          // Stroke layer properties
+          strokes?: SnapshotIn<typeof Stroke>[];
+          // Image layer properties
+          blobId?: string;
+          naturalWidth?: number;
+          naturalHeight?: number;
+          x?: number;
+          y?: number;
+          width?: number;
+          height?: number;
+          rotation?: number;
+          aspectLocked?: boolean;
         }>,
         activeLayerId?: string,
       ) {
@@ -975,15 +987,41 @@ export const CanvasModel = types
 
         // Add each layer from saved data
         layersData.forEach((layerData) => {
-          const layer = Layer.create({
-            id: layerData.id,
-            name: layerData.name,
-            visible: layerData.visible,
-            locked: layerData.locked,
-            opacity: layerData.opacity,
-            strokes: layerData.strokes as any,
-          });
-          self.layers.push(layer);
+          const layerType = layerData.type || "stroke";
+
+          if (layerType === "image") {
+            // Create image layer
+            const layer = Layer.create({
+              id: layerData.id,
+              name: layerData.name,
+              type: "image",
+              visible: layerData.visible,
+              locked: layerData.locked,
+              opacity: layerData.opacity,
+              blobId: layerData.blobId!,
+              naturalWidth: layerData.naturalWidth!,
+              naturalHeight: layerData.naturalHeight!,
+              x: layerData.x ?? 0,
+              y: layerData.y ?? 0,
+              width: layerData.width!,
+              height: layerData.height!,
+              rotation: layerData.rotation ?? 0,
+              aspectLocked: layerData.aspectLocked ?? true,
+            });
+            self.layers.push(layer);
+          } else {
+            // Create stroke layer (default)
+            const layer = Layer.create({
+              id: layerData.id,
+              name: layerData.name,
+              type: "stroke",
+              visible: layerData.visible,
+              locked: layerData.locked,
+              opacity: layerData.opacity,
+              strokes: (layerData.strokes || []) as any,
+            });
+            self.layers.push(layer);
+          }
         });
 
         // Set active layer
