@@ -19,6 +19,15 @@ export interface StrokeData {
   opacity?: number;
   brushStyle: string;
   timestamp: number;
+  // Animation timing
+  startTime?: number | null;
+  duration?: number | null;
+  // Brush settings (pass through)
+  thinning?: number;
+  smoothing?: number;
+  streamline?: number;
+  taperStart?: number;
+  taperEnd?: number;
 }
 
 /**

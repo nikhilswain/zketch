@@ -259,6 +259,15 @@ export const CanvasModel = types
                 opacity: stroke.opacity ?? 1,
                 brushStyle: stroke.brushStyle,
                 timestamp: stroke.timestamp,
+                // Animation timing
+                startTime: stroke.startTime ?? null,
+                duration: stroke.duration ?? null,
+                // Brush settings
+                thinning: stroke.thinning,
+                smoothing: stroke.smoothing,
+                streamline: stroke.streamline,
+                taperStart: stroke.taperStart,
+                taperEnd: stroke.taperEnd,
               })),
             };
           } else if (layer.type === "image") {

@@ -54,6 +54,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     const [transformStart, setTransformStart] =
       useState<TransformStartState | null>(null);
 
+    // Stroke timing for animation playback
+    const strokeStartTimeRef = useRef<number | null>(null);
+
     // Mount layered engine (background + strokes). Engine handles its own resizing.
     useEffect(() => {
       const root = rootRef.current;
@@ -426,6 +429,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           // Start drawing
           setIsDrawing(true);
           point.pressure = e.pressure || 0.5;
+          strokeStartTimeRef.current = Date.now(); // Capture stroke start time for animation
           setCurrentPoints([point]);
         }
       },
@@ -555,6 +559,12 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             previewRafRef.current = null;
           }
           if (currentPoints.length > 1) {
+            // Calculate stroke timing for animation playback
+            const endTime = Date.now();
+            const startTime = strokeStartTimeRef.current ?? endTime;
+            const duration = endTime - startTime;
+            strokeStartTimeRef.current = null;
+
             // Add a stroke to the active layer (or legacy strokes if no layers)
             const strokeData = {
               id: crypto.randomUUID(),
@@ -566,7 +576,10 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                   : canvasStore.currentSize,
               opacity: canvasStore.brushSettings.opacity ?? 1,
               brushStyle: canvasStore.currentBrushStyle,
-              timestamp: Date.now(),
+              timestamp: endTime,
+              // Animation timing for timelapse playback
+              startTime,
+              duration,
               // Store brush settings per-stroke for correct rendering
               thinning: canvasStore.brushSettings.thinning,
               smoothing: canvasStore.brushSettings.smoothing,

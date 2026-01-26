@@ -20,6 +20,9 @@ export interface StrokeLike {
   opacity?: number;
   brushStyle: BrushStyle;
   timestamp: number;
+  // Animation timing - auto-captured during drawing
+  startTime?: number | null;
+  duration?: number | null;
   // Brush settings stored per-stroke for correct rendering
   thinning?: number;
   smoothing?: number;

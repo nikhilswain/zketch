@@ -108,6 +108,9 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
                   opacity: stroke.opacity ?? 1,
                   brushStyle: stroke.brushStyle,
                   timestamp: stroke.timestamp,
+                  // Animation timing
+                  startTime: stroke.startTime ?? null,
+                  duration: stroke.duration ?? null,
                   // Brush settings per-stroke
                   thinning: stroke.thinning,
                   smoothing: stroke.smoothing,
@@ -171,6 +174,9 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             opacity: stroke.opacity ?? 1,
             brushStyle: stroke.brushStyle,
             timestamp: stroke.timestamp,
+            // Animation timing
+            startTime: stroke.startTime ?? null,
+            duration: stroke.duration ?? null,
             // Brush settings per-stroke
             thinning: stroke.thinning,
             smoothing: stroke.smoothing,

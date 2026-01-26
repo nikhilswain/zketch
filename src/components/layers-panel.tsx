@@ -30,9 +30,10 @@ import {
   Eraser,
   Image as ImageIcon,
 } from "lucide-react";
-import type { ILayer } from "@/models/LayerModel";
+import type { ILayer, IStrokeLayer } from "@/models/LayerModel";
 import { getSnapshot } from "mobx-state-tree";
 import { BlobStorageService } from "@/services/BlobStorageService";
+import LayerAnimationControls from "@/components/layer-animation-controls";
 
 // Generate a small thumbnail preview of a layer's strokes (simplified for performance)
 function generateLayerThumbnail(
@@ -165,6 +166,7 @@ const LayerItem: React.FC<LayerItemProps> = observer(
     const [isEditing, setIsEditing] = useState(false);
     const [editName, setEditName] = useState(layer.name);
     const [showOpacity, setShowOpacity] = useState(false);
+    const [showAnimation, setShowAnimation] = useState(false);
     const [thumbnail, setThumbnail] = useState<string>("");
     const thumbnailTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const layerIdRef = useRef(layer.id);
@@ -389,6 +391,11 @@ const LayerItem: React.FC<LayerItemProps> = observer(
                 <DropdownMenuItem onClick={() => setShowOpacity(!showOpacity)}>
                   Opacity
                 </DropdownMenuItem>
+                {layer.type === "stroke" && (
+                  <DropdownMenuItem onClick={() => setShowAnimation(!showAnimation)}>
+                    Animation
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={onClear}
@@ -435,6 +442,16 @@ const LayerItem: React.FC<LayerItemProps> = observer(
               </span>
             </div>
           </div>
+        )}
+
+        {/* Animation Controls (expandable, only for stroke layers) */}
+        {showAnimation && layer.type === "stroke" && (
+          <LayerAnimationControls
+            layer={layer as IStrokeLayer}
+            onPlaybackStateChange={() => {
+              // Could disable layer editing during playback
+            }}
+          />
         )}
       </div>
     );

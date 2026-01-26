@@ -26,6 +26,9 @@ export const Stroke = types.model("Stroke", {
     "texture",
   ]),
   timestamp: types.number,
+  // Animation timing - auto-captured during drawing
+  startTime: types.optional(types.maybeNull(types.number), null),
+  duration: types.optional(types.maybeNull(types.number), null),
   // Brush settings stored per-stroke for correct rendering
   thinning: types.optional(types.number, 0.5),
   smoothing: types.optional(types.number, 0.5),
