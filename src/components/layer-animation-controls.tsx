@@ -42,11 +42,21 @@ const SPEED_OPTIONS: PlaybackSpeed[] = [0.5, 1, 2, 4];
 const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
   ({ layer, onPlaybackFrame, onPlaybackStateChange, className = "" }) => {
     const engineRef = useRef<AnimationPlaybackEngine | null>(null);
-    const [playbackState, setPlaybackState] = useState<PlaybackState>("stopped");
+    const [playbackState, setPlaybackState] =
+      useState<PlaybackState>("stopped");
     const [currentTime, setCurrentTime] = useState(0);
     const [totalDuration, setTotalDuration] = useState(0);
     const [speed, setSpeed] = useState<PlaybackSpeed>(1);
     const [isSeeking, setIsSeeking] = useState(false);
+
+    // Store callbacks in refs to avoid stale closures
+    const onPlaybackFrameRef = useRef(onPlaybackFrame);
+    const onPlaybackStateChangeRef = useRef(onPlaybackStateChange);
+
+    useEffect(() => {
+      onPlaybackFrameRef.current = onPlaybackFrame;
+      onPlaybackStateChangeRef.current = onPlaybackStateChange;
+    }, [onPlaybackFrame, onPlaybackStateChange]);
 
     // Initialize engine
     useEffect(() => {
@@ -55,11 +65,11 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
           if (!isSeeking) {
             setCurrentTime(info.currentTime);
           }
-          onPlaybackFrame?.(visibleStrokes);
+          onPlaybackFrameRef.current?.(visibleStrokes);
         },
         onStateChange: (state) => {
           setPlaybackState(state);
-          onPlaybackStateChange?.(state);
+          onPlaybackStateChangeRef.current?.(state);
         },
         onComplete: () => {
           // Animation finished
@@ -69,6 +79,8 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
       engineRef.current = engine;
 
       return () => {
+        // Notify parent that animation is stopping when component unmounts
+        onPlaybackStateChangeRef.current?.("stopped");
         engine.destroy();
         engineRef.current = null;
       };
@@ -130,12 +142,15 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
       return null;
     }
 
-    const progress = totalDuration > 0 ? (currentTime / totalDuration) * 100 : 0;
+    const progress =
+      totalDuration > 0 ? (currentTime / totalDuration) * 100 : 0;
     const isPlaying = playbackState === "playing";
     const isPaused = playbackState === "paused";
 
     return (
-      <div className={`px-2 py-1.5 border-t border-border/30 bg-muted/20 ${className}`}>
+      <div
+        className={`px-2 py-1.5 border-t border-border/30 bg-muted/20 ${className}`}
+      >
         {/* Controls Row */}
         <div className="flex items-center gap-1 mb-1">
           {/* Play/Pause Button */}
@@ -216,7 +231,7 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
         </div>
       </div>
     );
-  }
+  },
 );
 
 export default LayerAnimationControls;
