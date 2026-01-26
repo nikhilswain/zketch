@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Play, Pause, Square, ChevronDown } from "lucide-react";
+import { Play, Pause, Square, ChevronDown, Repeat } from "lucide-react";
 import {
   AnimationPlaybackEngine,
   type PlaybackSpeed,
@@ -48,6 +48,7 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
     const [totalDuration, setTotalDuration] = useState(0);
     const [speed, setSpeed] = useState<PlaybackSpeed>(1);
     const [isSeeking, setIsSeeking] = useState(false);
+    const [loop, setLoop] = useState(false);
 
     // Store callbacks in refs to avoid stale closures
     const onPlaybackFrameRef = useRef(onPlaybackFrame);
@@ -109,6 +110,11 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
       engineRef.current?.setSpeed(speed);
     }, [speed]);
 
+    // Update loop
+    useEffect(() => {
+      engineRef.current?.setLoop(loop);
+    }, [loop]);
+
     const handlePlay = useCallback(() => {
       engineRef.current?.play();
     }, []);
@@ -120,6 +126,10 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
     const handleStop = useCallback(() => {
       engineRef.current?.stop();
       setCurrentTime(0);
+    }, []);
+
+    const handleToggleLoop = useCallback(() => {
+      setLoop((prev) => !prev);
     }, []);
 
     const handleSeekStart = useCallback(() => {
@@ -186,6 +196,17 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
             disabled={playbackState === "stopped"}
           >
             <Square className="h-3 w-3" />
+          </Button>
+
+          {/* Loop Toggle */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-6 w-6 ${loop ? "bg-primary/20 text-primary" : ""}`}
+            onClick={handleToggleLoop}
+            title={loop ? "Loop: On" : "Loop: Off"}
+          >
+            <Repeat className="h-3 w-3" />
           </Button>
 
           {/* Spacer */}

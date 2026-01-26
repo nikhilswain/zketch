@@ -20,12 +20,21 @@ export interface PlaybackInfo {
   totalDuration: number;
   speed: PlaybackSpeed;
   progress: number; // 0-1
+  loop: boolean;
+}
+
+export interface AnimationOptions {
+  /** Loop the animation when it reaches the end */
+  loop?: boolean;
+  /** Compress gaps between strokes to this max duration (ms). Set to 0 to disable. */
+  maxGap?: number;
 }
 
 export interface AnimationCallbacks {
   onFrame?: (info: PlaybackInfo, visibleStrokes: StrokeLike[]) => void;
   onStateChange?: (state: PlaybackState) => void;
   onComplete?: () => void;
+  onLoop?: () => void;
 }
 
 /**
@@ -37,7 +46,7 @@ export function calculateTotalDuration(strokes: StrokeLike[]): number {
 
   // Find strokes that have timing data
   const timedStrokes = strokes.filter(
-    (s) => s.startTime != null && s.duration != null
+    (s) => s.startTime != null && s.duration != null,
   );
 
   if (timedStrokes.length === 0) {
@@ -83,6 +92,7 @@ export class AnimationPlaybackEngine {
   private speed: PlaybackSpeed = 1;
   private animationFrameId: number | null = null;
   private lastFrameTime: number = 0;
+  private loop: boolean = false;
 
   private strokes: StrokeLike[] = [];
   private baseTime: number = 0;
@@ -115,6 +125,22 @@ export class AnimationPlaybackEngine {
   }
 
   /**
+   * Set animation options
+   */
+  setOptions(options: AnimationOptions): void {
+    if (options.loop !== undefined) {
+      this.loop = options.loop;
+    }
+  }
+
+  /**
+   * Toggle loop mode
+   */
+  setLoop(loop: boolean): void {
+    this.loop = loop;
+  }
+
+  /**
    * Get current playback info
    */
   getPlaybackInfo(): PlaybackInfo {
@@ -125,6 +151,7 @@ export class AnimationPlaybackEngine {
       speed: this.speed,
       progress:
         this.totalDuration > 0 ? this.currentTime / this.totalDuration : 0,
+      loop: this.loop,
     };
   }
 
@@ -227,7 +254,7 @@ export class AnimationPlaybackEngine {
    */
   private getPartialStroke(
     stroke: StrokeLike,
-    playbackTime: number
+    playbackTime: number,
   ): StrokeLike | null {
     // Get stroke timing
     const strokeStart = (stroke.startTime ?? stroke.timestamp) - this.baseTime;
@@ -246,10 +273,7 @@ export class AnimationPlaybackEngine {
 
     // Stroke is in progress - calculate partial points
     const progress = (playbackTime - strokeStart) / strokeDuration;
-    const pointCount = Math.max(
-      1,
-      Math.floor(stroke.points.length * progress)
-    );
+    const pointCount = Math.max(1, Math.floor(stroke.points.length * progress));
 
     return {
       ...stroke,
@@ -271,11 +295,21 @@ export class AnimationPlaybackEngine {
 
     // Check if animation is complete
     if (this.currentTime >= this.totalDuration) {
-      this.currentTime = this.totalDuration;
-      this.emitFrame();
-      this.state = "stopped";
-      this.callbacks.onStateChange?.("stopped");
-      this.callbacks.onComplete?.();
+      if (this.loop) {
+        // Loop back to start
+        this.currentTime = 0;
+        this.lastFrameTime = performance.now();
+        this.callbacks.onLoop?.();
+        this.emitFrame();
+        this.animationFrameId = requestAnimationFrame(this.tick);
+      } else {
+        // Stop at end
+        this.currentTime = this.totalDuration;
+        this.emitFrame();
+        this.state = "stopped";
+        this.callbacks.onStateChange?.("stopped");
+        this.callbacks.onComplete?.();
+      }
       return;
     }
 
