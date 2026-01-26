@@ -43,18 +43,18 @@ export const CanvasModel = types
     // Layer display mode: "normal" shows individual layers, "flattened" shows merged result
     layerDisplayMode: types.optional(
       types.enumeration("LayerDisplayMode", ["normal", "flattened"]),
-      "normal"
+      "normal",
     ),
     currentColor: types.optional(types.string, "#000000"),
     currentSize: types.optional(types.number, 4),
     eraserSize: types.optional(types.number, 20),
     currentBrushStyle: types.optional(
       types.enumeration("BrushStyle", ["ink", "eraser", "spray", "texture"]),
-      "ink"
+      "ink",
     ),
     background: types.optional(
       types.enumeration("BackgroundType", ["white", "transparent", "grid"]),
-      "white"
+      "white",
     ),
     zoom: types.optional(types.number, 1),
     panX: types.optional(types.number, 0),
@@ -65,7 +65,7 @@ export const CanvasModel = types
     // Interaction mode: "draw" for normal drawing, "transform" for moving/resizing images
     interactionMode: types.optional(
       types.enumeration("InteractionMode", ["draw", "transform"]),
-      "draw"
+      "draw",
     ),
     // Currently selected layer for transformation
     selectedLayerId: types.optional(types.maybeNull(types.string), null),
@@ -102,6 +102,40 @@ export const CanvasModel = types
     // Get all layers in render order (bottom to top)
     get sortedLayers() {
       return self.layers.slice();
+    },
+    // Get layers formatted for export (includes both stroke and image layers)
+    get exportLayers() {
+      return self.layers
+        .map((layer) => {
+          if (layer.type === "stroke") {
+            const strokeLayer = layer as any;
+            return {
+              type: "stroke" as const,
+              visible: layer.visible,
+              opacity: layer.opacity,
+              strokes: strokeLayer.strokes.map((s: any) => getSnapshot(s)),
+            };
+          } else if (layer.type === "image") {
+            const imageLayer = layer as any;
+            return {
+              type: "image" as const,
+              visible: layer.visible,
+              opacity: layer.opacity,
+              imageData: {
+                blobId: imageLayer.blobId,
+                x: imageLayer.x,
+                y: imageLayer.y,
+                width: imageLayer.width,
+                height: imageLayer.height,
+                rotation: imageLayer.rotation,
+                opacity: imageLayer.opacity,
+                visible: imageLayer.visible,
+              },
+            };
+          }
+          return null;
+        })
+        .filter(Boolean);
     },
     // Get visible layers only (respects focus mode)
     get visibleLayers() {
@@ -279,7 +313,7 @@ export const CanvasModel = types
       } else {
         // It's a plain snapshot, create normally
         self.strokes.push(
-          Stroke.create(strokeData as SnapshotIn<typeof Stroke>)
+          Stroke.create(strokeData as SnapshotIn<typeof Stroke>),
         );
       }
     };
@@ -287,13 +321,13 @@ export const CanvasModel = types
     const updateState = (state: SnapshotOut<typeof CanvasState>) => {
       // Replace the entire strokes array atomically to ensure proper reactivity
       self.strokes.replace(
-        state.strokes.map((strokeData) => Stroke.create(strokeData))
+        state.strokes.map((strokeData) => Stroke.create(strokeData)),
       );
 
       // Update layers if present in state
       if (state.layers) {
         self.layers.replace(
-          state.layers.map((layerData) => Layer.create(layerData as any))
+          state.layers.map((layerData) => Layer.create(layerData as any)),
         );
       }
       if (state.activeLayerId !== undefined) {
@@ -373,7 +407,7 @@ export const CanvasModel = types
           taperEnd: number;
           easing: string;
           opacity: number;
-        }>
+        }>,
       ) {
         if (settings.thinning !== undefined)
           self.brushSettings.thinning = settings.thinning;
@@ -390,7 +424,7 @@ export const CanvasModel = types
         if (settings.opacity !== undefined)
           self.brushSettings.opacity = Math.max(
             0,
-            Math.min(1, settings.opacity)
+            Math.min(1, settings.opacity),
           );
       },
       clear() {
@@ -432,7 +466,7 @@ export const CanvasModel = types
       // Keeping method for backward compatibility; now a no-op.
       eraseStrokes(
         _eraserPath: { x: number; y: number; pressure: number }[],
-        _eraserSize: number
+        _eraserSize: number,
       ) {
         // no-op: erasing is recorded as a stroke with brushStyle = 'eraser'
         return;
@@ -462,13 +496,13 @@ export const CanvasModel = types
         bounds: { minX: number; minY: number; maxX: number; maxY: number },
         circleX: number,
         circleY: number,
-        radius: number
+        radius: number,
       ): boolean {
         // Quick bounding box vs circle intersection test
         const closestX = Math.max(bounds.minX, Math.min(circleX, bounds.maxX));
         const closestY = Math.max(bounds.minY, Math.min(circleY, bounds.maxY));
         const distance = Math.sqrt(
-          (circleX - closestX) ** 2 + (circleY - closestY) ** 2
+          (circleX - closestX) ** 2 + (circleY - closestY) ** 2,
         );
         return distance <= radius;
       },
@@ -477,7 +511,7 @@ export const CanvasModel = types
         _stroke: SnapshotOut<typeof Stroke>,
         _x: number,
         _y: number,
-        _eraserRadius: number
+        _eraserRadius: number,
       ): SnapshotIn<typeof Stroke>[] {
         // return original stroke unchanged
         return [];
@@ -486,7 +520,7 @@ export const CanvasModel = types
       splitStrokeByEraser(
         stroke: SnapshotOut<typeof Stroke>,
         _eraserPath: { x: number; y: number; pressure: number }[],
-        _eraserSize: number
+        _eraserSize: number,
       ): SnapshotIn<typeof Stroke>[] {
         return [stroke as any];
       },
@@ -512,7 +546,7 @@ export const CanvasModel = types
       // Add a new stroke layer
       addLayer(name?: string) {
         const newLayer = createDefaultLayer(
-          name || `Layer ${self.layers.length + 1}`
+          name || `Layer ${self.layers.length + 1}`,
         );
         self.layers.push(Layer.create(newLayer as any));
         self.activeLayerId = newLayer.id;
@@ -530,7 +564,7 @@ export const CanvasModel = types
         canvasHeight: number,
         name?: string,
         centerX?: number,
-        centerY?: number
+        centerY?: number,
       ) {
         const newLayer = createImageLayer(
           blobId,
@@ -541,7 +575,7 @@ export const CanvasModel = types
           name ||
             `Image ${self.layers.filter((l) => l.type === "image").length + 1}`,
           centerX,
-          centerY
+          centerY,
         );
         self.layers.push(Layer.create(newLayer as any));
         self.activeLayerId = newLayer.id;
@@ -740,7 +774,7 @@ export const CanvasModel = types
       // Add a stroke to the active layer
       addStrokeToActiveLayer(strokeData: SnapshotIn<typeof Stroke>) {
         const activeLayer = self.layers.find(
-          (l) => l.id === self.activeLayerId
+          (l) => l.id === self.activeLayerId,
         );
         // Can only add strokes to stroke layers
         if (
@@ -762,7 +796,7 @@ export const CanvasModel = types
       // Clear strokes from the active layer
       clearActiveLayer() {
         const activeLayer = self.layers.find(
-          (l) => l.id === self.activeLayerId
+          (l) => l.id === self.activeLayerId,
         );
         if (
           activeLayer &&
@@ -831,7 +865,7 @@ export const CanvasModel = types
       // Merge visible stroke layers into a single layer (image layers are skipped)
       mergeVisibleLayers() {
         const visibleStrokeLayers = self.layers.filter(
-          (l) => l.visible && l.type === "stroke"
+          (l) => l.visible && l.type === "stroke",
         );
         if (visibleStrokeLayers.length < 2) return;
 
@@ -923,17 +957,29 @@ export const CanvasModel = types
         self.renderVersion++;
       },
 
-      // Load layers from saved drawing data
+      // Load layers from saved drawing data (supports both stroke and image layers)
       loadLayers(
         layersData: Array<{
           id: string;
           name: string;
+          type?: string;
           visible: boolean;
           locked: boolean;
           opacity: number;
-          strokes: SnapshotIn<typeof Stroke>[];
+          // Stroke layer properties
+          strokes?: SnapshotIn<typeof Stroke>[];
+          // Image layer properties
+          blobId?: string;
+          naturalWidth?: number;
+          naturalHeight?: number;
+          x?: number;
+          y?: number;
+          width?: number;
+          height?: number;
+          rotation?: number;
+          aspectLocked?: boolean;
         }>,
-        activeLayerId?: string
+        activeLayerId?: string,
       ) {
         // Clear existing layers
         self.layers.clear();
@@ -941,15 +987,41 @@ export const CanvasModel = types
 
         // Add each layer from saved data
         layersData.forEach((layerData) => {
-          const layer = Layer.create({
-            id: layerData.id,
-            name: layerData.name,
-            visible: layerData.visible,
-            locked: layerData.locked,
-            opacity: layerData.opacity,
-            strokes: layerData.strokes as any,
-          });
-          self.layers.push(layer);
+          const layerType = layerData.type || "stroke";
+
+          if (layerType === "image") {
+            // Create image layer
+            const layer = Layer.create({
+              id: layerData.id,
+              name: layerData.name,
+              type: "image",
+              visible: layerData.visible,
+              locked: layerData.locked,
+              opacity: layerData.opacity,
+              blobId: layerData.blobId!,
+              naturalWidth: layerData.naturalWidth!,
+              naturalHeight: layerData.naturalHeight!,
+              x: layerData.x ?? 0,
+              y: layerData.y ?? 0,
+              width: layerData.width!,
+              height: layerData.height!,
+              rotation: layerData.rotation ?? 0,
+              aspectLocked: layerData.aspectLocked ?? true,
+            });
+            self.layers.push(layer);
+          } else {
+            // Create stroke layer (default)
+            const layer = Layer.create({
+              id: layerData.id,
+              name: layerData.name,
+              type: "stroke",
+              visible: layerData.visible,
+              locked: layerData.locked,
+              opacity: layerData.opacity,
+              strokes: (layerData.strokes || []) as any,
+            });
+            self.layers.push(layer);
+          }
         });
 
         // Set active layer

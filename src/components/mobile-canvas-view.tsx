@@ -137,21 +137,6 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
     const handleSave = async () => {
       if (canvasStore.isEmpty) return;
 
-      // Get all strokes from visible layers for thumbnail
-      const allStrokes = canvasStore.flattenedStrokes;
-
-      // Generate thumbnail data URL
-      const thumbnailDataUrl = ThumbnailService.generateThumbnail(
-        allStrokes as any,
-        canvasStore.background,
-        200,
-        150,
-      );
-
-      // Store thumbnail as blob and get ID
-      const thumbnailId =
-        await BlobStorageService.storeThumbnail(thumbnailDataUrl);
-
       // Map layers to save format with optimized strokes
       const layersToSave = canvasStore.layers.map((layer) => {
         const baseLayerData = {
@@ -211,6 +196,18 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
         return baseLayerData;
       });
 
+      // Generate thumbnail data URL with images support
+      const thumbnailDataUrl = await ThumbnailService.generateThumbnailAsync(
+        layersToSave as any,
+        canvasStore.background,
+        200,
+        150,
+      );
+
+      // Store thumbnail as blob and get ID
+      const thumbnailId =
+        await BlobStorageService.storeThumbnail(thumbnailDataUrl);
+
       if (currentDrawingId) {
         await vaultStore.updateDrawing(
           currentDrawingId,
@@ -243,29 +240,33 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
       try {
         let dataUrl: string;
         const background = canvasStore.background as BackgroundType;
+        const allStrokes = canvasStore.flattenedStrokes;
+        const exportLayers = canvasStore.exportLayers;
 
         switch (format) {
           case "png":
             dataUrl = await ExportService.exportToPNG(
-              canvasStore.strokes,
+              allStrokes as any,
               background,
               canvasSize.width,
               canvasSize.height,
               settingsStore.exportSettings,
+              exportLayers as any,
             );
             break;
           case "jpg":
             dataUrl = await ExportService.exportToJPG(
-              canvasStore.strokes,
+              allStrokes as any,
               background,
               canvasSize.width,
               canvasSize.height,
               settingsStore.exportSettings,
+              exportLayers as any,
             );
             break;
           case "svg":
             dataUrl = await ExportService.exportToSVG(
-              canvasStore.strokes,
+              allStrokes as any,
               background,
               canvasSize.width,
               canvasSize.height,
@@ -374,10 +375,11 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
           isOpen={showExportDialog}
           onClose={() => setShowExportDialog(false)}
           onExport={handleExport}
-          strokes={canvasStore.strokes}
+          strokes={canvasStore.flattenedStrokes as any}
           background={canvasStore.background as BackgroundType}
           drawingName={drawingName}
           layerCount={canvasStore.layers.length}
+          layers={canvasStore.exportLayers as any}
         />
       </div>
     );

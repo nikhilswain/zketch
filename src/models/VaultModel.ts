@@ -70,7 +70,7 @@ export interface ISavedDrawingData {
   background: string;
 }
 
-// Saved layer model for MST
+// Saved layer model for MST (stroke layers only - for backward compatibility)
 export const SavedLayer = types.model("SavedLayer", {
   id: types.identifier,
   name: types.string,
@@ -83,8 +83,9 @@ export const SavedLayer = types.model("SavedLayer", {
 export const SavedDrawing = types.model("SavedDrawing", {
   id: types.identifier,
   name: types.string,
-  // All drawing data is stored in layers
-  layers: types.optional(types.array(SavedLayer), []),
+  // Layers stored as frozen JSON to support both stroke and image layers
+  // This avoids complex MST union types while maintaining flexibility
+  layers: types.optional(types.frozen<ILayerData[]>(), []),
   activeLayerId: types.optional(types.string, ""),
   thumbnail: types.string,
   createdAt: types.Date,
@@ -156,27 +157,9 @@ export const VaultModel = types
     ) {
       const drawing = self.drawings.find((d) => d.id === id);
       if (drawing) {
-        // Update layers
-        drawing.layers.clear();
-        layers.forEach((layerData) => {
-          // Only load stroke layers for now - image layers will be handled in Phase 3
-          if (layerData.type === "stroke" || !("type" in layerData)) {
-            const strokeLayerData = layerData as IStrokeLayerData;
-            drawing.layers.push(
-              SavedLayer.create({
-                id: strokeLayerData.id,
-                name: strokeLayerData.name,
-                visible: strokeLayerData.visible,
-                locked: strokeLayerData.locked,
-                opacity: strokeLayerData.opacity,
-                strokes: strokeLayerData.strokes as any,
-              }),
-            );
-          }
-          // TODO: Handle image layers in Phase 3
-        });
+        // Update layers - now stored as frozen JSON, supports both stroke and image layers
+        (drawing as any).layers = layers;
         drawing.activeLayerId = activeLayerId || layers[0]?.id || "";
-
         drawing.thumbnail = thumbnail;
         drawing.background = background;
         drawing.updatedAt = new Date();
@@ -218,55 +201,8 @@ export const VaultModel = types
           (drawing) => ({
             id: drawing.id,
             name: drawing.name,
-            // Layers data - handle both stroke and image layers
-            layers: drawing.layers.map((layer: any) => {
-              const baseLayerData = {
-                id: layer.id,
-                name: layer.name,
-                type: layer.type || "stroke",
-                visible: layer.visible,
-                locked: layer.locked,
-                opacity: layer.opacity,
-              };
-
-              if (layer.type === "image") {
-                return {
-                  ...baseLayerData,
-                  blobId: layer.blobId,
-                  naturalWidth: layer.naturalWidth,
-                  naturalHeight: layer.naturalHeight,
-                  x: layer.x,
-                  y: layer.y,
-                  width: layer.width,
-                  height: layer.height,
-                  rotation: layer.rotation,
-                  aspectLocked: layer.aspectLocked,
-                };
-              }
-
-              return {
-                ...baseLayerData,
-                strokes: (layer.strokes || []).map((stroke: any) => ({
-                  id: stroke.id,
-                  points: stroke.points.map((p: any) => ({
-                    x: p.x,
-                    y: p.y,
-                    pressure: p.pressure,
-                  })),
-                  color: stroke.color,
-                  size: stroke.size,
-                  opacity: stroke.opacity ?? 1,
-                  brushStyle: stroke.brushStyle,
-                  timestamp: stroke.timestamp,
-                  // Brush settings per-stroke
-                  thinning: stroke.thinning,
-                  smoothing: stroke.smoothing,
-                  streamline: stroke.streamline,
-                  taperStart: stroke.taperStart,
-                  taperEnd: stroke.taperEnd,
-                })),
-              };
-            }),
+            // Layers are already stored as frozen JSON in the correct format
+            layers: drawing.layers as ILayerData[],
             activeLayerId: drawing.activeLayerId,
             thumbnail: drawing.thumbnail,
             createdAt: new Date(drawing.createdAt),

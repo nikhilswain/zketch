@@ -169,7 +169,7 @@ const VaultView: React.FC<VaultViewProps> = observer(
     const getStrokeCount = (drawing: ISavedDrawing) => {
       // Count strokes from all stroke layers
       return drawing.layers.reduce((total, layer) => {
-        if (layer.strokes) {
+        if (layer.type === "stroke" && layer.strokes) {
           return total + layer.strokes.length;
         }
         return total;
@@ -180,7 +180,7 @@ const VaultView: React.FC<VaultViewProps> = observer(
       // Get unique colors from all stroke layers
       const colors = new Set<string>();
       drawing.layers.forEach((layer) => {
-        if (layer.strokes) {
+        if (layer.type === "stroke" && layer.strokes) {
           layer.strokes.forEach((stroke) => colors.add(stroke.color));
         }
       });

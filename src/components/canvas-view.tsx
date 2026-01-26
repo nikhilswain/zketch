@@ -145,21 +145,6 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     const handleSave = async () => {
       if (canvasStore.isEmpty) return;
 
-      // Get all strokes from visible layers for thumbnail (flattened preview)
-      const allStrokes = canvasStore.flattenedStrokes;
-
-      // Generate thumbnail data URL
-      const thumbnailDataUrl = ThumbnailService.generateThumbnail(
-        allStrokes as any,
-        canvasStore.background,
-        200,
-        150,
-      );
-
-      // Store thumbnail as blob and get ID
-      const thumbnailId =
-        await BlobStorageService.storeThumbnail(thumbnailDataUrl);
-
       // Map layers to save format with optimized strokes
       const layersToSave = canvasStore.layers.map((layer) => {
         const baseLayerData = {
@@ -219,6 +204,18 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         return baseLayerData;
       });
 
+      // Generate thumbnail data URL with images support
+      const thumbnailDataUrl = await ThumbnailService.generateThumbnailAsync(
+        layersToSave as any,
+        canvasStore.background,
+        200,
+        150,
+      );
+
+      // Store thumbnail as blob and get ID
+      const thumbnailId =
+        await BlobStorageService.storeThumbnail(thumbnailDataUrl);
+
       if (currentDrawingId) {
         await vaultStore.updateDrawing(
           currentDrawingId,
@@ -263,6 +260,8 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         const exportSize = { width: 1920, height: 1080 };
         // Get all strokes from visible layers for export
         const allStrokes = canvasStore.flattenedStrokes;
+        // Get all layers for export (includes images)
+        const exportLayers = canvasStore.exportLayers;
 
         switch (format) {
           case "png":
@@ -272,6 +271,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               exportSize.width,
               exportSize.height,
               settingsStore.exportSettings,
+              exportLayers as any,
             );
             break;
           case "jpg":
@@ -281,6 +281,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               exportSize.width,
               exportSize.height,
               settingsStore.exportSettings,
+              exportLayers as any,
             );
             break;
           case "svg":
@@ -447,6 +448,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           drawingName={drawingName}
           layerCount={canvasStore.layerCount}
           onFlattenLayers={() => canvasStore.flattenAllLayers()}
+          layers={canvasStore.exportLayers as any}
         />
 
         {/* Import Dialog */}
