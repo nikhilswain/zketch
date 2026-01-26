@@ -138,6 +138,27 @@ export class CanvasEngine {
     this.cursor = c;
     this.invalidate();
   }
+
+  // Animation state
+  private animatingLayerId: string | null = null;
+  private animationStrokes: StrokeLike[] | null = null;
+
+  /**
+   * Set the animation state - when a layer is being animated, render these strokes instead
+   */
+  setAnimationState(layerId: string | null, strokes: StrokeLike[] | null) {
+    this.animatingLayerId = layerId;
+    this.animationStrokes = strokes;
+    this.invalidate();
+  }
+
+  /**
+   * Check if a layer is currently being animated
+   */
+  isLayerAnimating(layerId: string): boolean {
+    return this.animatingLayerId === layerId;
+  }
+
   invalidate = () => {
     this.invalid = true;
     this.config.onInvalidate?.();
@@ -255,8 +276,16 @@ export class CanvasEngine {
       layerCtx.translate(this.pz.panX, this.pz.panY);
       layerCtx.scale(this.pz.zoom, this.pz.zoom);
 
-      // Render all strokes for this layer
-      this.renderLayer(layerCtx, layer);
+      // Check if this layer is being animated
+      if (this.animatingLayerId === layer.id && this.animationStrokes) {
+        // Render animation strokes instead of normal layer strokes
+        for (const stroke of this.animationStrokes) {
+          this.renderStroke(layerCtx, stroke, 1);
+        }
+      } else {
+        // Render normal layer content
+        this.renderLayer(layerCtx, layer);
+      }
 
       layerCtx.restore();
 

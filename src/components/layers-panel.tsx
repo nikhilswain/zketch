@@ -34,12 +34,14 @@ import type { ILayer, IStrokeLayer } from "@/models/LayerModel";
 import { getSnapshot } from "mobx-state-tree";
 import { BlobStorageService } from "@/services/BlobStorageService";
 import LayerAnimationControls from "@/components/layer-animation-controls";
+import type { StrokeLike } from "@/engine";
+import type { PlaybackState } from "@/engine/AnimationPlaybackEngine";
 
 // Generate a small thumbnail preview of a layer's strokes (simplified for performance)
 function generateLayerThumbnail(
   layerSnapshot: { strokes: readonly any[] },
   width: number = 48,
-  height: number = 36
+  height: number = 36,
 ): string {
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -81,7 +83,7 @@ function generateLayerThumbnail(
   const contentHeight = maxY - minY || 1;
   const scale = Math.min(
     (width - padding * 2) / contentWidth,
-    (height - padding * 2) / contentHeight
+    (height - padding * 2) / contentHeight,
   );
   const offsetX =
     padding + (width - padding * 2 - contentWidth * scale) / 2 - minX * scale;
@@ -140,6 +142,8 @@ interface LayerItemProps {
   isLast: boolean;
   canDelete: boolean;
   renderVersion: number;
+  onAnimationFrame?: (strokes: StrokeLike[]) => void;
+  onAnimationStateChange?: (state: PlaybackState) => void;
 }
 
 const LayerItem: React.FC<LayerItemProps> = observer(
@@ -162,6 +166,8 @@ const LayerItem: React.FC<LayerItemProps> = observer(
     isLast,
     canDelete,
     renderVersion,
+    onAnimationFrame,
+    onAnimationStateChange,
   }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editName, setEditName] = useState(layer.name);
@@ -195,7 +201,7 @@ const LayerItem: React.FC<LayerItemProps> = observer(
           // Handle image layers - get thumbnail from blob
           if (snapshot.type === "image" && snapshot.blobId) {
             const blobUrl = await BlobStorageService.getBlobUrl(
-              snapshot.blobId
+              snapshot.blobId,
             );
             if (blobUrl && layerIdRef.current === layerId) {
               setThumbnail(blobUrl);
@@ -392,7 +398,9 @@ const LayerItem: React.FC<LayerItemProps> = observer(
                   Opacity
                 </DropdownMenuItem>
                 {layer.type === "stroke" && (
-                  <DropdownMenuItem onClick={() => setShowAnimation(!showAnimation)}>
+                  <DropdownMenuItem
+                    onClick={() => setShowAnimation(!showAnimation)}
+                  >
                     Animation
                   </DropdownMenuItem>
                 )}
@@ -448,23 +456,29 @@ const LayerItem: React.FC<LayerItemProps> = observer(
         {showAnimation && layer.type === "stroke" && (
           <LayerAnimationControls
             layer={layer as IStrokeLayer}
-            onPlaybackStateChange={() => {
-              // Could disable layer editing during playback
-            }}
+            onPlaybackFrame={onAnimationFrame}
+            onPlaybackStateChange={onAnimationStateChange}
           />
         )}
       </div>
     );
-  }
+  },
 );
 
 interface LayersPanelProps {
   className?: string;
   collapsed?: boolean;
+  onAnimationFrame?: (layerId: string, strokes: StrokeLike[]) => void;
+  onAnimationStateChange?: (layerId: string, state: PlaybackState) => void;
 }
 
 const LayersPanel: React.FC<LayersPanelProps> = observer(
-  ({ className = "", collapsed = false }) => {
+  ({
+    className = "",
+    collapsed = false,
+    onAnimationFrame,
+    onAnimationStateChange,
+  }) => {
     const canvasStore = useCanvasStore();
 
     // Initialize layers if needed
@@ -585,6 +599,12 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
                 isLast={actualIndex === canvasStore.layers.length - 1}
                 canDelete={canvasStore.layerCount > 1}
                 renderVersion={canvasStore.renderVersion}
+                onAnimationFrame={(strokes) =>
+                  onAnimationFrame?.(layer.id, strokes)
+                }
+                onAnimationStateChange={(state) =>
+                  onAnimationStateChange?.(layer.id, state)
+                }
               />
             );
           })}
@@ -604,7 +624,7 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
         )}
       </div>
     );
-  }
+  },
 );
 
 export default LayersPanel;

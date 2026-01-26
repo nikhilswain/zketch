@@ -21,10 +21,19 @@ interface DrawingCanvasProps {
   className?: string;
   width?: number;
   height?: number;
+  animatingLayerId?: string | null;
+  animationStrokes?: StrokeLike[] | null;
 }
 
 const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
-  ({ isDrawingMode, className, width, height }) => {
+  ({
+    isDrawingMode,
+    className,
+    width,
+    height,
+    animatingLayerId,
+    animationStrokes,
+  }) => {
     const canvasStore = useCanvasStore();
     // We now mount canvases inside this root div via CanvasEngine; no direct canvas ref needed
     const rootRef = useRef<HTMLDivElement>(null);
@@ -154,6 +163,16 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       engine.setPreviewStroke(null);
       engine.invalidate();
     }, [canvasStore.renderVersion]);
+
+    // Sync animation state with engine
+    useEffect(() => {
+      const engine = engineRef.current;
+      if (!engine) return;
+      engine.setAnimationState(
+        animatingLayerId ?? null,
+        animationStrokes ?? null,
+      );
+    }, [animatingLayerId, animationStrokes]);
 
     // Coordinate conversion
     const screenToCanvas = useCallback(

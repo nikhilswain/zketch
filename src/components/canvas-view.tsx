@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { observer } from "mobx-react-lite";
 import {
   useCanvasStore,
@@ -25,6 +25,8 @@ import type { ExportFormat } from "@/models/SettingsModel";
 import type { BackgroundType } from "@/models/CanvasModel";
 import { toast } from "sonner";
 import { Input } from "./ui/input";
+import type { StrokeLike } from "@/engine";
+import type { PlaybackState } from "@/engine/AnimationPlaybackEngine";
 
 interface CanvasViewProps {
   editingDrawingId: string | null;
@@ -48,6 +50,35 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     );
     // Track if rename was just done (to prevent double toast from Enter + blur)
     const justRenamedRef = useRef(false);
+
+    // Animation playback state
+    const [animatingLayerId, setAnimatingLayerId] = useState<string | null>(
+      null,
+    );
+    const [animationStrokes, setAnimationStrokes] = useState<
+      StrokeLike[] | null
+    >(null);
+
+    // Animation callbacks
+    const handleAnimationFrame = useCallback(
+      (layerId: string, strokes: StrokeLike[]) => {
+        setAnimatingLayerId(layerId);
+        setAnimationStrokes(strokes);
+      },
+      [],
+    );
+
+    const handleAnimationStateChange = useCallback(
+      (layerId: string, state: PlaybackState) => {
+        if (state === "playing") {
+          setAnimatingLayerId(layerId);
+        } else if (state === "stopped") {
+          setAnimatingLayerId(null);
+          setAnimationStrokes(null);
+        }
+      },
+      [],
+    );
 
     // Sync with prop when it changes (e.g., navigating to edit a different drawing)
     useEffect(() => {
@@ -399,7 +430,11 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         </div>
 
         {/* Full-screen canvas */}
-        <DrawingCanvas isDrawingMode={isDrawingMode} />
+        <DrawingCanvas
+          isDrawingMode={isDrawingMode}
+          animatingLayerId={animatingLayerId}
+          animationStrokes={animationStrokes}
+        />
 
         {/* Layers Panel - Right side */}
         <div
@@ -433,7 +468,10 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
                   <ChevronRight className="w-3 h-3" />
                 </Button>
               </div>
-              <LayersPanel />
+              <LayersPanel
+                onAnimationFrame={handleAnimationFrame}
+                onAnimationStateChange={handleAnimationStateChange}
+              />
             </div>
           )}
         </div>
