@@ -46,6 +46,8 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
       useState<PlaybackState>("stopped");
     const [currentTime, setCurrentTime] = useState(0);
     const [totalDuration, setTotalDuration] = useState(0);
+    const [originalDuration, setOriginalDuration] = useState(0);
+    const [gapCompressionActive, setGapCompressionActive] = useState(false);
     const [speed, setSpeed] = useState<PlaybackSpeed>(1);
     const [isSeeking, setIsSeeking] = useState(false);
     const [loop, setLoop] = useState(false);
@@ -98,6 +100,8 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
         engine.setStrokes(strokes);
         const info = engine.getPlaybackInfo();
         setTotalDuration(info.totalDuration);
+        setOriginalDuration(info.originalDuration);
+        setGapCompressionActive(info.gapCompressionActive);
         setCurrentTime(0);
       } catch (e) {
         // Layer might be detached during reordering
@@ -246,8 +250,18 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
             onPointerUp={handleSeekEnd}
             className="flex-1"
           />
-          <span className="text-[10px] text-muted-foreground whitespace-nowrap min-w-[65px] text-right">
+          <span
+            className="text-[10px] text-muted-foreground whitespace-nowrap min-w-[65px] text-right"
+            title={
+              gapCompressionActive
+                ? `Gap compression active: ${formatTime(originalDuration)} → ${formatTime(totalDuration)}`
+                : undefined
+            }
+          >
             {formatTime(currentTime)} / {formatTime(totalDuration)}
+            {gapCompressionActive && (
+              <span className="text-primary/60 ml-1">⚡</span>
+            )}
           </span>
         </div>
       </div>
