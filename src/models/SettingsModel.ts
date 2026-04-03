@@ -32,6 +32,11 @@ export const SettingsModel = types
     dockHideDelay: types.optional(types.number, 3000),
     showGrid: types.optional(types.boolean, true),
     snapToGrid: types.optional(types.boolean, false),
+    // Touch input mode: auto (pen+finger draw), stylus-only (pen draws, finger gestures), touch-draw (finger draws)
+    touchMode: types.optional(
+      types.enumeration("TouchMode", ["auto", "stylus-only", "touch-draw"]),
+      "auto",
+    ),
   })
   .views((self) => ({
     get defaultSettings() {
@@ -61,6 +66,7 @@ export const SettingsModel = types
           dockHideDelay: self.dockHideDelay,
           showGrid: self.showGrid,
           snapToGrid: self.snapToGrid,
+          touchMode: self.touchMode,
         };
         localStorage.setItem("drawing-app-settings", JSON.stringify(settings));
       } catch (error) {
@@ -94,6 +100,7 @@ export const SettingsModel = types
           self.dockHideDelay = settings.dockHideDelay ?? self.dockHideDelay;
           self.showGrid = settings.showGrid ?? self.showGrid;
           self.snapToGrid = settings.snapToGrid ?? self.snapToGrid;
+          self.touchMode = settings.touchMode ?? self.touchMode;
         }
       } catch (error) {
         console.error("Failed to load settings:", error);
@@ -138,6 +145,10 @@ export const SettingsModel = types
             settings.transparentBackground;
         if (settings.scale !== undefined)
           self.exportSettings.scale = settings.scale;
+        saveToStorage();
+      },
+      setTouchMode(mode: "auto" | "stylus-only" | "touch-draw") {
+        self.touchMode = mode;
         saveToStorage();
       },
       setUIPreferences(
