@@ -22,6 +22,9 @@ import {
   SquareDot,
   ChevronLeft,
   ImagePlus,
+  Pointer,
+  PenTool,
+  Hand,
 } from "lucide-react";
 import type { BackgroundType } from "@/models/CanvasModel";
 
@@ -62,6 +65,27 @@ const Sidebar: React.FC<SidebarProps> = observer(
       },
       { value: "grid", label: "Grid", icon: <Grid3X3 className="w-4 h-4" /> },
     ];
+
+    const touchModeOptions: {
+      value: "auto" | "stylus-only" | "touch-draw";
+      label: string;
+      icon: React.ReactNode;
+    }[] = [
+      { value: "auto", label: "Auto", icon: <Pointer className="w-4 h-4" /> },
+      {
+        value: "stylus-only",
+        label: "Stylus Only",
+        icon: <PenTool className="w-4 h-4" />,
+      },
+      {
+        value: "touch-draw",
+        label: "Touch Draw",
+        icon: <Hand className="w-4 h-4" />,
+      },
+    ];
+
+    const hasTouchSupport =
+      typeof navigator !== "undefined" && navigator.maxTouchPoints > 0;
 
     const commonColors = [
       "#000000", // Black
@@ -388,6 +412,35 @@ const Sidebar: React.FC<SidebarProps> = observer(
                 </div>
               </CardContent>
             </Card>
+
+            {/* Touch Mode - only shown on touch-capable devices */}
+            {hasTouchSupport && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium">
+                    Touch Mode
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-3 gap-2">
+                    {touchModeOptions.map((tm) => (
+                      <button
+                        key={tm.value}
+                        onClick={() => settingsStore.setTouchMode(tm.value)}
+                        className={`flex flex-col items-center gap-1 p-3 rounded border-2 transition-all ${
+                          settingsStore.touchMode === tm.value
+                            ? "border-blue-500 bg-blue-50"
+                            : "border-gray-300 hover:border-gray-400"
+                        }`}
+                      >
+                        {tm.icon}
+                        <span className="text-xs">{tm.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Actions */}
             <Card>
