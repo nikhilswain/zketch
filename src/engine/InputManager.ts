@@ -64,9 +64,6 @@ export class InputManager {
 
   // Gesture state
   private gestureActive = false;
-  private gestureStartDistance = 0;
-  private gestureStartCenterX = 0;
-  private gestureStartCenterY = 0;
   private gesturePrevCenterX = 0;
   private gesturePrevCenterY = 0;
   private gesturePrevDistance = 0;
@@ -74,8 +71,8 @@ export class InputManager {
   // Gesture start threshold
   private gestureThresholdMet = false;
   private gestureThresholdTimer: number | null = null;
-  private static GESTURE_THRESHOLD_PX = 5;
-  private static GESTURE_THRESHOLD_MS = 50;
+  private static readonly GESTURE_THRESHOLD_PX = 5;
+  private static readonly GESTURE_THRESHOLD_MS = 50;
 
   constructor(root: HTMLElement, config: InputManagerConfig) {
     this.root = root;
@@ -133,11 +130,9 @@ export class InputManager {
   }
 
   private preventTouch = (e: TouchEvent): void => {
-    // Prevent browser default touch behaviors (scroll, zoom, etc.)
-    // We handle all touch interactions ourselves
-    if (e.touches.length > 1) {
-      e.preventDefault();
-    }
+    // Prevent all browser default touch behaviors (scroll, zoom, pull-to-refresh).
+    // InputManager handles all touch interactions.
+    e.preventDefault();
   };
 
   private preventGesture = (e: Event): void => {
@@ -240,10 +235,7 @@ export class InputManager {
   private initGestureState(a: TrackedPointer, b: TrackedPointer): void {
     const dist = this.getDistance(a, b);
     const center = this.getCenter(a, b);
-    this.gestureStartDistance = dist;
     this.gesturePrevDistance = dist;
-    this.gestureStartCenterX = center.x;
-    this.gestureStartCenterY = center.y;
     this.gesturePrevCenterX = center.x;
     this.gesturePrevCenterY = center.y;
     this.gestureActive = true;
@@ -309,6 +301,11 @@ export class InputManager {
       }
 
       this.currentIntent = "gesture";
+
+      // If gesture is already active (e.g., third finger arrived), ignore
+      if (this.gestureActive) {
+        return;
+      }
 
       // For two-finger gestures, initialize gesture state
       const pair = this.getTwoTouchPointers();
@@ -466,9 +463,8 @@ export class InputManager {
         if (touchCount === 0) {
           this.currentIntent = "ignore";
         }
-      }
       // For single-pointer pan (mouse/pen in pan mode), end when pointer lifts
-      if (touchCount === 0 && this.activePointers.size === 0) {
+      } else if (touchCount === 0 && this.activePointers.size === 0) {
         if (this.gestureActive) {
           this.gestureActive = false;
           this.config.callbacks.onGestureEnd?.();
