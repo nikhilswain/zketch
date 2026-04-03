@@ -2,12 +2,11 @@ import type React from "react";
 import { useRef, useEffect, useState, useCallback } from "react";
 import { observer } from "mobx-react-lite";
 import { getSnapshot } from "mobx-state-tree";
-import { useCanvasStore } from "../hooks/useStores";
-import type { IPoint, IStroke } from "@/models/CanvasModel";
-import { CanvasEngine, transformController } from "@/engine";
+import { useCanvasStore, useSettingsStore } from "../hooks/useStores";
+import type { IPoint } from "@/models/CanvasModel";
+import { CanvasEngine, transformController, InputManager } from "@/engine";
 import type {
   StrokeLike,
-  LayerLike,
   TransformHandleType,
   ImageLayerLike,
 } from "@/engine";
@@ -35,21 +34,18 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     animationStrokes,
   }) => {
     const canvasStore = useCanvasStore();
+    const settingsStore = useSettingsStore();
     // We now mount canvases inside this root div via CanvasEngine; no direct canvas ref needed
     const rootRef = useRef<HTMLDivElement>(null);
     const engineRef = useRef<CanvasEngine | null>(null);
+    const inputManagerRef = useRef<InputManager | null>(null);
     // Wheel axis lock to keep horizontal pan during momentum even after Shift released
     const wheelAxisLockRef = useRef<"none" | "horizontal" | "vertical">("none");
     const wheelAxisResetTimerRef = useRef<number | null>(null);
     const shiftDownRef = useRef(false);
     const lastShiftUpTsRef = useRef<number>(0);
     const [isDrawing, setIsDrawing] = useState(false);
-    const [isPanning, setIsPanning] = useState(false);
     const [currentPoints, setCurrentPoints] = useState<IPoint[]>([]);
-    const [lastPanPoint, setLastPanPoint] = useState<{
-      x: number;
-      y: number;
-    } | null>(null);
     const [spacePressed, setSpacePressed] = useState(false);
     const [mousePosition, setMousePosition] = useState<{
       x: number;
@@ -303,6 +299,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         if (e.code === "Space" && !e.repeat) {
           e.preventDefault();
           setSpacePressed(true);
+          inputManagerRef.current?.setPanOverride(true);
         }
         if (e.key === "Shift") {
           shiftDownRef.current = true;
@@ -318,8 +315,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         if (e.code === "Space") {
           e.preventDefault();
           setSpacePressed(false);
-          setIsPanning(false);
-          setLastPanPoint(null);
+          inputManagerRef.current?.setPanOverride(false);
         }
         if (e.key === "Shift") {
           shiftDownRef.current = false;
@@ -327,7 +323,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         }
       };
 
-      // Prevent browser zoom/scroll if the pointer is over the canvas area, but still let the event reach our canvas handler
+      // Prevent browser zoom/scroll if the pointer is over the canvas area
       const handleGlobalWheel = (e: WheelEvent) => {
         const root = rootRef.current;
         if (!root) return;
@@ -335,23 +331,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         const inside = !!target && (target === root || root.contains(target));
         if (!inside) return;
         if (e.ctrlKey) {
-          // Only block default when user is trying to zoom the page
-          e.preventDefault();
-        }
-      };
-
-      // Additional prevention for touchstart to prevent pinch gestures
-      const handleTouchStart = (e: TouchEvent) => {
-        const root = rootRef.current;
-        if (root && root.contains(e.target as Node) && e.touches.length > 1) {
-          e.preventDefault();
-        }
-      };
-
-      // Prevent gesturestart which can trigger zoom
-      const handleGestureStart = (e: Event) => {
-        const root = rootRef.current;
-        if (root && root.contains(e.target as Node)) {
           e.preventDefault();
         }
       };
@@ -362,273 +341,13 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         passive: false,
         capture: true,
       });
-      window.addEventListener("touchstart", handleTouchStart, {
-        passive: false,
-      });
-      window.addEventListener("gesturestart", handleGestureStart, {
-        passive: false,
-      });
 
       return () => {
         window.removeEventListener("keydown", handleKeyDown);
         window.removeEventListener("keyup", handleKeyUp);
         window.removeEventListener("wheel", handleGlobalWheel, true);
-        window.removeEventListener("touchstart", handleTouchStart);
-        window.removeEventListener("gesturestart", handleGestureStart);
       };
     }, []);
-
-    const handlePointerDown = useCallback(
-      (e: React.PointerEvent) => {
-        e.preventDefault();
-        const root = rootRef.current;
-        if (!root) return;
-        root.focus?.();
-
-        // Pan mode: middle mouse button or space + left click
-        if (
-          e.button === 1 ||
-          (spacePressed && e.button === 0) ||
-          !isDrawingMode
-        ) {
-          setIsPanning(true);
-          setLastPanPoint({ x: e.clientX, y: e.clientY });
-          return;
-        }
-
-        // Left click in drawing mode
-        if (isDrawingMode && e.button === 0) {
-          const point = screenToCanvas(e.clientX, e.clientY);
-
-          // If in transform mode, check for handle interactions first
-          if (canvasStore.isTransformMode && canvasStore.selectedImageLayer) {
-            const handle = hitTestTransformHandles(e.clientX, e.clientY);
-
-            if (handle) {
-              // Start transform operation using TransformController
-              const root = rootRef.current;
-              if (!root) return;
-              const rect = root.getBoundingClientRect();
-              const localX = e.clientX - rect.left;
-              const localY = e.clientY - rect.top;
-
-              const viewport = {
-                panX: canvasStore.panX,
-                panY: canvasStore.panY,
-                zoom: canvasStore.zoom,
-              };
-
-              const startState = transformController.captureStartState(
-                { x: localX, y: localY },
-                canvasStore.selectedImageLayer as ImageLayerLike,
-                viewport,
-              );
-
-              setIsTransforming(true);
-              setTransformHandle(handle);
-              setTransformStart(startState);
-              return;
-            }
-          }
-
-          // Check if clicking on an image layer
-          const hitLayerId = hitTestImageLayers(point.x, point.y);
-
-          if (hitLayerId) {
-            // Select the image layer and enter transform mode
-            canvasStore.selectLayer(hitLayerId);
-            return;
-          }
-
-          // If in transform mode but clicked outside any image, deselect
-          if (canvasStore.isTransformMode) {
-            canvasStore.deselectLayer();
-          }
-
-          // Start drawing
-          setIsDrawing(true);
-          point.pressure = e.pressure || 0.5;
-          strokeStartTimeRef.current = Date.now(); // Capture stroke start time for animation
-          setCurrentPoints([point]);
-        }
-      },
-      [
-        screenToCanvas,
-        isDrawingMode,
-        spacePressed,
-        hitTestImageLayers,
-        hitTestTransformHandles,
-        canvasStore,
-      ],
-    );
-
-    const handlePointerMove = useCallback(
-      (e: React.PointerEvent) => {
-        // Update mouse position for eraser cursor
-        setMousePosition({ x: e.clientX, y: e.clientY });
-
-        if (isPanning && lastPanPoint) {
-          // Panning
-          const deltaX = e.clientX - lastPanPoint.x;
-          const deltaY = e.clientY - lastPanPoint.y;
-          canvasStore.setPan(
-            canvasStore.panX + deltaX,
-            canvasStore.panY + deltaY,
-          );
-          setLastPanPoint({ x: e.clientX, y: e.clientY });
-        } else if (
-          isTransforming &&
-          transformHandle &&
-          transformStart &&
-          canvasStore.selectedImageLayer
-        ) {
-          // Handle transform operations using TransformController
-          const layer = canvasStore.selectedImageLayer as any;
-          const root = rootRef.current;
-          if (!root) return;
-          const rect = root.getBoundingClientRect();
-          const localX = e.clientX - rect.left;
-          const localY = e.clientY - rect.top;
-
-          const viewport = {
-            panX: canvasStore.panX,
-            panY: canvasStore.panY,
-            zoom: canvasStore.zoom,
-          };
-
-          let result;
-          if (transformHandle === "move") {
-            result = transformController.applyMove(
-              { x: localX, y: localY },
-              transformStart,
-              viewport,
-            );
-            layer.setPosition(result.x, result.y);
-          } else if (transformHandle === "rotate") {
-            result = transformController.applyRotation(
-              { x: localX, y: localY },
-              transformStart,
-              viewport,
-            );
-            layer.setRotation(result.rotation);
-          } else if (["nw", "ne", "se", "sw"].includes(transformHandle)) {
-            const maintainAspect = !e.shiftKey; // Shift to free resize
-            result = transformController.applyResize(
-              transformHandle as "nw" | "ne" | "se" | "sw",
-              { x: localX, y: localY },
-              transformStart,
-              viewport,
-              maintainAspect,
-            );
-            layer.setPosition(result.x, result.y);
-            layer.setSize(result.width, result.height, false);
-          }
-        } else if (isDrawing && isDrawingMode) {
-          // Drawing
-          const point = screenToCanvas(e.clientX, e.clientY);
-          point.pressure = e.pressure || 0.5;
-
-          if (canvasStore.currentBrushStyle === "eraser") {
-            // For eraser, just collect points - no real-time erasing for performance
-            // Erasing will happen on stroke completion
-          }
-
-          // Min-distance filter to reduce point density and preview work
-          const MIN_DIST = 0.5; // world units
-          setCurrentPoints((prev) => {
-            const last = prev[prev.length - 1];
-            if (!last) return [point];
-            const dx = point.x - last.x;
-            const dy = point.y - last.y;
-            if (dx * dx + dy * dy < MIN_DIST * MIN_DIST) return prev;
-            return [...prev, point];
-          });
-        }
-      },
-      [
-        isDrawing,
-        isPanning,
-        isTransforming,
-        transformHandle,
-        transformStart,
-        isDrawingMode,
-        lastPanPoint,
-        canvasStore,
-      ],
-    );
-
-    const handlePointerUp = useCallback(
-      (e: React.PointerEvent) => {
-        // no pointer capture on root div
-
-        // End transform operation
-        if (isTransforming) {
-          setIsTransforming(false);
-          setTransformHandle(null);
-          setTransformStart(null);
-          // Save history after image transform completes (for undo/redo)
-          canvasStore.saveCurrentStateToHistory();
-          return;
-        }
-
-        if (isDrawing && isDrawingMode) {
-          setIsDrawing(false);
-          if (previewRafRef.current) {
-            cancelAnimationFrame(previewRafRef.current);
-            previewRafRef.current = null;
-          }
-          if (currentPoints.length > 1) {
-            // Calculate stroke timing for animation playback
-            const endTime = Date.now();
-            const startTime = strokeStartTimeRef.current ?? endTime;
-            const duration = endTime - startTime;
-            strokeStartTimeRef.current = null;
-
-            // Add a stroke to the active layer (or legacy strokes if no layers)
-            const strokeData = {
-              id: crypto.randomUUID(),
-              points: currentPoints.map((point) => ({ ...point })),
-              color: canvasStore.currentColor,
-              size:
-                canvasStore.currentBrushStyle === "eraser"
-                  ? canvasStore.eraserSize
-                  : canvasStore.currentSize,
-              opacity: canvasStore.brushSettings.opacity ?? 1,
-              brushStyle: canvasStore.currentBrushStyle,
-              timestamp: endTime,
-              // Animation timing for timelapse playback
-              startTime,
-              duration,
-              // Store brush settings per-stroke for correct rendering
-              thinning: canvasStore.brushSettings.thinning,
-              smoothing: canvasStore.brushSettings.smoothing,
-              streamline: canvasStore.brushSettings.streamline,
-              taperStart: canvasStore.brushSettings.taperStart,
-              taperEnd: canvasStore.brushSettings.taperEnd,
-            };
-
-            // Use layer-aware stroke addition if layers exist
-            if (canvasStore.hasLayers) {
-              canvasStore.addStrokeToActiveLayer(strokeData);
-            } else {
-              canvasStore.addStroke(strokeData);
-            }
-          }
-          setCurrentPoints([]);
-        } else if (isPanning) {
-          setIsPanning(false);
-          setLastPanPoint(null);
-        }
-      },
-      [
-        isDrawing,
-        isPanning,
-        isTransforming,
-        isDrawingMode,
-        currentPoints,
-        canvasStore,
-      ],
-    );
 
     const handleWheel = useCallback(
       (e: WheelEvent) => {
@@ -702,6 +421,205 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         root.removeEventListener("wheel", handleWheel);
       };
     }, [handleWheel]);
+
+    // Mount InputManager for touch/stylus input handling
+    useEffect(() => {
+      const root = rootRef.current;
+      if (!root) return;
+
+      const manager = new InputManager(root, {
+        getTouchMode: () => settingsStore.touchMode as "auto" | "stylus-only" | "touch-draw",
+        getIsDrawingMode: () => isDrawingMode,
+        callbacks: {},
+      });
+
+      inputManagerRef.current = manager;
+
+      return () => {
+        manager.destroy();
+        inputManagerRef.current = null;
+      };
+    }, []);
+
+    // Update InputManager callbacks when dependencies change
+    useEffect(() => {
+      const manager = inputManagerRef.current;
+      if (!manager) return;
+
+      manager.setCallbacks({
+        onDrawStart: (pt, pointerType) => {
+          const root = rootRef.current;
+          if (!root) return;
+
+          const canvasPoint = screenToCanvas(pt.x, pt.y);
+          canvasPoint.pressure = pt.pressure;
+
+          // If in transform mode, check for handle interactions first
+          if (canvasStore.isTransformMode && canvasStore.selectedImageLayer) {
+            const handle = hitTestTransformHandles(pt.x, pt.y);
+            if (handle) {
+              const rect = root.getBoundingClientRect();
+              const localX = pt.x - rect.left;
+              const localY = pt.y - rect.top;
+              const viewport = {
+                panX: canvasStore.panX,
+                panY: canvasStore.panY,
+                zoom: canvasStore.zoom,
+              };
+              const startState = transformController.captureStartState(
+                { x: localX, y: localY },
+                canvasStore.selectedImageLayer as ImageLayerLike,
+                viewport,
+              );
+              setIsTransforming(true);
+              setTransformHandle(handle);
+              setTransformStart(startState);
+              return;
+            }
+          }
+
+          // Check if clicking on an image layer
+          const hitLayerId = hitTestImageLayers(canvasPoint.x, canvasPoint.y);
+          if (hitLayerId) {
+            canvasStore.selectLayer(hitLayerId);
+            return;
+          }
+
+          // If in transform mode but clicked outside any image, deselect
+          if (canvasStore.isTransformMode) {
+            canvasStore.deselectLayer();
+          }
+
+          // Start drawing
+          strokeStartTimeRef.current = Date.now();
+          setIsDrawing(true);
+          setCurrentPoints([canvasPoint]);
+        },
+
+        onDrawMove: (pt) => {
+          const canvasPoint = screenToCanvas(pt.x, pt.y);
+          canvasPoint.pressure = pt.pressure;
+
+          // Min-distance filter
+          const MIN_DIST = 0.5;
+          setCurrentPoints((prev) => {
+            const last = prev[prev.length - 1];
+            if (!last) return [canvasPoint];
+            const dx = canvasPoint.x - last.x;
+            const dy = canvasPoint.y - last.y;
+            if (dx * dx + dy * dy < MIN_DIST * MIN_DIST) return prev;
+            return [...prev, canvasPoint];
+          });
+        },
+
+        onDrawEnd: () => {
+          setIsDrawing(false);
+          if (previewRafRef.current) {
+            cancelAnimationFrame(previewRafRef.current);
+            previewRafRef.current = null;
+          }
+        },
+
+        onDrawCancel: () => {
+          setIsDrawing(false);
+          setCurrentPoints([]);
+          if (previewRafRef.current) {
+            cancelAnimationFrame(previewRafRef.current);
+            previewRafRef.current = null;
+          }
+          engineRef.current?.setPreviewStroke(null);
+          engineRef.current?.invalidate();
+        },
+
+        onGestureStart: () => {
+          // Nothing special needed on gesture start
+        },
+
+        onGestureUpdate: (gesture) => {
+          const root = rootRef.current;
+          if (!root) return;
+
+          // Apply pan
+          canvasStore.setPan(
+            canvasStore.panX + gesture.panDeltaX,
+            canvasStore.panY + gesture.panDeltaY,
+          );
+
+          // Apply zoom around gesture center
+          if (gesture.zoomDelta !== 1) {
+            const rect = root.getBoundingClientRect();
+            const localX = gesture.zoomCenterX - rect.left;
+            const localY = gesture.zoomCenterY - rect.top;
+
+            const newZoom = Math.max(0.1, Math.min(5, canvasStore.zoom * gesture.zoomDelta));
+            const worldX = (localX - canvasStore.panX) / canvasStore.zoom;
+            const worldY = (localY - canvasStore.panY) / canvasStore.zoom;
+            const newPanX = localX - worldX * newZoom;
+            const newPanY = localY - worldY * newZoom;
+
+            canvasStore.setZoom(newZoom);
+            canvasStore.setPan(newPanX, newPanY);
+          }
+        },
+
+        onGestureEnd: () => {
+          // Nothing special needed
+        },
+
+        onHoverMove: (screenX, screenY) => {
+          setMousePosition({ x: screenX, y: screenY });
+        },
+      });
+    }, [
+      screenToCanvas,
+      isDrawingMode,
+      hitTestImageLayers,
+      hitTestTransformHandles,
+      canvasStore,
+    ]);
+
+    // Commit stroke when drawing ends
+    const prevIsDrawingRef = useRef(false);
+    useEffect(() => {
+      // Detect transition from drawing -> not drawing
+      if (prevIsDrawingRef.current && !isDrawing && currentPoints.length > 1) {
+        const endTime = Date.now();
+        const startTime = strokeStartTimeRef.current ?? endTime;
+        const duration = endTime - startTime;
+        strokeStartTimeRef.current = null;
+
+        const strokeData = {
+          id: crypto.randomUUID(),
+          points: currentPoints.map((point) => ({ ...point })),
+          color: canvasStore.currentColor,
+          size:
+            canvasStore.currentBrushStyle === "eraser"
+              ? canvasStore.eraserSize
+              : canvasStore.currentSize,
+          opacity: canvasStore.brushSettings.opacity ?? 1,
+          brushStyle: canvasStore.currentBrushStyle,
+          timestamp: endTime,
+          startTime,
+          duration,
+          thinning: canvasStore.brushSettings.thinning,
+          smoothing: canvasStore.brushSettings.smoothing,
+          streamline: canvasStore.brushSettings.streamline,
+          taperStart: canvasStore.brushSettings.taperStart,
+          taperEnd: canvasStore.brushSettings.taperEnd,
+        };
+
+        if (canvasStore.hasLayers) {
+          canvasStore.addStrokeToActiveLayer(strokeData);
+        } else {
+          canvasStore.addStroke(strokeData);
+        }
+
+        setCurrentPoints([]);
+        engineRef.current?.setPreviewStroke(null);
+        engineRef.current?.invalidate();
+      }
+      prevIsDrawingRef.current = isDrawing;
+    }, [isDrawing, currentPoints, canvasStore]);
 
     // Handle clipboard paste for image import
     const handleImagePaste = useCallback(
@@ -835,77 +753,68 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       renderStrokes();
     }, [renderStrokes]);
 
-    const handlePointerLeave = useCallback(() => {
-      // Clear mouse position when leaving canvas
-      setMousePosition(null);
-      // Hide eraser cursor overlay when leaving
-      engineRef.current?.setCursor({ visible: false });
+    // Handle transform pointer moves (image layer move/resize/rotate)
+    const handleTransformMove = useCallback(
+      (e: React.PointerEvent) => {
+        if (!isTransforming || !transformHandle || !transformStart || !canvasStore.selectedImageLayer) return;
 
-      // Cancel any pending preview
-      // and clear preview immediately
-      // to avoid ghost previews when leaving
-      // the drawing surface
-      //
-      // Note: engine will also be invalidated
-      // on state changes
-      // so this is safe.
-      //
-      // Cancel RAF if scheduled
-      // and clear engine preview
-      //
-      // Then handle ongoing interactions
-      if (previewRafRef.current) {
-        cancelAnimationFrame(previewRafRef.current);
-        previewRafRef.current = null;
-      }
-      engineRef.current?.setPreviewStroke(null);
+        const layer = canvasStore.selectedImageLayer as any;
+        const root = rootRef.current;
+        if (!root) return;
+        const rect = root.getBoundingClientRect();
+        const localX = e.clientX - rect.left;
+        const localY = e.clientY - rect.top;
 
-      // Safely release any pointer capture if present
-      const root = rootRef.current;
-      root?.blur?.();
+        const viewport = {
+          panX: canvasStore.panX,
+          panY: canvasStore.panY,
+          zoom: canvasStore.zoom,
+        };
 
-      // Handle any ongoing drawing interactions
-      if (isDrawing && isDrawingMode) {
-        setIsDrawing(false);
-        if (currentPoints.length > 1) {
-          const stroke = {
-            id: Date.now().toString(),
-            points: currentPoints,
-            color: canvasStore.currentColor,
-            size:
-              canvasStore.currentBrushStyle === "eraser"
-                ? canvasStore.eraserSize
-                : canvasStore.currentSize,
-            opacity: canvasStore.brushSettings.opacity ?? 1,
-            brushStyle: canvasStore.currentBrushStyle,
-            timestamp: Date.now(),
-            // Store brush settings per-stroke for correct rendering
-            thinning: canvasStore.brushSettings.thinning,
-            smoothing: canvasStore.brushSettings.smoothing,
-            streamline: canvasStore.brushSettings.streamline,
-            taperStart: canvasStore.brushSettings.taperStart,
-            taperEnd: canvasStore.brushSettings.taperEnd,
-          } as IStroke;
-
-          // Use layer-aware stroke addition if layers exist
-          if (canvasStore.hasLayers) {
-            canvasStore.addStrokeToActiveLayer(stroke as any);
-          } else {
-            canvasStore.addStroke(stroke);
-          }
+        let result;
+        if (transformHandle === "move") {
+          result = transformController.applyMove(
+            { x: localX, y: localY },
+            transformStart,
+            viewport,
+          );
+          layer.setPosition(result.x, result.y);
+        } else if (transformHandle === "rotate") {
+          result = transformController.applyRotation(
+            { x: localX, y: localY },
+            transformStart,
+            viewport,
+          );
+          layer.setRotation(result.rotation);
+        } else if (["nw", "ne", "se", "sw"].includes(transformHandle)) {
+          const maintainAspect = !e.shiftKey;
+          result = transformController.applyResize(
+            transformHandle as "nw" | "ne" | "se" | "sw",
+            { x: localX, y: localY },
+            transformStart,
+            viewport,
+            maintainAspect,
+          );
+          layer.setPosition(result.x, result.y);
+          layer.setSize(result.width, result.height, false);
         }
-        setCurrentPoints([]);
-      }
+      },
+      [isTransforming, transformHandle, transformStart, canvasStore],
+    );
 
-      // Handle panning
-      if (isPanning) {
-        setIsPanning(false);
-        setLastPanPoint(null);
-      }
-    }, [isDrawing, isDrawingMode, currentPoints, canvasStore, isPanning]);
+    const handleTransformUp = useCallback(
+      (e: React.PointerEvent) => {
+        if (!isTransforming) return;
+        setIsTransforming(false);
+        setTransformHandle(null);
+        setTransformStart(null);
+        canvasStore.saveCurrentStateToHistory();
+      },
+      [isTransforming, canvasStore],
+    );
 
     const getCursorStyle = () => {
-      if (spacePressed || isPanning) return "cursor-grabbing";
+      if (spacePressed) return "cursor-grabbing";
       if (!isDrawingMode) return "cursor-grab";
 
       // Transform mode cursors
@@ -944,7 +853,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         mousePosition &&
         isDrawingMode &&
         canvasStore.currentBrushStyle === "eraser" &&
-        !isPanning &&
         !spacePressed
       ) {
         const rect = root.getBoundingClientRect();
@@ -963,7 +871,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       canvasStore.currentBrushStyle,
       canvasStore.eraserSize,
       canvasStore.zoom,
-      isPanning,
       spacePressed,
     ]);
 
@@ -972,10 +879,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         ref={rootRef}
         className={`fixed inset-0 touch-none ${getCursorStyle()} ${className}`}
         tabIndex={0}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerLeave}
+        onPointerMove={isTransforming ? handleTransformMove : undefined}
+        onPointerUp={isTransforming ? handleTransformUp : undefined}
         onContextMenu={(e) => e.preventDefault()}
         style={{
           outline: "none",
