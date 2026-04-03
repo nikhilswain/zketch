@@ -44,6 +44,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     const wheelAxisResetTimerRef = useRef<number | null>(null);
     const shiftDownRef = useRef(false);
     const lastShiftUpTsRef = useRef<number>(0);
+    const prevIsDrawingRef = useRef(false);
     const [isDrawing, setIsDrawing] = useState(false);
     const [currentPoints, setCurrentPoints] = useState<IPoint[]>([]);
     const [spacePressed, setSpacePressed] = useState(false);
@@ -423,6 +424,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     }, [handleWheel]);
 
     // Mount InputManager for touch/stylus input handling
+    // Note: callbacks start empty and are wired in the next effect (same React commit).
+    // No user events can fire between effects since JS is single-threaded.
     useEffect(() => {
       const root = rootRef.current;
       if (!root) return;
@@ -539,26 +542,31 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           const root = rootRef.current;
           if (!root) return;
 
-          // Apply pan
-          canvasStore.setPan(
-            canvasStore.panX + gesture.panDeltaX,
-            canvasStore.panY + gesture.panDeltaY,
-          );
+          // Capture current pan/zoom before mutation
+          const curPanX = canvasStore.panX;
+          const curPanY = canvasStore.panY;
+          const curZoom = canvasStore.zoom;
 
-          // Apply zoom around gesture center
           if (gesture.zoomDelta !== 1) {
+            // Combined pan + zoom: compute new zoom and pan atomically
             const rect = root.getBoundingClientRect();
             const localX = gesture.zoomCenterX - rect.left;
             const localY = gesture.zoomCenterY - rect.top;
 
-            const newZoom = Math.max(0.1, Math.min(5, canvasStore.zoom * gesture.zoomDelta));
-            const worldX = (localX - canvasStore.panX) / canvasStore.zoom;
-            const worldY = (localY - canvasStore.panY) / canvasStore.zoom;
-            const newPanX = localX - worldX * newZoom;
-            const newPanY = localY - worldY * newZoom;
+            const newZoom = Math.max(0.1, Math.min(5, curZoom * gesture.zoomDelta));
+            const worldX = (localX - curPanX) / curZoom;
+            const worldY = (localY - curPanY) / curZoom;
+            const newPanX = localX - worldX * newZoom + gesture.panDeltaX;
+            const newPanY = localY - worldY * newZoom + gesture.panDeltaY;
 
             canvasStore.setZoom(newZoom);
             canvasStore.setPan(newPanX, newPanY);
+          } else {
+            // Pure pan (no zoom)
+            canvasStore.setPan(
+              curPanX + gesture.panDeltaX,
+              curPanY + gesture.panDeltaY,
+            );
           }
         },
 
@@ -579,7 +587,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     ]);
 
     // Commit stroke when drawing ends
-    const prevIsDrawingRef = useRef(false);
     useEffect(() => {
       // Detect transition from drawing -> not drawing
       if (prevIsDrawingRef.current && !isDrawing && currentPoints.length > 1) {
@@ -803,7 +810,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     );
 
     const handleTransformUp = useCallback(
-      (e: React.PointerEvent) => {
+      (_e: React.PointerEvent) => {
         if (!isTransforming) return;
         setIsTransforming(false);
         setTransformHandle(null);
