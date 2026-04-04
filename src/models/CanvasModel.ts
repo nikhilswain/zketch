@@ -348,8 +348,6 @@ export const CanvasModel = types
       self.panX = state.panX;
       self.panY = state.panY;
 
-      // Force a re-render by incrementing version
-      self.renderVersion++;
     };
 
     const clearHistory = () => {
@@ -371,10 +369,12 @@ export const CanvasModel = types
       afterCreate() {
         self.saveToHistory();
       },
+      bumpRenderVersion() {
+        self.renderVersion++;
+      },
       addStroke(strokeData: SnapshotIn<typeof Stroke>) {
         self.addStrokeToModel(strokeData);
         self.saveToHistory();
-        self.renderVersion++; // Force re-render
       },
       replaceStrokes(strokes: SnapshotIn<typeof Stroke>[]) {
         self.clearStrokes();
@@ -382,7 +382,6 @@ export const CanvasModel = types
           self.addStrokeToModel(strokeData);
         });
         self.saveToHistory();
-        self.renderVersion++; // Force re-render
       },
       setBrushStyle(style: "ink" | "eraser" | "spray" | "texture") {
         self.currentBrushStyle = style;
@@ -392,7 +391,6 @@ export const CanvasModel = types
       },
       setEraserSize(size: number) {
         self.eraserSize = Math.max(1, Math.min(100, size));
-        self.renderVersion++; // Force re-render to ensure UI updates
       },
       setColor(color: string) {
         self.currentColor = color;
@@ -451,7 +449,6 @@ export const CanvasModel = types
         self.activeLayerId = defaultLayer.id;
 
         self.saveToHistory();
-        self.renderVersion++;
       },
       undo() {
         if (self.historyIndex > 0) {
@@ -548,7 +545,6 @@ export const CanvasModel = types
           const defaultLayer = createDefaultLayer("Layer 1");
           self.layers.push(Layer.create(defaultLayer as any));
           self.activeLayerId = defaultLayer.id;
-          self.renderVersion++;
         }
       },
 
@@ -560,7 +556,6 @@ export const CanvasModel = types
         self.layers.push(Layer.create(newLayer as any));
         self.activeLayerId = newLayer.id;
         self.saveToHistory();
-        self.renderVersion++;
         return newLayer.id;
       },
 
@@ -589,7 +584,6 @@ export const CanvasModel = types
         self.layers.push(Layer.create(newLayer as any));
         self.activeLayerId = newLayer.id;
         self.saveToHistory();
-        self.renderVersion++;
         return newLayer.id;
       },
 
@@ -610,7 +604,6 @@ export const CanvasModel = types
         }
 
         self.saveToHistory();
-        self.renderVersion++;
       },
 
       // Set the active layer
@@ -618,7 +611,6 @@ export const CanvasModel = types
         const layer = self.layers.find((l) => l.id === layerId);
         if (layer) {
           self.activeLayerId = layerId;
-          self.renderVersion++;
         }
       },
 
@@ -629,7 +621,6 @@ export const CanvasModel = types
         if (mode === "draw") {
           self.selectedLayerId = null;
         }
-        self.renderVersion++;
       },
 
       // Select a layer for transformation
@@ -646,14 +637,12 @@ export const CanvasModel = types
             self.activeLayerId = layerId;
           }
         }
-        self.renderVersion++;
       },
 
       // Deselect current layer and return to draw mode
       deselectLayer() {
         self.selectedLayerId = null;
         self.interactionMode = "draw";
-        self.renderVersion++;
       },
 
       // Move layer to a new position (index)
@@ -667,7 +656,6 @@ export const CanvasModel = types
         self.layers.splice(newIndex, 0, layer);
 
         self.saveToHistory();
-        self.renderVersion++;
       },
 
       // Move layer up (towards the top/front) - swap with the layer above
@@ -688,7 +676,6 @@ export const CanvasModel = types
         self.layers[currentIndex] = Layer.create(targetLayerSnapshot as any);
         self.layers[targetIndex] = Layer.create(currentLayerSnapshot as any);
 
-        self.renderVersion++;
       },
 
       // Move layer down (towards the bottom/back) - swap with the layer below
@@ -706,7 +693,6 @@ export const CanvasModel = types
         self.layers[currentIndex] = Layer.create(targetLayerSnapshot as any);
         self.layers[targetIndex] = Layer.create(currentLayerSnapshot as any);
 
-        self.renderVersion++;
       },
 
       // Rename a layer
@@ -714,7 +700,6 @@ export const CanvasModel = types
         const layer = self.layers.find((l) => l.id === layerId);
         if (layer) {
           layer.setName(name);
-          self.renderVersion++;
         }
       },
 
@@ -723,7 +708,6 @@ export const CanvasModel = types
         const layer = self.layers.find((l) => l.id === layerId);
         if (layer) {
           layer.toggleVisible();
-          self.renderVersion++;
         }
       },
 
@@ -737,14 +721,12 @@ export const CanvasModel = types
           } else {
             self.focusedLayerId = layerId;
           }
-          self.renderVersion++;
         }
       },
 
       // Unfocus layer (exit solo mode)
       unfocusLayer() {
         self.focusedLayerId = null;
-        self.renderVersion++;
       },
 
       // Check if a specific layer is the focused one
@@ -757,7 +739,6 @@ export const CanvasModel = types
         const layer = self.layers.find((l) => l.id === layerId);
         if (layer) {
           layer.toggleLocked();
-          self.renderVersion++;
         }
       },
 
@@ -767,7 +748,6 @@ export const CanvasModel = types
         if (layer && !layer.locked && layer.type === "stroke") {
           (layer as any).clearStrokes();
           self.saveToHistory();
-          self.renderVersion++;
         }
       },
 
@@ -776,7 +756,6 @@ export const CanvasModel = types
         const layer = self.layers.find((l) => l.id === layerId);
         if (layer) {
           layer.setOpacity(opacity);
-          self.renderVersion++;
         }
       },
 
@@ -793,12 +772,10 @@ export const CanvasModel = types
         ) {
           (activeLayer as any).addStroke(strokeData);
           self.saveToHistory();
-          self.renderVersion++;
         } else if (!activeLayer && self.layers.length === 0) {
           // Fallback to legacy strokes if no layers exist
           self.addStrokeToModel(strokeData);
           self.saveToHistory();
-          self.renderVersion++;
         }
       },
 
@@ -814,7 +791,6 @@ export const CanvasModel = types
         ) {
           (activeLayer as any).clearStrokes();
           self.saveToHistory();
-          self.renderVersion++;
         }
       },
 
@@ -867,7 +843,6 @@ export const CanvasModel = types
         self.activeLayerId = newLayerId;
 
         self.saveToHistory();
-        self.renderVersion++;
         return newLayerId;
       },
 
@@ -906,7 +881,6 @@ export const CanvasModel = types
         self.activeLayerId = mergedLayerId;
 
         self.saveToHistory();
-        self.renderVersion++;
         return mergedLayerId;
       },
 
@@ -946,14 +920,12 @@ export const CanvasModel = types
         self.activeLayerId = flattenedLayerId;
 
         self.saveToHistory();
-        self.renderVersion++;
         return flattenedLayerId;
       },
 
       // Toggle layer display mode (normal vs flattened preview)
       setLayerDisplayMode(mode: "normal" | "flattened") {
         self.layerDisplayMode = mode;
-        self.renderVersion++;
       },
 
       // Clear all layers (for new document)
@@ -963,7 +935,6 @@ export const CanvasModel = types
         self.strokes.clear();
         self.focusedLayerId = null;
         self.saveToHistory();
-        self.renderVersion++;
       },
 
       // Load layers from saved drawing data (supports both stroke and image layers)
@@ -1041,7 +1012,6 @@ export const CanvasModel = types
         }
 
         self.saveToHistory();
-        self.renderVersion++;
       },
     };
   });
