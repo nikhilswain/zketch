@@ -153,7 +153,7 @@ export class InputManager {
   // Intent Classification
   // ============================================
 
-  private classifyIntent(pointerType: string): InputIntent {
+  private classifyIntent(pointerType: string, button?: number): InputIntent {
     const mode = this.config.getTouchMode();
     const touchCount = this.getTouchPointerCount();
 
@@ -162,8 +162,8 @@ export class InputManager {
       return "ignore";
     }
 
-    // Pan override (space key held)
-    if (this.panOverride) {
+    // Pan override (space key held) or middle mouse button
+    if (this.panOverride || (pointerType === "mouse" && button === 1)) {
       return "gesture";
     }
 
@@ -308,7 +308,7 @@ export class InputManager {
       this.penActive = true;
     }
 
-    const intent = this.classifyIntent(e.pointerType);
+    const intent = this.classifyIntent(e.pointerType, e.button);
 
     if (intent === "ignore") {
       return;
