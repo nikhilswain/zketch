@@ -331,11 +331,11 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               saveStatusResetTimerRef.current = window.setTimeout(() => {
                 setSaveStatus("idle");
                 saveStatusResetTimerRef.current = null;
-              }, 2000);
+              }, 1500);
             } else {
               setSaveStatus("idle");
             }
-          }, 3000);
+          }, 500);
         },
       );
 
@@ -502,12 +502,14 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             }}
             className="text-lg font-semibold bg-transparent border-none outline-none focus:bg-gray-50 px-2 py-1 rounded"
           />
-          {saveStatus === "saving" && (
-            <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
-          )}
-          {saveStatus === "saved" && (
-            <Check className="w-4 h-4 text-green-500" />
-          )}
+          <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
+            {saveStatus === "saving" && (
+              <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
+            )}
+            {saveStatus === "saved" && (
+              <Check className="w-4 h-4 text-green-500" />
+            )}
+          </div>
         </div>
 
         {/* Full-screen canvas */}
