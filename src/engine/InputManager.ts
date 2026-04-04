@@ -352,8 +352,8 @@ export class InputManager {
         this.gesturePrevCenterX = pointer.currentX;
         this.gesturePrevCenterY = pointer.currentY;
         this.config.callbacks.onGestureStart?.();
-      } else if (this.panOverride || !this.config.getIsDrawingMode()) {
-        // Pan override (space held) or pan mode — single pointer pan
+      } else if (this.panOverride || !this.config.getIsDrawingMode() || pointer.type === "mouse") {
+        // Pan override (space held), pan mode, or middle mouse — single pointer pan
         this.gestureActive = true;
         this.gestureThresholdMet = true;
         this.gesturePrevCenterX = pointer.currentX;
