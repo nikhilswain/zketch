@@ -20,13 +20,14 @@ import { ThumbnailService } from "@/services/ThumbnailService";
 import { BlobStorageService } from "@/services/BlobStorageService";
 import { optimizeStrokes } from "@/utils/StrokeOptimizer";
 import { Button } from "./ui/button";
-import { ArrowLeft, ChevronRight, ChevronLeft, Layers } from "lucide-react";
+import { ArrowLeft, ChevronRight, ChevronLeft, Layers, Loader2, Check } from "lucide-react";
 import type { ExportFormat } from "@/models/SettingsModel";
 import type { BackgroundType } from "@/models/CanvasModel";
 import { toast } from "sonner";
 import { Input } from "./ui/input";
 import type { StrokeLike } from "@/engine";
 import type { PlaybackState } from "@/engine/AnimationPlaybackEngine";
+import { reaction } from "mobx";
 
 interface CanvasViewProps {
   editingDrawingId: string | null;
@@ -50,6 +51,10 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     );
     // Track if rename was just done (to prevent double toast from Enter + blur)
     const justRenamedRef = useRef(false);
+    const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+    const isDirtyRef = useRef(false);
+    const autosaveTimerRef = useRef<number | null>(null);
+    const saveStatusResetTimerRef = useRef<number | null>(null);
 
     // Animation playback state
     const [animatingLayerId, setAnimatingLayerId] = useState<string | null>(
@@ -163,120 +168,130 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
       }
     }, [editingDrawingId, canvasStore, vaultStore]);
 
-    //   ! beforeunload handling.
-    // useEffect(() => {
-    //   const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+    const performSave = async (): Promise<boolean> => {
+      if (canvasStore.isEmpty) return false;
 
-    //     // check if any changes.
-    //     event.preventDefault();
-    //     event.returnValue = "";
-    //   };
+      try {
+        // Map layers to save format with optimized strokes
+        const layersToSave = canvasStore.layers.map((layer) => {
+          const baseLayerData = {
+            id: layer.id,
+            name: layer.name,
+            type: layer.type,
+            visible: layer.visible,
+            locked: layer.locked,
+            opacity: layer.opacity,
+          };
 
-    //   window.addEventListener("beforeunload", handleBeforeUnload);
-    //   return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-    // }, []);
+          if (layer.type === "stroke") {
+            const strokeLayer = layer as any;
+            const strokesData = strokeLayer.strokes.map((stroke: any) => ({
+              id: stroke.id,
+              points: stroke.points.map((p: any) => ({
+                x: p.x,
+                y: p.y,
+                pressure: p.pressure,
+              })),
+              color: stroke.color,
+              size: stroke.size,
+              opacity: stroke.opacity ?? 1,
+              brushStyle: stroke.brushStyle,
+              timestamp: stroke.timestamp,
+              startTime: stroke.startTime ?? null,
+              duration: stroke.duration ?? null,
+              thinning: stroke.thinning,
+              smoothing: stroke.smoothing,
+              streamline: stroke.streamline,
+              taperStart: stroke.taperStart,
+              taperEnd: stroke.taperEnd,
+            }));
+
+            const optimizedStrokes = optimizeStrokes(strokesData);
+
+            return {
+              ...baseLayerData,
+              strokes: optimizedStrokes,
+            };
+          } else if (layer.type === "image") {
+            const imageLayer = layer as any;
+            return {
+              ...baseLayerData,
+              blobId: imageLayer.blobId,
+              naturalWidth: imageLayer.naturalWidth,
+              naturalHeight: imageLayer.naturalHeight,
+              x: imageLayer.x,
+              y: imageLayer.y,
+              width: imageLayer.width,
+              height: imageLayer.height,
+              rotation: imageLayer.rotation,
+              aspectLocked: imageLayer.aspectLocked,
+            };
+          }
+          return baseLayerData;
+        });
+
+        const thumbnailDataUrl = await ThumbnailService.generateThumbnailAsync(
+          layersToSave as any,
+          canvasStore.background,
+          200,
+          150,
+        );
+
+        const thumbnailId =
+          await BlobStorageService.storeThumbnail(thumbnailDataUrl);
+
+        if (currentDrawingId) {
+          await vaultStore.updateDrawing(
+            currentDrawingId,
+            thumbnailId,
+            canvasStore.background as any,
+            layersToSave as any,
+            canvasStore.activeLayerId,
+            drawingName,
+          );
+        } else {
+          const newDrawing = await vaultStore.addDrawing(
+            drawingName,
+            thumbnailId,
+            canvasStore.background as any,
+            layersToSave as any,
+            canvasStore.activeLayerId,
+          );
+          if (newDrawing) {
+            setCurrentDrawingId(newDrawing.id);
+          }
+        }
+
+        isDirtyRef.current = false;
+        return true;
+      } catch (error) {
+        console.error("Save failed:", error);
+        return false;
+      }
+    };
 
     const handleSave = async () => {
-      if (canvasStore.isEmpty) return;
-
-      // Map layers to save format with optimized strokes
-      const layersToSave = canvasStore.layers.map((layer) => {
-        const baseLayerData = {
-          id: layer.id,
-          name: layer.name,
-          type: layer.type,
-          visible: layer.visible,
-          locked: layer.locked,
-          opacity: layer.opacity,
-        };
-
-        if (layer.type === "stroke") {
-          const strokeLayer = layer as any;
-          // Map strokes to plain objects first
-          const strokesData = strokeLayer.strokes.map((stroke: any) => ({
-            id: stroke.id,
-            points: stroke.points.map((p: any) => ({
-              x: p.x,
-              y: p.y,
-              pressure: p.pressure,
-            })),
-            color: stroke.color,
-            size: stroke.size,
-            opacity: stroke.opacity ?? 1,
-            brushStyle: stroke.brushStyle,
-            timestamp: stroke.timestamp,
-            // Animation timing
-            startTime: stroke.startTime ?? null,
-            duration: stroke.duration ?? null,
-            // Brush settings per-stroke
-            thinning: stroke.thinning,
-            smoothing: stroke.smoothing,
-            streamline: stroke.streamline,
-            taperStart: stroke.taperStart,
-            taperEnd: stroke.taperEnd,
-          }));
-
-          // Optimize strokes using RDP algorithm
-          const optimizedStrokes = optimizeStrokes(strokesData);
-
-          return {
-            ...baseLayerData,
-            strokes: optimizedStrokes,
-          };
-        } else if (layer.type === "image") {
-          const imageLayer = layer as any;
-          return {
-            ...baseLayerData,
-            blobId: imageLayer.blobId,
-            naturalWidth: imageLayer.naturalWidth,
-            naturalHeight: imageLayer.naturalHeight,
-            x: imageLayer.x,
-            y: imageLayer.y,
-            width: imageLayer.width,
-            height: imageLayer.height,
-            rotation: imageLayer.rotation,
-            aspectLocked: imageLayer.aspectLocked,
-          };
-        }
-        return baseLayerData;
-      });
-
-      // Generate thumbnail data URL with images support
-      const thumbnailDataUrl = await ThumbnailService.generateThumbnailAsync(
-        layersToSave as any,
-        canvasStore.background,
-        200,
-        150,
-      );
-
-      // Store thumbnail as blob and get ID
-      const thumbnailId =
-        await BlobStorageService.storeThumbnail(thumbnailDataUrl);
-
-      if (currentDrawingId) {
-        await vaultStore.updateDrawing(
-          currentDrawingId,
-          thumbnailId,
-          canvasStore.background as any,
-          layersToSave as any,
-          canvasStore.activeLayerId,
-          drawingName,
-        );
-      } else {
-        const newDrawing = await vaultStore.addDrawing(
-          drawingName,
-          thumbnailId,
-          canvasStore.background as any,
-          layersToSave as any,
-          canvasStore.activeLayerId,
-        );
-        // Update currentDrawingId so subsequent saves update instead of creating new
-        if (newDrawing) {
-          setCurrentDrawingId(newDrawing.id);
-        }
+      // Cancel any pending autosave
+      if (autosaveTimerRef.current !== null) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
       }
 
-      toast.success("Drawing saved successfully!");
+      setSaveStatus("saving");
+      const success = await performSave();
+      if (success) {
+        setSaveStatus("saved");
+        toast.success("Drawing saved successfully!");
+        if (saveStatusResetTimerRef.current !== null) {
+          clearTimeout(saveStatusResetTimerRef.current);
+        }
+        saveStatusResetTimerRef.current = window.setTimeout(() => {
+          setSaveStatus("idle");
+          saveStatusResetTimerRef.current = null;
+        }, 2000);
+      } else {
+        setSaveStatus("idle");
+      }
     };
 
     // Rename drawing (without saving all content)
@@ -288,6 +303,66 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         }
       }
     };
+
+    // Autosave: debounced reaction on renderVersion
+    useEffect(() => {
+      const disposer = reaction(
+        () => canvasStore.renderVersion,
+        () => {
+          isDirtyRef.current = true;
+
+          // Reset debounce timer
+          if (autosaveTimerRef.current !== null) {
+            clearTimeout(autosaveTimerRef.current);
+          }
+
+          autosaveTimerRef.current = window.setTimeout(async () => {
+            autosaveTimerRef.current = null;
+
+            if (canvasStore.isEmpty) return;
+
+            setSaveStatus("saving");
+            const success = await performSave();
+            if (success) {
+              setSaveStatus("saved");
+              if (saveStatusResetTimerRef.current !== null) {
+                clearTimeout(saveStatusResetTimerRef.current);
+              }
+              saveStatusResetTimerRef.current = window.setTimeout(() => {
+                setSaveStatus("idle");
+                saveStatusResetTimerRef.current = null;
+              }, 2000);
+            } else {
+              setSaveStatus("idle");
+            }
+          }, 3000);
+        },
+      );
+
+      return () => {
+        disposer();
+        if (autosaveTimerRef.current !== null) {
+          clearTimeout(autosaveTimerRef.current);
+        }
+        if (saveStatusResetTimerRef.current !== null) {
+          clearTimeout(saveStatusResetTimerRef.current);
+        }
+      };
+    }, []);
+
+    // Warn user if closing with unsaved changes
+    useEffect(() => {
+      const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+        if (isDirtyRef.current) {
+          e.preventDefault();
+        }
+      };
+
+      window.addEventListener("beforeunload", handleBeforeUnload);
+      return () => {
+        window.removeEventListener("beforeunload", handleBeforeUnload);
+      };
+    }, []);
 
     const handleExport = async (format: ExportFormat) => {
       if (canvasStore.isEmpty) return;
@@ -427,6 +502,12 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             }}
             className="text-lg font-semibold bg-transparent border-none outline-none focus:bg-gray-50 px-2 py-1 rounded"
           />
+          {saveStatus === "saving" && (
+            <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
+          )}
+          {saveStatus === "saved" && (
+            <Check className="w-4 h-4 text-green-500" />
+          )}
         </div>
 
         {/* Full-screen canvas */}
