@@ -32,7 +32,6 @@ import { ArrowLeft, ChevronRight, ChevronLeft, Layers, Loader2, Check } from "lu
 import type { ExportFormat } from "@/models/SettingsModel";
 import type { BackgroundType } from "@/models/CanvasModel";
 import { toast } from "sonner";
-import { Input } from "./ui/input";
 import type { StrokeLike } from "@/engine";
 import type { PlaybackState } from "@/engine/AnimationPlaybackEngine";
 import { reaction } from "mobx";
