@@ -1,11 +1,3 @@
-/**
- * InputManager — Classifies pointer input into drawing vs gesture intents.
- *
- * Sits between raw PointerEvents and the canvas component.
- * Tracks all active pointers, detects multi-touch gestures (pinch-to-zoom,
- * two-finger pan), and emits high-level events for drawing and gestures.
- */
-
 export type TouchMode = "auto" | "stylus-only" | "touch-draw";
 
 type InputIntent = "draw" | "gesture" | "ignore";
@@ -105,16 +97,34 @@ export class InputManager {
   // ============================================
 
   private attachListeners(): void {
-    this.root.addEventListener("pointerdown", this.handlePointerDown, { passive: false });
-    this.root.addEventListener("pointermove", this.handlePointerMove, { passive: false });
-    this.root.addEventListener("pointerup", this.handlePointerUp, { passive: false });
-    this.root.addEventListener("pointercancel", this.handlePointerUp, { passive: false });
-    this.root.addEventListener("pointerleave", this.handlePointerLeave, { passive: false });
+    this.root.addEventListener("pointerdown", this.handlePointerDown, {
+      passive: false,
+    });
+    this.root.addEventListener("pointermove", this.handlePointerMove, {
+      passive: false,
+    });
+    this.root.addEventListener("pointerup", this.handlePointerUp, {
+      passive: false,
+    });
+    this.root.addEventListener("pointercancel", this.handlePointerUp, {
+      passive: false,
+    });
+    this.root.addEventListener("pointerleave", this.handlePointerLeave, {
+      passive: false,
+    });
     // Block browser gestures on touch
-    this.root.addEventListener("touchstart", this.preventTouch, { passive: false });
-    this.root.addEventListener("touchmove", this.preventTouch, { passive: false });
-    this.root.addEventListener("gesturestart", this.preventGesture, { passive: false });
-    this.root.addEventListener("gesturechange", this.preventGesture, { passive: false });
+    this.root.addEventListener("touchstart", this.preventTouch, {
+      passive: false,
+    });
+    this.root.addEventListener("touchmove", this.preventTouch, {
+      passive: false,
+    });
+    this.root.addEventListener("gesturestart", this.preventGesture, {
+      passive: false,
+    });
+    this.root.addEventListener("gesturechange", this.preventGesture, {
+      passive: false,
+    });
   }
 
   private detachListeners(): void {
@@ -215,7 +225,10 @@ export class InputManager {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
-  private getCenter(a: TrackedPointer, b: TrackedPointer): { x: number; y: number } {
+  private getCenter(
+    a: TrackedPointer,
+    b: TrackedPointer,
+  ): { x: number; y: number } {
     return {
       x: (a.currentX + b.currentX) / 2,
       y: (a.currentY + b.currentY) / 2,
@@ -229,7 +242,10 @@ export class InputManager {
     const dyB = b.currentY - b.startY;
     const movedA = Math.sqrt(dxA * dxA + dyA * dyA);
     const movedB = Math.sqrt(dxB * dxB + dyB * dyB);
-    return movedA > InputManager.GESTURE_THRESHOLD_PX || movedB > InputManager.GESTURE_THRESHOLD_PX;
+    return (
+      movedA > InputManager.GESTURE_THRESHOLD_PX ||
+      movedB > InputManager.GESTURE_THRESHOLD_PX
+    );
   }
 
   private initGestureState(a: TrackedPointer, b: TrackedPointer): void {
@@ -242,14 +258,18 @@ export class InputManager {
     this.gestureThresholdMet = false;
   }
 
-  private computeGestureUpdate(a: TrackedPointer, b: TrackedPointer): GestureUpdate {
+  private computeGestureUpdate(
+    a: TrackedPointer,
+    b: TrackedPointer,
+  ): GestureUpdate {
     const dist = this.getDistance(a, b);
     const center = this.getCenter(a, b);
 
     const update: GestureUpdate = {
       panDeltaX: center.x - this.gesturePrevCenterX,
       panDeltaY: center.y - this.gesturePrevCenterY,
-      zoomDelta: this.gesturePrevDistance > 0 ? dist / this.gesturePrevDistance : 1,
+      zoomDelta:
+        this.gesturePrevDistance > 0 ? dist / this.gesturePrevDistance : 1,
       zoomCenterX: center.x,
       zoomCenterY: center.y,
     };
@@ -322,7 +342,10 @@ export class InputManager {
         }, InputManager.GESTURE_THRESHOLD_MS);
 
         this.config.callbacks.onGestureStart?.();
-      } else if (this.config.getTouchMode() === "stylus-only" && pointer.type === "touch") {
+      } else if (
+        this.config.getTouchMode() === "stylus-only" &&
+        pointer.type === "touch"
+      ) {
         // Single finger pan in stylus-only mode
         this.gestureActive = true;
         this.gestureThresholdMet = true;
@@ -426,9 +449,11 @@ export class InputManager {
         return;
       }
 
-      this.config.callbacks.onDrawMove?.(
-        { x: e.clientX, y: e.clientY, pressure: e.pressure || 0.5 },
-      );
+      this.config.callbacks.onDrawMove?.({
+        x: e.clientX,
+        y: e.clientY,
+        pressure: e.pressure || 0.5,
+      });
 
       // Also emit hover for eraser cursor tracking during drawing
       this.config.callbacks.onHoverMove?.(e.clientX, e.clientY);
@@ -463,7 +488,7 @@ export class InputManager {
         if (touchCount === 0) {
           this.currentIntent = "ignore";
         }
-      // For single-pointer pan (mouse/pen in pan mode), end when pointer lifts
+        // For single-pointer pan (mouse/pen in pan mode), end when pointer lifts
       } else if (touchCount === 0 && this.activePointers.size === 0) {
         if (this.gestureActive) {
           this.gestureActive = false;
