@@ -9,7 +9,15 @@ import {
   useSettingsStore,
 } from "@/hooks/useStores";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
-import Sidebar from "./slider";
+import IconBar from "./sidebar";
+import FloatingPanel from "./sidebar/FloatingPanel";
+import ToolSettingsPanel from "./sidebar/ToolSettingsPanel";
+import ColorPanel from "./sidebar/ColorPanel";
+import BackgroundPanel from "./sidebar/BackgroundPanel";
+import TouchModePanel from "./sidebar/TouchModePanel";
+import UndoIcon from "@/icons/UndoIcon";
+import RedoIcon from "@/icons/RedoIcon";
+import TrashIcon from "@/icons/TrashIcon";
 import DrawingCanvas from "./drawing-canvas";
 import FloatingDock from "./floating-dock";
 import ExportDialog from "./export-dialog";
@@ -43,7 +51,8 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     const [isDrawingMode, setIsDrawingMode] = useState(true);
     const [showExportDialog, setShowExportDialog] = useState(false);
     const [showImportDialog, setShowImportDialog] = useState(false);
-    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    const [openPanels, setOpenPanels] = useState<Set<string>>(new Set());
+    const [showClearModal, setShowClearModal] = useState(false);
     const [layersPanelCollapsed, setLayersPanelCollapsed] = useState(false);
     // Track the current drawing ID (may differ from prop after first save of new drawing)
     const [currentDrawingId, setCurrentDrawingId] = useState<string | null>(
@@ -304,6 +313,31 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
       }
     };
 
+    const togglePanel = (panelId: string) => {
+      setOpenPanels((prev) => {
+        const next = new Set(prev);
+        if (next.has(panelId)) {
+          next.delete(panelId);
+        } else {
+          next.add(panelId);
+        }
+        return next;
+      });
+    };
+
+    const handleClear = () => {
+      setShowClearModal(true);
+    };
+
+    const confirmClear = () => {
+      canvasStore.clear();
+      setShowClearModal(false);
+    };
+
+    const cancelClear = () => {
+      setShowClearModal(false);
+    };
+
     // Autosave: debounced reaction on renderVersion
     useEffect(() => {
       const disposer = reaction(
@@ -432,36 +466,83 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
 
     return (
       <div className="fixed inset-0 bg-gray-100">
-        {/* Floating sidebar */}
-        <div
-          className={`fixed top-0 left-0 h-full transition-all duration-300 z-10 ${
-            sidebarCollapsed ? "w-12" : "w-80"
-          }`}
-        >
-          {sidebarCollapsed ? (
-            <div className="w-12 bg-white/90 backdrop-blur-sm border-r border-gray-200 flex flex-col items-center py-4 h-full">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSidebarCollapsed(false)}
-                className="p-2"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </Button>
+        {/* Icon bar + floating panels */}
+        <IconBar
+          openPanels={openPanels}
+          onTogglePanel={togglePanel}
+          onImport={() => setShowImportDialog(true)}
+          onExport={handleShowExportDialog}
+        />
+
+        {openPanels.has("tool-settings") && (
+          <FloatingPanel
+            title={
+              canvasStore.currentBrushStyle === "eraser"
+                ? "Eraser Settings"
+                : "Brush Settings"
+            }
+            anchorIconIndex={0}
+            onClose={() => togglePanel("tool-settings")}
+          >
+            <ToolSettingsPanel
+              isDrawingMode={isDrawingMode}
+              onForceDrawingMode={() => setIsDrawingMode(true)}
+            />
+          </FloatingPanel>
+        )}
+
+        {openPanels.has("color") && (
+          <FloatingPanel
+            title="Color"
+            anchorIconIndex={1}
+            onClose={() => togglePanel("color")}
+          >
+            <ColorPanel />
+          </FloatingPanel>
+        )}
+
+        {openPanels.has("background") && (
+          <FloatingPanel
+            title="Background"
+            anchorIconIndex={2}
+            onClose={() => togglePanel("background")}
+          >
+            <BackgroundPanel />
+          </FloatingPanel>
+        )}
+
+        {openPanels.has("touch-mode") && (
+          <FloatingPanel
+            title="Touch Mode"
+            anchorIconIndex={3}
+            onClose={() => togglePanel("touch-mode")}
+          >
+            <TouchModePanel />
+          </FloatingPanel>
+        )}
+
+        {/* Clear confirmation modal */}
+        {showClearModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/20 backdrop-blur-sm">
+            <div className="bg-white rounded shadow-lg p-6 w-80 border border-gray-200">
+              <h3 className="text-lg font-semibold mb-4">
+                Clear Entire Canvas?
+              </h3>
+              <p className="mb-6 text-sm text-gray-700">
+                This will delete <strong>all layers and all strokes</strong>. A
+                new empty layer will be created. This action cannot be undone.
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={cancelClear}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={confirmClear}>
+                  Clear All
+                </Button>
+              </div>
             </div>
-          ) : (
-            <div className="bg-white/90 backdrop-blur-sm border-r border-gray-200 h-full">
-              <Sidebar
-                onSave={handleSave}
-                onExport={handleShowExportDialog}
-                onImport={() => setShowImportDialog(true)}
-                onCollapse={() => setSidebarCollapsed(true)}
-                isDrawingMode={isDrawingMode}
-                onForceDrawingMode={() => setIsDrawingMode(true)}
-              />
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Floating header */}
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-white/90 backdrop-blur-sm border border-gray-200 rounded-lg px-4 py-2 flex items-center gap-4 z-10">
@@ -509,6 +590,34 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             {saveStatus === "saved" && (
               <Check className="w-4 h-4 text-green-500" />
             )}
+          </div>
+
+          <div className="w-px h-6 bg-gray-200" />
+
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => canvasStore.undo()}
+              disabled={!canvasStore.canUndo}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+              title="Undo"
+            >
+              <UndoIcon width={16} height={16} />
+            </button>
+            <button
+              onClick={() => canvasStore.redo()}
+              disabled={!canvasStore.canRedo}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+              title="Redo"
+            >
+              <RedoIcon width={16} height={16} />
+            </button>
+            <button
+              onClick={handleClear}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 hover:text-red-600 transition-colors"
+              title="Clear Canvas"
+            >
+              <TrashIcon width={16} height={16} />
+            </button>
           </div>
         </div>
 
