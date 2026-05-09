@@ -1,7 +1,9 @@
 export type BrushStyle = "ink" | "eraser" | "spray" | "texture";
 
 // Layer types
-export type LayerType = "stroke" | "image";
+export type LayerType = "stroke" | "image" | "shape";
+
+export type ShapeKind = "rectangle" | "circle" | "diamond" | "triangle";
 
 // Interaction modes
 export type InteractionMode = "draw" | "transform";
@@ -61,8 +63,30 @@ export interface ImageLayerLike extends BaseLayerLike {
   aspectLocked: boolean;
 }
 
+export interface ShapeLayerLike extends BaseLayerLike {
+  type: "shape";
+  shapeType: ShapeKind;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  strokeColor: string;
+  strokeWidth: number;
+  cornerRadius: number;
+}
+
+// Anything with a transformable bounding box (used by TransformController).
+export interface TransformableLayer {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+}
+
 // Union type for all layer types
-export type LayerLike = StrokeLayerLike | ImageLayerLike;
+export type LayerLike = StrokeLayerLike | ImageLayerLike | ShapeLayerLike;
 
 // Legacy interface for backward compatibility (deprecated, use LayerLike)
 export interface LegacyLayerLike {

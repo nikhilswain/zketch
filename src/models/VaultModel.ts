@@ -54,8 +54,29 @@ export interface IImageLayerData {
   opacity: number;
 }
 
+export interface IShapeLayerData {
+  type: "shape";
+  id: string;
+  name: string;
+  shapeType: "rectangle" | "circle" | "diamond" | "triangle";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  strokeColor: string;
+  strokeWidth: number;
+  cornerRadius: number;
+  visible: boolean;
+  locked: boolean;
+  opacity: number;
+}
+
 // Union type for layer data
-export type ILayerData = IStrokeLayerData | IImageLayerData;
+export type ILayerData =
+  | IStrokeLayerData
+  | IImageLayerData
+  | IShapeLayerData;
 
 // Plain data interfaces for persistence
 export interface ISavedDrawingData {

@@ -29,6 +29,7 @@ import {
   Focus,
   Eraser,
   Image as ImageIcon,
+  Shapes as ShapesIcon,
 } from "lucide-react";
 import type { ILayer, IStrokeLayer } from "@/models/LayerModel";
 import { getSnapshot } from "mobx-state-tree";
@@ -123,6 +124,68 @@ function generateLayerThumbnail(
   return canvas.toDataURL();
 }
 
+function generateShapeThumbnail(
+  snapshot: any,
+  width: number = 48,
+  height: number = 36,
+): string {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return "";
+
+  ctx.fillStyle = "#f5f5f5";
+  ctx.fillRect(0, 0, width, height);
+
+  const padding = 6;
+  const w = width - padding * 2;
+  const h = height - padding * 2;
+  const x = padding;
+  const y = padding;
+
+  ctx.strokeStyle = snapshot.strokeColor ?? "#000000";
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+
+  switch (snapshot.shapeType) {
+    case "circle":
+      ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+      break;
+    case "rectangle": {
+      const r = 4;
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.arcTo(x + w, y, x + w, y + r, r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+      ctx.lineTo(x + r, y + h);
+      ctx.arcTo(x, y + h, x, y + h - r, r);
+      ctx.lineTo(x, y + r);
+      ctx.arcTo(x, y, x + r, y, r);
+      ctx.closePath();
+      break;
+    }
+    case "diamond":
+      ctx.moveTo(x + w / 2, y);
+      ctx.lineTo(x + w, y + h / 2);
+      ctx.lineTo(x + w / 2, y + h);
+      ctx.lineTo(x, y + h / 2);
+      ctx.closePath();
+      break;
+    case "triangle":
+      ctx.moveTo(x + w / 2, y);
+      ctx.lineTo(x + w, y + h);
+      ctx.lineTo(x, y + h);
+      ctx.closePath();
+      break;
+  }
+  ctx.stroke();
+  return canvas.toDataURL();
+}
+
 interface LayerItemProps {
   layer: ILayer;
   isActive: boolean;
@@ -184,6 +247,10 @@ const LayerItem: React.FC<LayerItemProps> = observer(
     // Use snapshot to avoid MST detachment issues during reordering
     const strokeCount =
       layer.type === "stroke" ? (layer as any).strokes.length : 0;
+    const shapeSig =
+      layer.type === "shape"
+        ? `${(layer as any).shapeType}:${(layer as any).strokeColor}:${(layer as any).strokeWidth}:${(layer as any).cornerRadius}:${(layer as any).rotation}:${(layer as any).width}:${(layer as any).height}`
+        : "";
     const layerId = layer.id;
 
     useEffect(() => {
@@ -205,6 +272,14 @@ const LayerItem: React.FC<LayerItemProps> = observer(
             );
             if (blobUrl && layerIdRef.current === layerId) {
               setThumbnail(blobUrl);
+            }
+            return;
+          }
+
+          if (snapshot.type === "shape") {
+            const thumb = generateShapeThumbnail(snapshot);
+            if (layerIdRef.current === layerId) {
+              setThumbnail(thumb);
             }
             return;
           }
@@ -232,7 +307,7 @@ const LayerItem: React.FC<LayerItemProps> = observer(
           clearTimeout(thumbnailTimeoutRef.current);
         }
       };
-    }, [layerId, strokeCount]);
+    }, [layerId, strokeCount, shapeSig]);
 
     const handleNameSubmit = () => {
       if (editName.trim()) {
@@ -266,6 +341,8 @@ const LayerItem: React.FC<LayerItemProps> = observer(
               />
             ) : layer.type === "image" ? (
               <ImageIcon className="w-5 h-5 text-muted-foreground" />
+            ) : layer.type === "shape" ? (
+              <ShapesIcon className="w-5 h-5 text-muted-foreground" />
             ) : null}
           </div>
 
@@ -302,7 +379,9 @@ const LayerItem: React.FC<LayerItemProps> = observer(
                 <span className="text-xs text-muted-foreground">
                   {layer.type === "stroke"
                     ? `${(layer as any).strokes?.length || 0} strokes`
-                    : "Image"}
+                    : layer.type === "image"
+                      ? "Image"
+                      : `Shape — ${(layer as any).shapeType}`}
                 </span>
               </div>
             )}

@@ -112,6 +112,16 @@ export class ThumbnailService {
           offsetX,
           offsetY,
         );
+      } else if (layer.type === "shape") {
+        this.renderShape(
+          ctx,
+          layer as any,
+          minX,
+          minY,
+          scale,
+          offsetX,
+          offsetY,
+        );
       }
 
       ctx.globalAlpha = prevAlpha;
@@ -242,6 +252,18 @@ export class ThumbnailService {
             hasContent = true;
           }
         }
+      } else if (layer.type === "shape") {
+        const sx = (layer as any).x ?? 0;
+        const sy = (layer as any).y ?? 0;
+        const sw = (layer as any).width ?? 0;
+        const sh = (layer as any).height ?? 0;
+        if (sw > 0 && sh > 0) {
+          minX = Math.min(minX, sx);
+          minY = Math.min(minY, sy);
+          maxX = Math.max(maxX, sx + sw);
+          maxY = Math.max(maxY, sy + sh);
+          hasContent = true;
+        }
       }
     }
 
@@ -363,6 +385,77 @@ export class ThumbnailService {
 
       ctx.globalCompositeOperation = prevComposite;
     });
+  }
+
+  private static renderShape(
+    ctx: CanvasRenderingContext2D,
+    layer: any,
+    minX: number,
+    minY: number,
+    scale: number,
+    offsetX: number,
+    offsetY: number,
+  ) {
+    const x = (layer.x - minX) * scale + offsetX;
+    const y = (layer.y - minY) * scale + offsetY;
+    const w = layer.width * scale;
+    const h = layer.height * scale;
+    const r = (layer.cornerRadius ?? 0) * scale;
+    ctx.save();
+    if (layer.rotation) {
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      ctx.translate(cx, cy);
+      ctx.rotate((layer.rotation * Math.PI) / 180);
+      ctx.translate(-cx, -cy);
+    }
+    ctx.strokeStyle = layer.strokeColor ?? "#000000";
+    ctx.lineWidth = Math.max(0.5, (layer.strokeWidth ?? 2) * scale);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    if (layer.shapeType === "circle") {
+      ctx.ellipse(
+        x + w / 2,
+        y + h / 2,
+        Math.max(0.5, w / 2),
+        Math.max(0.5, h / 2),
+        0,
+        0,
+        Math.PI * 2,
+      );
+    } else if (layer.shapeType === "rectangle") {
+      const rr = Math.max(0, Math.min(r, w / 2, h / 2));
+      ctx.moveTo(x + rr, y);
+      ctx.lineTo(x + w - rr, y);
+      ctx.arcTo(x + w, y, x + w, y + rr, rr);
+      ctx.lineTo(x + w, y + h - rr);
+      ctx.arcTo(x + w, y + h, x + w - rr, y + h, rr);
+      ctx.lineTo(x + rr, y + h);
+      ctx.arcTo(x, y + h, x, y + h - rr, rr);
+      ctx.lineTo(x, y + rr);
+      ctx.arcTo(x, y, x + rr, y, rr);
+      ctx.closePath();
+    } else {
+      const pts =
+        layer.shapeType === "diamond"
+          ? [
+              { x: x + w / 2, y: y },
+              { x: x + w, y: y + h / 2 },
+              { x: x + w / 2, y: y + h },
+              { x: x, y: y + h / 2 },
+            ]
+          : [
+              { x: x + w / 2, y: y },
+              { x: x + w, y: y + h },
+              { x: x, y: y + h },
+            ];
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.closePath();
+    }
+    ctx.stroke();
+    ctx.restore();
   }
 
   private static drawGrid(

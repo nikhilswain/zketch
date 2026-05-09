@@ -8,9 +8,10 @@ import {
 } from "mobx-state-tree";
 import { Stroke } from "./SharedModels";
 import { ImageLayer } from "./ImageLayerModel";
+import { ShapeLayer } from "./ShapeLayerModel";
 
 // Layer type discriminator
-export const LayerType = types.enumeration("LayerType", ["stroke", "image"]);
+export const LayerType = types.enumeration("LayerType", ["stroke", "image", "shape"]);
 
 // Base layer properties shared by all layer types
 const BaseLayerProps = {
@@ -106,12 +107,16 @@ export const Layer = types.union(
       if (snapshot?.type === "image") {
         return ImageLayer;
       }
+      if (snapshot?.type === "shape") {
+        return ShapeLayer;
+      }
       // Default to StrokeLayer for backward compatibility
       return StrokeLayer;
     },
   },
   StrokeLayer,
-  ImageLayer
+  ImageLayer,
+  ShapeLayer
 );
 
 // Type exports for StrokeLayer
@@ -145,7 +150,7 @@ export function createDefaultLayer(
 }
 
 // Type exports
-export type LayerTypeValue = "stroke" | "image";
+export type LayerTypeValue = "stroke" | "image" | "shape";
 
 // Re-export ImageLayer utilities
 export {
@@ -153,5 +158,13 @@ export {
   createBlobId,
   createImageLayerId,
 } from "./ImageLayerModel";
+
+// Re-export ShapeLayer utilities
+export {
+  createShapeLayer,
+  createShapeLayerId,
+  type ShapeKind,
+  type IShapeLayer,
+} from "./ShapeLayerModel";
 
 export default Layer;

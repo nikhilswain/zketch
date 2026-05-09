@@ -137,6 +137,21 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
                 };
               }
 
+              if (layer.type === "shape") {
+                return {
+                  ...baseLayerData,
+                  shapeType: layer.shapeType,
+                  x: layer.x,
+                  y: layer.y,
+                  width: layer.width,
+                  height: layer.height,
+                  rotation: layer.rotation,
+                  strokeColor: layer.strokeColor,
+                  strokeWidth: layer.strokeWidth,
+                  cornerRadius: layer.cornerRadius,
+                };
+              }
+
               // Stroke layer (default)
               return {
                 ...baseLayerData,
@@ -233,6 +248,20 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               height: imageLayer.height,
               rotation: imageLayer.rotation,
               aspectLocked: imageLayer.aspectLocked,
+            };
+          } else if (layer.type === "shape") {
+            const shapeLayer = layer as any;
+            return {
+              ...baseLayerData,
+              shapeType: shapeLayer.shapeType,
+              x: shapeLayer.x,
+              y: shapeLayer.y,
+              width: shapeLayer.width,
+              height: shapeLayer.height,
+              rotation: shapeLayer.rotation,
+              strokeColor: shapeLayer.strokeColor,
+              strokeWidth: shapeLayer.strokeWidth,
+              cornerRadius: shapeLayer.cornerRadius,
             };
           }
           return baseLayerData;

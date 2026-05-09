@@ -15,15 +15,28 @@ export interface IExportImageLayer {
   visible: boolean;
 }
 
+export interface IExportShapeLayer {
+  shapeType: "rectangle" | "circle" | "diamond" | "triangle";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  strokeColor: string;
+  strokeWidth: number;
+  cornerRadius: number;
+  opacity: number;
+  visible: boolean;
+}
+
 // Generic layer for export (maintains z-order)
 export interface IExportLayer {
-  type: "stroke" | "image";
+  type: "stroke" | "image" | "shape";
   visible: boolean;
   opacity: number;
-  // For stroke layers
   strokes?: IStroke[];
-  // For image layers
   imageData?: IExportImageLayer;
+  shapeData?: IExportShapeLayer;
 }
 
 export class ExportService {
@@ -268,6 +281,13 @@ export class ExportService {
         maxX = Math.max(maxX, img.x + img.width);
         maxY = Math.max(maxY, img.y + img.height);
         hasContent = true;
+      } else if (layer.type === "shape" && layer.shapeData) {
+        const s = layer.shapeData;
+        minX = Math.min(minX, s.x);
+        minY = Math.min(minY, s.y);
+        maxX = Math.max(maxX, s.x + s.width);
+        maxY = Math.max(maxY, s.y + s.height);
+        hasContent = true;
       }
     }
 
@@ -349,12 +369,108 @@ export class ExportService {
       } else if (layer.type === "image" && layer.imageData) {
         // Render image layer at its position
         await this.renderImageLayer(ctx, layer.imageData);
+      } else if (layer.type === "shape" && layer.shapeData) {
+        this.renderShape(ctx, layer.shapeData);
       }
 
       ctx.globalAlpha = prevAlpha;
     }
 
     ctx.restore();
+  }
+
+  private static renderShape(
+    ctx: CanvasRenderingContext2D,
+    s: IExportShapeLayer,
+  ) {
+    ctx.save();
+    if (s.rotation !== 0) {
+      const cx = s.x + s.width / 2;
+      const cy = s.y + s.height / 2;
+      ctx.translate(cx, cy);
+      ctx.rotate((s.rotation * Math.PI) / 180);
+      ctx.translate(-cx, -cy);
+    }
+    ctx.strokeStyle = s.strokeColor;
+    ctx.lineWidth = s.strokeWidth;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    this.traceShape(ctx, s);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private static traceShape(
+    ctx: CanvasRenderingContext2D,
+    s: IExportShapeLayer,
+  ) {
+    const { shapeType, x, y, width, height, cornerRadius } = s;
+    if (shapeType === "rectangle") {
+      const r = Math.max(0, Math.min(cornerRadius, width / 2, height / 2));
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + width - r, y);
+      ctx.arcTo(x + width, y, x + width, y + r, r);
+      ctx.lineTo(x + width, y + height - r);
+      ctx.arcTo(x + width, y + height, x + width - r, y + height, r);
+      ctx.lineTo(x + r, y + height);
+      ctx.arcTo(x, y + height, x, y + height - r, r);
+      ctx.lineTo(x, y + r);
+      ctx.arcTo(x, y, x + r, y, r);
+      ctx.closePath();
+    } else if (shapeType === "circle") {
+      ctx.ellipse(
+        x + width / 2,
+        y + height / 2,
+        Math.max(1, width / 2),
+        Math.max(1, height / 2),
+        0,
+        0,
+        Math.PI * 2,
+      );
+    } else {
+      const pts =
+        shapeType === "diamond"
+          ? [
+              { x: x + width / 2, y: y },
+              { x: x + width, y: y + height / 2 },
+              { x: x + width / 2, y: y + height },
+              { x: x, y: y + height / 2 },
+            ]
+          : [
+              { x: x + width / 2, y: y },
+              { x: x + width, y: y + height },
+              { x: x, y: y + height },
+            ];
+      const r = Math.min(cornerRadius, Math.min(width, height) / 4);
+      if (r <= 0) {
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+        ctx.closePath();
+      } else {
+        for (let i = 0; i < pts.length; i++) {
+          const cur = pts[i];
+          const next = pts[(i + 1) % pts.length];
+          const prev = pts[(i + pts.length - 1) % pts.length];
+          const dxN = next.x - cur.x;
+          const dyN = next.y - cur.y;
+          const dxP = prev.x - cur.x;
+          const dyP = prev.y - cur.y;
+          const lN = Math.hypot(dxN, dyN);
+          const lP = Math.hypot(dxP, dyP);
+          const tN = Math.min(0.5, r / Math.max(1, lN));
+          const tP = Math.min(0.5, r / Math.max(1, lP));
+          const sx = cur.x + dxP * tP;
+          const sy = cur.y + dyP * tP;
+          const ex = cur.x + dxN * tN;
+          const ey = cur.y + dyN * tN;
+          if (i === 0) ctx.moveTo(sx, sy);
+          else ctx.lineTo(sx, sy);
+          ctx.quadraticCurveTo(cur.x, cur.y, ex, ey);
+        }
+        ctx.closePath();
+      }
+    }
   }
 
   /**
