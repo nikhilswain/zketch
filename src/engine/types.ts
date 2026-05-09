@@ -74,6 +74,7 @@ export interface ShapeLayerLike extends BaseLayerLike {
   strokeColor: string;
   strokeWidth: number;
   cornerRadius: number;
+  fillColor: string | null;
 }
 
 // Anything with a transformable bounding box (used by TransformController).

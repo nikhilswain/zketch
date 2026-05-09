@@ -87,6 +87,12 @@ export const CanvasModel = types
     shapeStrokeWidth: types.optional(types.number, 4),
     shapeCornerRadius: types.optional(types.number, 8),
     shapeOpacity: types.optional(types.number, 1),
+    shapeFillColor: types.optional(types.maybeNull(types.string), null),
+    // Which attribute the global Color picker writes to when a shape is selected.
+    colorTarget: types.optional(
+      types.enumeration("ColorTarget", ["stroke", "fill"]),
+      "stroke",
+    ),
   })
   .volatile((self) => ({
     history: [] as SnapshotOut<typeof CanvasState>[],
@@ -166,6 +172,7 @@ export const CanvasModel = types
                 strokeColor: shapeLayer.strokeColor,
                 strokeWidth: shapeLayer.strokeWidth,
                 cornerRadius: shapeLayer.cornerRadius,
+                fillColor: shapeLayer.fillColor,
                 opacity: shapeLayer.opacity,
                 visible: shapeLayer.visible,
               },
@@ -344,6 +351,7 @@ export const CanvasModel = types
               strokeColor: shapeLayer.strokeColor,
               strokeWidth: shapeLayer.strokeWidth,
               cornerRadius: shapeLayer.cornerRadius,
+              fillColor: shapeLayer.fillColor,
             };
           }
           return baseLayerData;
@@ -457,8 +465,15 @@ export const CanvasModel = types
         self.currentColor = color;
         const selected = self.layers.find((l) => l.id === self.selectedLayerId);
         if (selected && selected.type === "shape") {
-          (selected as any).setStrokeColor(color);
+          if (self.colorTarget === "fill") {
+            (selected as any).setFillColor(color);
+          } else {
+            (selected as any).setStrokeColor(color);
+          }
         }
+      },
+      setColorTarget(target: "stroke" | "fill") {
+        self.colorTarget = target;
       },
       setBackground(background: "white" | "transparent" | "grid") {
         self.background = background;
@@ -639,6 +654,9 @@ export const CanvasModel = types
       setShapeOpacity(o: number) {
         self.shapeOpacity = Math.max(0, Math.min(1, o));
       },
+      setShapeFillColor(c: string | null) {
+        self.shapeFillColor = c;
+      },
 
       addShapeLayer(
         shapeType: ShapeKind,
@@ -652,6 +670,7 @@ export const CanvasModel = types
           strokeWidth: self.shapeStrokeWidth,
           cornerRadius: self.shapeCornerRadius,
           opacity: self.shapeOpacity,
+          fillColor: self.shapeFillColor,
         });
         self.layers.push(Layer.create(newLayer as any));
         self.activeLayerId = newLayer.id;
@@ -951,6 +970,7 @@ export const CanvasModel = types
             strokeColor: shapeLayer.strokeColor,
             strokeWidth: shapeLayer.strokeWidth,
             cornerRadius: shapeLayer.cornerRadius,
+            fillColor: shapeLayer.fillColor,
           };
         } else {
           return;
@@ -1082,6 +1102,7 @@ export const CanvasModel = types
           strokeColor?: string;
           strokeWidth?: number;
           cornerRadius?: number;
+          fillColor?: string | null;
         }>,
         activeLayerId?: string,
       ) {
@@ -1129,6 +1150,7 @@ export const CanvasModel = types
               strokeColor: layerData.strokeColor ?? "#000000",
               strokeWidth: layerData.strokeWidth ?? 4,
               cornerRadius: layerData.cornerRadius ?? 8,
+              fillColor: layerData.fillColor ?? null,
             });
             self.layers.push(layer);
           } else {

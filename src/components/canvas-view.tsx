@@ -12,6 +12,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import IconBar from "./sidebar";
 import FloatingPanel from "./sidebar/FloatingPanel";
 import ToolSettingsPanel from "./sidebar/ToolSettingsPanel";
+import ShapeSettingsPanel from "./sidebar/ShapeSettingsPanel";
 import ColorPanel from "./sidebar/ColorPanel";
 import BackgroundPanel from "./sidebar/BackgroundPanel";
 import TouchModePanel from "./sidebar/TouchModePanel";
@@ -149,6 +150,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
                   strokeColor: layer.strokeColor,
                   strokeWidth: layer.strokeWidth,
                   cornerRadius: layer.cornerRadius,
+                  fillColor: layer.fillColor ?? null,
                 };
               }
 
@@ -262,6 +264,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               strokeColor: shapeLayer.strokeColor,
               strokeWidth: shapeLayer.strokeWidth,
               cornerRadius: shapeLayer.cornerRadius,
+              fillColor: shapeLayer.fillColor ?? null,
             };
           }
           return baseLayerData;
@@ -524,10 +527,20 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           </FloatingPanel>
         )}
 
+        {openPanels.has("shape-settings") && (
+          <FloatingPanel
+            title="Shape Settings"
+            anchorIconIndex={1}
+            onClose={() => togglePanel("shape-settings")}
+          >
+            <ShapeSettingsPanel />
+          </FloatingPanel>
+        )}
+
         {openPanels.has("color") && (
           <FloatingPanel
             title="Color"
-            anchorIconIndex={1}
+            anchorIconIndex={2}
             onClose={() => togglePanel("color")}
           >
             <ColorPanel />
@@ -537,7 +550,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         {openPanels.has("background") && (
           <FloatingPanel
             title="Background"
-            anchorIconIndex={2}
+            anchorIconIndex={3}
             onClose={() => togglePanel("background")}
           >
             <BackgroundPanel />
@@ -547,7 +560,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         {openPanels.has("touch-mode") && (
           <FloatingPanel
             title="Touch Mode"
-            anchorIconIndex={3}
+            anchorIconIndex={4}
             onClose={() => togglePanel("touch-mode")}
           >
             <TouchModePanel />

@@ -127,6 +127,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                   strokeColor: snapshot.strokeColor,
                   strokeWidth: snapshot.strokeWidth,
                   cornerRadius: snapshot.cornerRadius,
+                  fillColor: snapshot.fillColor ?? null,
                 };
               }
 
@@ -581,6 +582,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               strokeColor: canvasStore.currentColor,
               strokeWidth: canvasStore.shapeStrokeWidth,
               cornerRadius: canvasStore.shapeCornerRadius,
+              fillColor: canvasStore.shapeFillColor,
             };
             engineRef.current?.setPreviewShape(previewShape);
             return;
