@@ -17,6 +17,94 @@ const ToolSettingsPanel: React.FC<ToolSettingsPanelProps> = observer(
       if (!isDrawingMode) onForceDrawingMode();
     };
 
+    const selectedLayer = canvasStore.selectedLayer;
+    const editingShape =
+      selectedLayer && selectedLayer.type === "shape"
+        ? (selectedLayer as any)
+        : null;
+    const isShapeMode = canvasStore.activeTool === "shape" || !!editingShape;
+
+    if (isShapeMode) {
+      const strokeWidth = editingShape
+        ? editingShape.strokeWidth
+        : canvasStore.shapeStrokeWidth;
+      const opacity = editingShape
+        ? editingShape.opacity
+        : canvasStore.shapeOpacity;
+      const cornerRadius = editingShape
+        ? editingShape.cornerRadius
+        : canvasStore.shapeCornerRadius;
+      const shapeType = editingShape
+        ? editingShape.shapeType
+        : canvasStore.currentShapeType;
+      const supportsCornerRadius = shapeType !== "circle";
+
+      const setStrokeWidth = (v: number) => {
+        if (editingShape) editingShape.setStrokeWidth(v);
+        else canvasStore.setShapeStrokeWidth(v);
+      };
+      const setOpacity = (v: number) => {
+        if (editingShape) editingShape.setOpacity(v);
+        else canvasStore.setShapeOpacity(v);
+      };
+      const setCornerRadius = (v: number) => {
+        if (editingShape) editingShape.setCornerRadius(v);
+        else canvasStore.setShapeCornerRadius(v);
+      };
+
+      return (
+        <div className="space-y-3">
+          {editingShape && (
+            <div className="text-xs text-gray-500">
+              Editing: <span className="font-medium">{editingShape.name}</span>
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-gray-600">
+              Stroke Width:{" "}
+              <span className="font-semibold">{strokeWidth}px</span>
+            </Label>
+            <Slider
+              value={[strokeWidth]}
+              onValueChange={(v) => setStrokeWidth(v[0])}
+              min={1}
+              max={50}
+              step={1}
+              className="w-full"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-gray-600">
+              Opacity: {Math.round(opacity * 100)}%
+            </Label>
+            <Slider
+              value={[opacity]}
+              onValueChange={(v) => setOpacity(v[0])}
+              min={0}
+              max={1}
+              step={0.05}
+              className="w-full"
+            />
+          </div>
+          {supportsCornerRadius && (
+            <div className="space-y-2">
+              <Label className="text-xs font-medium text-gray-600">
+                Corner Radius: {Math.round(cornerRadius)}
+              </Label>
+              <Slider
+                value={[cornerRadius]}
+                onValueChange={(v) => setCornerRadius(v[0])}
+                min={0}
+                max={64}
+                step={1}
+                className="w-full"
+              />
+            </div>
+          )}
+        </div>
+      );
+    }
+
     if (canvasStore.currentBrushStyle === "eraser") {
       return (
         <div className="space-y-3">

@@ -6,7 +6,17 @@ import { observer } from "mobx-react-lite";
 import { useCanvasStore, useSettingsStore } from "../hooks/useStores";
 import { Button } from "./ui/button";
 import { Separator } from "./ui/separator";
-import { Move, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
+import {
+  Move,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  Shapes,
+  Square,
+  Circle,
+  Diamond,
+  Triangle,
+} from "lucide-react";
 import {
   Pen,
   Paintbrush,
@@ -17,6 +27,7 @@ import {
   Blend,
 } from "lucide-react";
 import type { BrushStyle } from "@/models/CanvasModel";
+import type { ShapeKind } from "@/models/ShapeLayerModel";
 
 interface FloatingDockProps {
   isDrawingMode: boolean;
@@ -31,6 +42,7 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
     const [isVisible, setIsVisible] = useState(true);
     const [isHovered, setIsHovered] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+    const [shapesPickerOpen, setShapesPickerOpen] = useState(false);
     const hideTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
     const dockRef = useRef<HTMLDivElement>(null);
 
@@ -122,11 +134,30 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
 
     const handleBrushChange = (brush: BrushStyle) => {
       canvasStore.setBrushStyle(brush);
-      // Switch to drawing mode when selecting any brush
+      canvasStore.setActiveTool("brush");
+      setShapesPickerOpen(false);
       if (!isDrawingMode) {
         onToggleDrawingMode();
       }
     };
+
+    const handleShapeChange = (shape: ShapeKind) => {
+      canvasStore.setCurrentShapeType(shape);
+      canvasStore.setActiveTool("shape");
+      canvasStore.deselectLayer();
+      if (!isDrawingMode) {
+        onToggleDrawingMode();
+      }
+    };
+
+    const shapeIcons: Record<ShapeKind, React.ReactNode> = {
+      rectangle: <Square className="w-4 h-4" />,
+      circle: <Circle className="w-4 h-4" />,
+      diamond: <Diamond className="w-4 h-4" />,
+      triangle: <Triangle className="w-4 h-4" />,
+    };
+
+    const shapeKinds: ShapeKind[] = ["rectangle", "circle", "diamond", "triangle"];
 
     if (!isVisible && settingsStore.autoHideDock && !isMobile) {
       return (
@@ -173,6 +204,7 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
                 <Button
                   key={brush}
                   variant={
+                    canvasStore.activeTool === "brush" &&
                     canvasStore.currentBrushStyle === brush
                       ? "default"
                       : "ghost"
@@ -189,6 +221,40 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
                   {brushIcons[brush]}
                 </Button>
               ))}
+
+              <div className="relative">
+                <Button
+                  variant={canvasStore.activeTool === "shape" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setShapesPickerOpen((v) => !v)}
+                  className="h-9 w-9 p-0 transition-all hover:scale-105"
+                  title="Shapes"
+                >
+                  <Shapes className="w-4 h-4" />
+                </Button>
+
+                {shapesPickerOpen && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-white border border-gray-200 rounded-xl shadow-lg px-2 py-2 flex items-center gap-1">
+                    {shapeKinds.map((shape) => (
+                      <Button
+                        key={shape}
+                        variant={
+                          canvasStore.activeTool === "shape" &&
+                          canvasStore.currentShapeType === shape
+                            ? "default"
+                            : "ghost"
+                        }
+                        size="sm"
+                        onClick={() => handleShapeChange(shape)}
+                        className="h-9 w-9 p-0"
+                        title={shape.charAt(0).toUpperCase() + shape.slice(1)}
+                      >
+                        {shapeIcons[shape]}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <Separator orientation="vertical" className="h-6 mx-1" />

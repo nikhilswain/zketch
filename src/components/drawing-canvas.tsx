@@ -8,7 +8,8 @@ import { CanvasEngine, transformController, InputManager } from "@/engine";
 import type {
   StrokeLike,
   TransformHandleType,
-  ImageLayerLike,
+  ShapeLayerLike,
+  TransformableLayer,
 } from "@/engine";
 import type { TransformStartState } from "@/engine/TransformController";
 import { createGetBrushOptions } from "@/engine/brushOptions";
@@ -66,6 +67,13 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     const strokeStartTimeRef = useRef<number | null>(null);
     // Distinguishes a real draw from onDrawStart that early-returned (image select / transform).
     const drawingStartedRef = useRef(false);
+    // Active shape creation drag (start + current canvas-space coords).
+    const shapeCreationRef = useRef<{
+      startX: number;
+      startY: number;
+      curX: number;
+      curY: number;
+    } | null>(null);
 
     // Mount layered engine (background + strokes). Engine handles its own resizing.
     useEffect(() => {
@@ -104,6 +112,21 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                   height: snapshot.height,
                   rotation: snapshot.rotation,
                   aspectLocked: snapshot.aspectLocked,
+                };
+              }
+
+              if (layerType === "shape") {
+                return {
+                  ...baseLayer,
+                  shapeType: snapshot.shapeType,
+                  x: snapshot.x,
+                  y: snapshot.y,
+                  width: snapshot.width,
+                  height: snapshot.height,
+                  rotation: snapshot.rotation,
+                  strokeColor: snapshot.strokeColor,
+                  strokeWidth: snapshot.strokeWidth,
+                  cornerRadius: snapshot.cornerRadius,
                 };
               }
 
@@ -191,24 +214,24 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       [canvasStore.panX, canvasStore.panY, canvasStore.zoom],
     );
 
-    // Hit test image layers - returns the topmost image layer at the given canvas coordinates
-    const hitTestImageLayers = useCallback(
+    // Hit test image/shape layers - returns the topmost transformable layer at canvas coords
+    const hitTestSelectableLayers = useCallback(
       (canvasX: number, canvasY: number): string | null => {
-        // Iterate layers from top to bottom (reverse order)
         const layers = canvasStore.visibleLayers;
         for (let i = layers.length - 1; i >= 0; i--) {
           const layer = layers[i];
-          if (layer.type !== "image" || layer.locked) continue;
-
-          const imgLayer = layer as any;
-          const { x, y, width, height } = imgLayer;
-
-          // Simple bounding box hit test (no rotation for now)
           if (
-            canvasX >= x &&
-            canvasX <= x + width &&
-            canvasY >= y &&
-            canvasY <= y + height
+            (layer.type !== "image" && layer.type !== "shape") ||
+            layer.locked
+          )
+            continue;
+
+          const t = layer as any;
+          if (
+            canvasX >= t.x &&
+            canvasX <= t.x + t.width &&
+            canvasY >= t.y &&
+            canvasY <= t.y + t.height
           ) {
             return layer.id;
           }
@@ -221,7 +244,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     // Hit test transform handles - returns handle type if hit, null otherwise
     const hitTestTransformHandles = useCallback(
       (screenX: number, screenY: number): TransformHandleType | null => {
-        const selectedLayer = canvasStore.selectedImageLayer;
+        const selectedLayer = canvasStore.selectedTransformableLayer;
         if (!selectedLayer) return null;
 
         const root = rootRef.current;
@@ -238,12 +261,12 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
         return transformController.hitTest(
           { x: localX, y: localY },
-          selectedLayer as ImageLayerLike,
+          selectedLayer as TransformableLayer,
           viewport,
         );
       },
       [
-        canvasStore.selectedImageLayer,
+        canvasStore.selectedTransformableLayer,
         canvasStore.zoom,
         canvasStore.panX,
         canvasStore.panY,
@@ -462,8 +485,10 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           const canvasPoint = screenToCanvas(pt.x, pt.y);
           canvasPoint.pressure = pt.pressure;
 
-          // If in transform mode, check for handle interactions first
-          if (canvasStore.isTransformMode && canvasStore.selectedImageLayer) {
+          if (
+            canvasStore.isTransformMode &&
+            canvasStore.selectedTransformableLayer
+          ) {
             const handle = hitTestTransformHandles(pt.x, pt.y);
             if (handle) {
               const rect = root.getBoundingClientRect();
@@ -476,7 +501,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               };
               const startState = transformController.captureStartState(
                 { x: localX, y: localY },
-                canvasStore.selectedImageLayer as ImageLayerLike,
+                canvasStore.selectedTransformableLayer as TransformableLayer,
                 viewport,
               );
               setIsTransforming(true);
@@ -486,19 +511,27 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             }
           }
 
-          // Check if clicking on an image layer
-          const hitLayerId = hitTestImageLayers(canvasPoint.x, canvasPoint.y);
+          const hitLayerId = hitTestSelectableLayers(canvasPoint.x, canvasPoint.y);
           if (hitLayerId) {
             canvasStore.selectLayer(hitLayerId);
             return;
           }
 
-          // If in transform mode but clicked outside any image, deselect
           if (canvasStore.isTransformMode) {
             canvasStore.deselectLayer();
           }
 
-          // Start drawing
+          if (canvasStore.activeTool === "shape") {
+            shapeCreationRef.current = {
+              startX: canvasPoint.x,
+              startY: canvasPoint.y,
+              curX: canvasPoint.x,
+              curY: canvasPoint.y,
+            };
+            drawingStartedRef.current = true;
+            return;
+          }
+
           strokeStartTimeRef.current = Date.now();
           drawingStartedRef.current = true;
           setIsDrawing(true);
@@ -509,6 +542,45 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           if (!drawingStartedRef.current) return;
           const canvasPoint = screenToCanvas(pt.x, pt.y);
           canvasPoint.pressure = pt.pressure;
+
+          if (shapeCreationRef.current) {
+            const start = shapeCreationRef.current;
+            let curX = canvasPoint.x;
+            let curY = canvasPoint.y;
+            if (shiftDownRef.current) {
+              const dx = curX - start.startX;
+              const dy = curY - start.startY;
+              const size = Math.max(Math.abs(dx), Math.abs(dy));
+              curX = start.startX + (dx >= 0 ? size : -size);
+              curY = start.startY + (dy >= 0 ? size : -size);
+            }
+            shapeCreationRef.current = { ...start, curX, curY };
+
+            const x = Math.min(start.startX, curX);
+            const y = Math.min(start.startY, curY);
+            const w = Math.max(1, Math.abs(curX - start.startX));
+            const h = Math.max(1, Math.abs(curY - start.startY));
+
+            const previewShape: ShapeLayerLike = {
+              id: "preview",
+              name: "preview",
+              type: "shape",
+              visible: true,
+              locked: false,
+              opacity: canvasStore.shapeOpacity,
+              shapeType: canvasStore.currentShapeType as any,
+              x,
+              y,
+              width: w,
+              height: h,
+              rotation: 0,
+              strokeColor: canvasStore.currentColor,
+              strokeWidth: canvasStore.shapeStrokeWidth,
+              cornerRadius: canvasStore.shapeCornerRadius,
+            };
+            engineRef.current?.setPreviewShape(previewShape);
+            return;
+          }
 
           // Min-distance filter
           const MIN_DIST = 0.5;
@@ -524,6 +596,34 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
         onDrawEnd: () => {
           drawingStartedRef.current = false;
+
+          if (shapeCreationRef.current) {
+            const ref = shapeCreationRef.current;
+            shapeCreationRef.current = null;
+            engineRef.current?.setPreviewShape(null);
+
+            const dx = ref.curX - ref.startX;
+            const dy = ref.curY - ref.startY;
+            const MIN_DRAG = 5;
+            if (Math.hypot(dx, dy) >= MIN_DRAG) {
+              const x = Math.min(ref.startX, ref.curX);
+              const y = Math.min(ref.startY, ref.curY);
+              const w = Math.abs(dx);
+              const h = Math.abs(dy);
+              const newId = canvasStore.addShapeLayer(
+                canvasStore.currentShapeType as any,
+                x,
+                y,
+                w,
+                h,
+              );
+              if (newId) {
+                canvasStore.selectLayer(newId);
+              }
+            }
+            return;
+          }
+
           setIsDrawing(false);
           if (previewRafRef.current) {
             cancelAnimationFrame(previewRafRef.current);
@@ -533,6 +633,12 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
         onDrawCancel: () => {
           drawingStartedRef.current = false;
+          if (shapeCreationRef.current) {
+            shapeCreationRef.current = null;
+            engineRef.current?.setPreviewShape(null);
+            engineRef.current?.invalidate();
+            return;
+          }
           setIsDrawing(false);
           setCurrentPoints([]);
           if (previewRafRef.current) {
@@ -590,7 +696,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     }, [
       screenToCanvas,
       isDrawingMode,
-      hitTestImageLayers,
+      hitTestSelectableLayers,
       hitTestTransformHandles,
       canvasStore,
       canvasLocked,
@@ -774,12 +880,18 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       renderStrokes();
     }, [renderStrokes]);
 
-    // Handle transform pointer moves (image layer move/resize/rotate)
+    // Handle transform pointer moves (image/shape layer move/resize/rotate)
     const handleTransformMove = useCallback(
       (e: React.PointerEvent) => {
-        if (!isTransforming || !transformHandle || !transformStart || !canvasStore.selectedImageLayer) return;
+        if (
+          !isTransforming ||
+          !transformHandle ||
+          !transformStart ||
+          !canvasStore.selectedTransformableLayer
+        )
+          return;
 
-        const layer = canvasStore.selectedImageLayer as any;
+        const layer = canvasStore.selectedTransformableLayer as any;
         const root = rootRef.current;
         if (!root) return;
         const rect = root.getBoundingClientRect();

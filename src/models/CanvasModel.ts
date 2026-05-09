@@ -13,6 +13,7 @@ import {
   createImageLayer,
   type ILayerSnapshot,
 } from "./LayerModel";
+import { createShapeLayer, type ShapeKind } from "./ShapeLayerModel";
 // Import shared models and re-export for backward compatibility
 import { Point, Stroke, BrushSettings } from "./SharedModels";
 export { Point, Stroke, BrushSettings } from "./SharedModels";
@@ -69,6 +70,23 @@ export const CanvasModel = types
     ),
     // Currently selected layer for transformation
     selectedLayerId: types.optional(types.maybeNull(types.string), null),
+    // Active tool: "brush" for drawing strokes, "shape" for placing shapes
+    activeTool: types.optional(
+      types.enumeration("ActiveTool", ["brush", "shape"]),
+      "brush",
+    ),
+    currentShapeType: types.optional(
+      types.enumeration("ShapeKind", [
+        "rectangle",
+        "circle",
+        "diamond",
+        "triangle",
+      ]),
+      "rectangle",
+    ),
+    shapeStrokeWidth: types.optional(types.number, 4),
+    shapeCornerRadius: types.optional(types.number, 8),
+    shapeOpacity: types.optional(types.number, 1),
   })
   .volatile((self) => ({
     history: [] as SnapshotOut<typeof CanvasState>[],
@@ -130,6 +148,26 @@ export const CanvasModel = types
                 rotation: imageLayer.rotation,
                 opacity: imageLayer.opacity,
                 visible: imageLayer.visible,
+              },
+            };
+          } else if (layer.type === "shape") {
+            const shapeLayer = layer as any;
+            return {
+              type: "shape" as const,
+              visible: layer.visible,
+              opacity: layer.opacity,
+              shapeData: {
+                shapeType: shapeLayer.shapeType,
+                x: shapeLayer.x,
+                y: shapeLayer.y,
+                width: shapeLayer.width,
+                height: shapeLayer.height,
+                rotation: shapeLayer.rotation,
+                strokeColor: shapeLayer.strokeColor,
+                strokeWidth: shapeLayer.strokeWidth,
+                cornerRadius: shapeLayer.cornerRadius,
+                opacity: shapeLayer.opacity,
+                visible: shapeLayer.visible,
               },
             };
           }
@@ -202,6 +240,15 @@ export const CanvasModel = types
       if (!self.selectedLayerId) return null;
       const layer = self.layers.find((l) => l.id === self.selectedLayerId);
       if (layer && layer.type === "image") {
+        return layer;
+      }
+      return null;
+    },
+    // Get selected layer if it's transformable (image or shape)
+    get selectedTransformableLayer() {
+      if (!self.selectedLayerId) return null;
+      const layer = self.layers.find((l) => l.id === self.selectedLayerId);
+      if (layer && (layer.type === "image" || layer.type === "shape")) {
         return layer;
       }
       return null;
@@ -283,6 +330,20 @@ export const CanvasModel = types
               height: imageLayer.height,
               rotation: imageLayer.rotation,
               aspectLocked: imageLayer.aspectLocked,
+            };
+          } else if (layer.type === "shape") {
+            const shapeLayer = layer as any;
+            return {
+              ...baseLayerData,
+              shapeType: shapeLayer.shapeType,
+              x: shapeLayer.x,
+              y: shapeLayer.y,
+              width: shapeLayer.width,
+              height: shapeLayer.height,
+              rotation: shapeLayer.rotation,
+              strokeColor: shapeLayer.strokeColor,
+              strokeWidth: shapeLayer.strokeWidth,
+              cornerRadius: shapeLayer.cornerRadius,
             };
           }
           return baseLayerData;
@@ -394,6 +455,10 @@ export const CanvasModel = types
       },
       setColor(color: string) {
         self.currentColor = color;
+        const selected = self.layers.find((l) => l.id === self.selectedLayerId);
+        if (selected && selected.type === "shape") {
+          (selected as any).setStrokeColor(color);
+        }
       },
       setBackground(background: "white" | "transparent" | "grid") {
         self.background = background;
@@ -553,6 +618,41 @@ export const CanvasModel = types
         const newLayer = createDefaultLayer(
           name || `Layer ${self.layers.length + 1}`,
         );
+        self.layers.push(Layer.create(newLayer as any));
+        self.activeLayerId = newLayer.id;
+        self.saveToHistory();
+        return newLayer.id;
+      },
+
+      setActiveTool(tool: "brush" | "shape") {
+        self.activeTool = tool;
+      },
+      setCurrentShapeType(t: ShapeKind) {
+        self.currentShapeType = t;
+      },
+      setShapeStrokeWidth(w: number) {
+        self.shapeStrokeWidth = Math.max(1, Math.min(50, w));
+      },
+      setShapeCornerRadius(r: number) {
+        self.shapeCornerRadius = Math.max(0, r);
+      },
+      setShapeOpacity(o: number) {
+        self.shapeOpacity = Math.max(0, Math.min(1, o));
+      },
+
+      addShapeLayer(
+        shapeType: ShapeKind,
+        x: number,
+        y: number,
+        width: number,
+        height: number,
+      ) {
+        const newLayer = createShapeLayer(shapeType, x, y, width, height, {
+          strokeColor: self.currentColor,
+          strokeWidth: self.shapeStrokeWidth,
+          cornerRadius: self.shapeCornerRadius,
+          opacity: self.shapeOpacity,
+        });
         self.layers.push(Layer.create(newLayer as any));
         self.activeLayerId = newLayer.id;
         self.saveToHistory();
@@ -833,6 +933,25 @@ export const CanvasModel = types
             rotation: imageLayer.rotation,
             aspectLocked: imageLayer.aspectLocked,
           };
+        } else if (layer.type === "shape") {
+          const shapeLayer = layer as any;
+          newLayerData = {
+            id: newLayerId,
+            name: `${layer.name} Copy`,
+            type: "shape",
+            visible: layer.visible,
+            locked: false,
+            opacity: layer.opacity,
+            shapeType: shapeLayer.shapeType,
+            x: shapeLayer.x + 16,
+            y: shapeLayer.y + 16,
+            width: shapeLayer.width,
+            height: shapeLayer.height,
+            rotation: shapeLayer.rotation,
+            strokeColor: shapeLayer.strokeColor,
+            strokeWidth: shapeLayer.strokeWidth,
+            cornerRadius: shapeLayer.cornerRadius,
+          };
         } else {
           return;
         }
@@ -958,6 +1077,11 @@ export const CanvasModel = types
           height?: number;
           rotation?: number;
           aspectLocked?: boolean;
+          // Shape layer properties
+          shapeType?: ShapeKind;
+          strokeColor?: string;
+          strokeWidth?: number;
+          cornerRadius?: number;
         }>,
         activeLayerId?: string,
       ) {
@@ -970,7 +1094,6 @@ export const CanvasModel = types
           const layerType = layerData.type || "stroke";
 
           if (layerType === "image") {
-            // Create image layer
             const layer = Layer.create({
               id: layerData.id,
               name: layerData.name,
@@ -989,8 +1112,26 @@ export const CanvasModel = types
               aspectLocked: layerData.aspectLocked ?? true,
             });
             self.layers.push(layer);
+          } else if (layerType === "shape") {
+            const layer = Layer.create({
+              id: layerData.id,
+              name: layerData.name,
+              type: "shape",
+              visible: layerData.visible,
+              locked: layerData.locked,
+              opacity: layerData.opacity,
+              shapeType: layerData.shapeType ?? "rectangle",
+              x: layerData.x ?? 0,
+              y: layerData.y ?? 0,
+              width: layerData.width!,
+              height: layerData.height!,
+              rotation: layerData.rotation ?? 0,
+              strokeColor: layerData.strokeColor ?? "#000000",
+              strokeWidth: layerData.strokeWidth ?? 4,
+              cornerRadius: layerData.cornerRadius ?? 8,
+            });
+            self.layers.push(layer);
           } else {
-            // Create stroke layer (default)
             const layer = Layer.create({
               id: layerData.id,
               name: layerData.name,

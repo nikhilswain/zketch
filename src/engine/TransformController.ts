@@ -1,4 +1,4 @@
-import type { PanZoom, ImageLayerLike, TransformHandleType } from "./types";
+import type { PanZoom, TransformableLayer, TransformHandleType } from "./types";
 
 /**
  * Screen point (in CSS pixels, relative to canvas element)
@@ -143,7 +143,7 @@ export class TransformController {
    * Get all handle positions for a layer in both screen and world coordinates
    */
   getHandlePositions(
-    layer: ImageLayerLike,
+    layer: TransformableLayer,
     viewport: PanZoom
   ): HandlePosition[] {
     const { x, y, width, height, rotation } = layer;
@@ -209,7 +209,7 @@ export class TransformController {
    * Get the bounding box corners in screen coordinates (for rendering)
    */
   getBoundingBoxCorners(
-    layer: ImageLayerLike,
+    layer: TransformableLayer,
     viewport: PanZoom
   ): { nw: ScreenPoint; ne: ScreenPoint; se: ScreenPoint; sw: ScreenPoint } {
     const { x, y, width, height, rotation } = layer;
@@ -244,7 +244,7 @@ export class TransformController {
    */
   hitTest(
     screenPoint: ScreenPoint,
-    layer: ImageLayerLike,
+    layer: TransformableLayer,
     viewport: PanZoom
   ): TransformHandleType | null {
     const handles = this.getHandlePositions(layer, viewport);
@@ -283,7 +283,7 @@ export class TransformController {
    */
   private isPointInRotatedRect(
     screenPoint: ScreenPoint,
-    layer: ImageLayerLike,
+    layer: TransformableLayer,
     viewport: PanZoom
   ): boolean {
     const { x, y, width, height, rotation } = layer;
@@ -319,7 +319,7 @@ export class TransformController {
    */
   captureStartState(
     mouseScreen: ScreenPoint,
-    layer: ImageLayerLike,
+    layer: TransformableLayer,
     viewport: PanZoom
   ): TransformStartState {
     const mouseWorld = this.screenToWorld(mouseScreen, viewport);
@@ -519,7 +519,7 @@ export class TransformController {
    */
   renderHandles(
     ctx: CanvasRenderingContext2D,
-    layer: ImageLayerLike,
+    layer: TransformableLayer,
     viewport: PanZoom,
     _dpr: number = 1
   ): void {
