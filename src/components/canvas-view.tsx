@@ -28,7 +28,7 @@ import { ThumbnailService } from "@/services/ThumbnailService";
 import { BlobStorageService } from "@/services/BlobStorageService";
 import { optimizeStrokes } from "@/utils/StrokeOptimizer";
 import { Button } from "./ui/button";
-import { ArrowLeft, ChevronRight, ChevronLeft, Layers, Loader2, Check } from "lucide-react";
+import { ArrowLeft, ChevronRight, ChevronLeft, Layers, Loader2, Check, Lock } from "lucide-react";
 import type { ExportFormat } from "@/models/SettingsModel";
 import type { BackgroundType } from "@/models/CanvasModel";
 import { toast } from "sonner";
@@ -466,6 +466,8 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     // Add keyboard shortcuts
     useKeyboardShortcuts(handleSave, handleShowExportDialog);
 
+    const canvasLocked = animatingLayerId !== null;
+
     return (
       <div className="fixed inset-0 bg-gray-100">
         {/* Icon bar + floating panels */}
@@ -628,7 +630,15 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           isDrawingMode={isDrawingMode}
           animatingLayerId={animatingLayerId}
           animationStrokes={animationStrokes}
+          canvasLocked={canvasLocked}
         />
+
+        {canvasLocked && (
+          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-10 pointer-events-none bg-amber-50/95 backdrop-blur-sm border border-amber-200 text-amber-900 text-xs px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1.5">
+            <Lock className="w-3 h-3" />
+            Animation active — stop to edit
+          </div>
+        )}
 
         {/* Layers Panel - Right side */}
         <div

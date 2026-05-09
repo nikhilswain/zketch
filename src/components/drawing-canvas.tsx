@@ -22,6 +22,7 @@ interface DrawingCanvasProps {
   height?: number;
   animatingLayerId?: string | null;
   animationStrokes?: StrokeLike[] | null;
+  canvasLocked?: boolean;
 }
 
 const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
@@ -32,6 +33,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     height,
     animatingLayerId,
     animationStrokes,
+    canvasLocked = false,
   }) => {
     const canvasStore = useCanvasStore();
     const settingsStore = useSettingsStore();
@@ -453,6 +455,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
       manager.setCallbacks({
         onDrawStart: (pt, pointerType) => {
+          if (canvasLocked) return;
           const root = rootRef.current;
           if (!root) return;
 
@@ -590,6 +593,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       hitTestImageLayers,
       hitTestTransformHandles,
       canvasStore,
+      canvasLocked,
     ]);
 
     // Commit stroke when drawing ends
@@ -637,6 +641,10 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     // Handle clipboard paste for image import
     const handleImagePaste = useCallback(
       async (file: File) => {
+        if (canvasLocked) {
+          toast.error("Stop animation playback to paste images");
+          return false;
+        }
         try {
           const result = await ImportService.importFromFile(file);
 
@@ -687,7 +695,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           return false;
         }
       },
-      [canvasStore, mousePosition],
+      [canvasStore, mousePosition, canvasLocked],
     );
 
     useEffect(() => {
@@ -827,6 +835,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     );
 
     const getCursorStyle = () => {
+      if (canvasLocked) return "cursor-not-allowed";
       if (spacePressed) return "cursor-grabbing";
       if (!isDrawingMode) return "cursor-grab";
 
@@ -866,7 +875,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         mousePosition &&
         isDrawingMode &&
         canvasStore.currentBrushStyle === "eraser" &&
-        !spacePressed
+        !spacePressed &&
+        !canvasLocked
       ) {
         const rect = root.getBoundingClientRect();
         engine.setCursor({
@@ -885,6 +895,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       canvasStore.eraserSize,
       canvasStore.zoom,
       spacePressed,
+      canvasLocked,
     ]);
 
     return (
