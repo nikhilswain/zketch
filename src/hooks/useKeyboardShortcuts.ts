@@ -26,6 +26,14 @@ export const useKeyboardShortcuts = (
       }
     });
 
+    KeyBindingManager.registerHandler("deleteSelected", () => {
+      const selected = canvasStore.selectedLayer;
+      if (!selected || selected.locked) return;
+      const id = selected.id;
+      canvasStore.deselectLayer();
+      canvasStore.removeLayer(id);
+    });
+
     // Tool selection
     KeyBindingManager.registerHandler("selectPen", () =>
       canvasStore.setBrushStyle("ink")

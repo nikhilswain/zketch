@@ -332,10 +332,14 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         if (e.key === "Shift") {
           shiftDownRef.current = true;
         }
-        // ESC to exit transform mode
-        if (e.key === "Escape" && canvasStore.isTransformMode) {
-          e.preventDefault();
-          canvasStore.deselectLayer();
+        if (e.key === "Escape") {
+          if (canvasStore.isTransformMode) {
+            e.preventDefault();
+            canvasStore.deselectLayer();
+          } else if (canvasStore.activeTool === "shape") {
+            e.preventDefault();
+            canvasStore.setActiveTool("brush");
+          }
         }
       };
 
