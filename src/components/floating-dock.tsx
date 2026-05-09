@@ -54,6 +54,12 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
       return () => window.removeEventListener("resize", checkMobile);
     }, []);
 
+    useEffect(() => {
+      if (canvasStore.activeTool !== "shape") {
+        setShapesPickerOpen(false);
+      }
+    }, [canvasStore.activeTool]);
+
     const brushIcons: Record<BrushStyle, React.ReactNode> = {
       ink: <Pencil className="w-4 h-4" />,
       // marker removed from UI

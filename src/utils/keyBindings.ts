@@ -24,15 +24,20 @@ export const KEY_BINDINGS: Record<string, KeyBinding> = {
     action: "redo",
   },
   CLEAR_CANVAS: {
-    key: "Delete",
+    key: "Backspace",
+    ctrlKey: true,
     description: "Clear entire canvas",
     action: "clearCanvas",
   },
-  CLEAR_CANVAS_ALT: {
+  DELETE_SELECTED: {
+    key: "Delete",
+    description: "Delete selected layer",
+    action: "deleteSelected",
+  },
+  DELETE_SELECTED_BACKSPACE: {
     key: "Backspace",
-    ctrlKey: true,
-    description: "Clear entire canvas (alternative)",
-    action: "clearCanvas",
+    description: "Delete selected layer",
+    action: "deleteSelected",
   },
 
   // Drawing Tools
