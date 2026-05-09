@@ -409,8 +409,6 @@ export class ThumbnailService {
       ctx.rotate((layer.rotation * Math.PI) / 180);
       ctx.translate(-cx, -cy);
     }
-    ctx.strokeStyle = layer.strokeColor ?? "#000000";
-    ctx.lineWidth = Math.max(0.5, (layer.strokeWidth ?? 2) * scale);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.beginPath();
@@ -454,6 +452,12 @@ export class ThumbnailService {
       for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
       ctx.closePath();
     }
+    if (layer.fillColor) {
+      ctx.fillStyle = layer.fillColor;
+      ctx.fill();
+    }
+    ctx.strokeStyle = layer.strokeColor ?? "#000000";
+    ctx.lineWidth = Math.max(0.5, (layer.strokeWidth ?? 2) * scale);
     ctx.stroke();
     ctx.restore();
   }

@@ -1,5 +1,6 @@
 import type React from "react";
 import ToolSettingsIcon from "@/icons/ToolSettingsIcon";
+import ShapeSettingsIcon from "@/icons/ShapeSettingsIcon";
 import PaletteIcon from "@/icons/PaletteIcon";
 import BackgroundIcon from "@/icons/BackgroundIcon";
 import TouchModeIcon from "@/icons/TouchModeIcon";
@@ -56,6 +57,14 @@ const IconBar: React.FC<IconBarProps> = ({
         title="Tool Settings"
       >
         <ToolSettingsIcon width={20} height={20} />
+      </IconButton>
+
+      <IconButton
+        isActive={openPanels.has("shape-settings")}
+        onClick={() => onTogglePanel("shape-settings")}
+        title="Shape Settings"
+      >
+        <ShapeSettingsIcon width={20} height={20} />
       </IconButton>
 
       <IconButton

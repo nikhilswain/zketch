@@ -25,6 +25,7 @@ export interface IExportShapeLayer {
   strokeColor: string;
   strokeWidth: number;
   cornerRadius: number;
+  fillColor: string | null;
   opacity: number;
   visible: boolean;
 }
@@ -391,12 +392,16 @@ export class ExportService {
       ctx.rotate((s.rotation * Math.PI) / 180);
       ctx.translate(-cx, -cy);
     }
-    ctx.strokeStyle = s.strokeColor;
-    ctx.lineWidth = s.strokeWidth;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.beginPath();
     this.traceShape(ctx, s);
+    if (s.fillColor) {
+      ctx.fillStyle = s.fillColor;
+      ctx.fill();
+    }
+    ctx.strokeStyle = s.strokeColor;
+    ctx.lineWidth = s.strokeWidth;
     ctx.stroke();
     ctx.restore();
   }

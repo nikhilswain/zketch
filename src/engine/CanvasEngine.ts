@@ -337,7 +337,16 @@ export class CanvasEngine {
     ctx: CanvasRenderingContext2D,
     layer: ShapeLayerLike,
   ) {
-    const { x, y, width, height, rotation, strokeColor, strokeWidth } = layer;
+    const {
+      x,
+      y,
+      width,
+      height,
+      rotation,
+      strokeColor,
+      strokeWidth,
+      fillColor,
+    } = layer;
 
     ctx.save();
     if (rotation !== 0) {
@@ -348,13 +357,19 @@ export class CanvasEngine {
       ctx.translate(-cx, -cy);
     }
 
-    ctx.strokeStyle = strokeColor;
-    ctx.lineWidth = strokeWidth;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
     ctx.beginPath();
     this.tracePath(ctx, layer);
+
+    if (fillColor) {
+      ctx.fillStyle = fillColor;
+      ctx.fill();
+    }
+
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = strokeWidth;
     ctx.stroke();
 
     ctx.restore();

@@ -32,6 +32,7 @@ export const ShapeLayer = types
     strokeColor: types.optional(types.string, "#000000"),
     strokeWidth: types.optional(types.number, 4),
     cornerRadius: types.optional(types.number, 8),
+    fillColor: types.optional(types.maybeNull(types.string), null),
   })
   .views((self) => ({
     get bounds() {
@@ -99,6 +100,10 @@ export const ShapeLayer = types
       if (self.locked) return;
       self.cornerRadius = Math.max(0, r);
     },
+    setFillColor(c: string | null) {
+      if (self.locked) return;
+      self.fillColor = c;
+    },
     setShapeType(t: ShapeKind) {
       if (self.locked) return;
       self.shapeType = t;
@@ -134,6 +139,7 @@ export function createShapeLayer(
     strokeWidth?: number;
     cornerRadius?: number;
     opacity?: number;
+    fillColor?: string | null;
   },
 ): SnapshotIn<typeof ShapeLayer> {
   return {
@@ -152,6 +158,7 @@ export function createShapeLayer(
     strokeColor: options?.strokeColor ?? "#000000",
     strokeWidth: options?.strokeWidth ?? 4,
     cornerRadius: options?.cornerRadius ?? 8,
+    fillColor: options?.fillColor ?? null,
   };
 }
 

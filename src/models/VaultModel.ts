@@ -67,6 +67,7 @@ export interface IShapeLayerData {
   strokeColor: string;
   strokeWidth: number;
   cornerRadius: number;
+  fillColor: string | null;
   visible: boolean;
   locked: boolean;
   opacity: number;
