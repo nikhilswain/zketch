@@ -277,6 +277,9 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         return false;
       }
     };
+    
+    const performSaveRef = useRef(performSave);
+    performSaveRef.current = performSave;
 
     const handleSave = async () => {
       // Cancel any pending autosave
@@ -355,7 +358,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             if (canvasStore.isEmpty) return;
 
             setSaveStatus("saving");
-            const success = await performSave();
+            const success = await performSaveRef.current();
             if (success) {
               setSaveStatus("saved");
               if (saveStatusResetTimerRef.current !== null) {

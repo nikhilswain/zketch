@@ -62,6 +62,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
     // Stroke timing for animation playback
     const strokeStartTimeRef = useRef<number | null>(null);
+    // Distinguishes a real draw from onDrawStart that early-returned (image select / transform).
+    const drawingStartedRef = useRef(false);
 
     // Mount layered engine (background + strokes). Engine handles its own resizing.
     useEffect(() => {
@@ -495,11 +497,13 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
           // Start drawing
           strokeStartTimeRef.current = Date.now();
+          drawingStartedRef.current = true;
           setIsDrawing(true);
           setCurrentPoints([canvasPoint]);
         },
 
         onDrawMove: (pt) => {
+          if (!drawingStartedRef.current) return;
           const canvasPoint = screenToCanvas(pt.x, pt.y);
           canvasPoint.pressure = pt.pressure;
 
@@ -516,6 +520,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         },
 
         onDrawEnd: () => {
+          drawingStartedRef.current = false;
           setIsDrawing(false);
           if (previewRafRef.current) {
             cancelAnimationFrame(previewRafRef.current);
@@ -524,6 +529,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         },
 
         onDrawCancel: () => {
+          drawingStartedRef.current = false;
           setIsDrawing(false);
           setCurrentPoints([]);
           if (previewRafRef.current) {
