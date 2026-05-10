@@ -78,6 +78,20 @@ export const CanvasModel = types
       ),
       [],
     ),
+    // Persistent rotated bbox that wraps the multi-selection. Null when fewer than 2
+    // elements are selected. Carries its own rotation so group rotate visibly persists.
+    selectionAnchor: types.optional(
+      types.maybeNull(
+        types.model("SelectionAnchor", {
+          x: types.number,
+          y: types.number,
+          width: types.number,
+          height: types.number,
+          rotation: types.number,
+        }),
+      ),
+      null,
+    ),
     // Active tool: "pan" navigates, "select" hit-tests, "brush" draws, "shape" creates
     activeTool: types.optional(
       types.enumeration("ActiveTool", ["pan", "select", "brush", "shape"]),
@@ -292,7 +306,20 @@ export const CanvasModel = types
       }
       return out;
     },
-    // Axis-aligned union of every selected element's *rotated* AABB.
+    // All selected stroke elements (skipping eraser strokes — they're invisible).
+    get selectedStrokes() {
+      const out: any[] = [];
+      for (const ref of self.selectedElements) {
+        if (!ref.elementId) continue;
+        const layer = self.layers.find((l) => l.id === ref.layerId);
+        if (!layer || layer.type !== "draw") continue;
+        const element = (layer as any).findElement(ref.elementId);
+        if (element && !("shapeType" in element)) out.push(element);
+      }
+      return out;
+    },
+    // Axis-aligned union of every selected element's visible bbox.
+    // Shapes use their *rotated* AABB; strokes use the AABB of their points + size/2 margin.
     get selectionUnionBounds() {
       let minX = Infinity,
         minY = Infinity,
@@ -302,33 +329,77 @@ export const CanvasModel = types
       for (const ref of self.selectedElements) {
         const layer = self.layers.find((l) => l.id === ref.layerId);
         if (!layer) continue;
-        let bbox: any = null;
+        let bx = 0,
+          by = 0,
+          bw = 0,
+          bh = 0;
+        let valid = false;
         if (layer.type === "image") {
-          bbox = layer;
+          const il = layer as any;
+          bx = il.x;
+          by = il.y;
+          bw = il.width;
+          bh = il.height;
+          const rot = il.rotation ?? 0;
+          if (rot) {
+            const cx = bx + bw / 2;
+            const cy = by + bh / 2;
+            const rad = (rot * Math.PI) / 180;
+            const absCos = Math.abs(Math.cos(rad));
+            const absSin = Math.abs(Math.sin(rad));
+            const rw = bw * absCos + bh * absSin;
+            const rh = bw * absSin + bh * absCos;
+            bx = cx - rw / 2;
+            by = cy - rh / 2;
+            bw = rw;
+            bh = rh;
+          }
+          valid = true;
         } else if (layer.type === "draw" && ref.elementId) {
           const el = (layer as any).findElement(ref.elementId);
-          if (el && "shapeType" in el) bbox = el;
+          if (el) {
+            if ("shapeType" in el) {
+              bx = el.x;
+              by = el.y;
+              bw = el.width;
+              bh = el.height;
+              const rot = el.rotation ?? 0;
+              if (rot) {
+                const cx = bx + bw / 2;
+                const cy = by + bh / 2;
+                const rad = (rot * Math.PI) / 180;
+                const absCos = Math.abs(Math.cos(rad));
+                const absSin = Math.abs(Math.sin(rad));
+                const rw = bw * absCos + bh * absSin;
+                const rh = bw * absSin + bh * absCos;
+                bx = cx - rw / 2;
+                by = cy - rh / 2;
+                bw = rw;
+                bh = rh;
+              }
+              valid = true;
+            } else if (el.points && el.points.length > 0) {
+              let sxMin = Infinity,
+                syMin = Infinity,
+                sxMax = -Infinity,
+                syMax = -Infinity;
+              for (const p of el.points) {
+                if (p.x < sxMin) sxMin = p.x;
+                if (p.y < syMin) syMin = p.y;
+                if (p.x > sxMax) sxMax = p.x;
+                if (p.y > syMax) syMax = p.y;
+              }
+              const half = (el.size ?? 1) / 2;
+              bx = sxMin - half;
+              by = syMin - half;
+              bw = sxMax - sxMin + half * 2;
+              bh = syMax - syMin + half * 2;
+              valid = true;
+            }
+          }
         }
-        if (!bbox) continue;
+        if (!valid) continue;
         any = true;
-        const rot = bbox.rotation ?? 0;
-        let bx = bbox.x;
-        let by = bbox.y;
-        let bw = bbox.width;
-        let bh = bbox.height;
-        if (rot) {
-          const cx = bx + bw / 2;
-          const cy = by + bh / 2;
-          const rad = (rot * Math.PI) / 180;
-          const absCos = Math.abs(Math.cos(rad));
-          const absSin = Math.abs(Math.sin(rad));
-          const rw = bw * absCos + bh * absSin;
-          const rh = bw * absSin + bh * absCos;
-          bx = cx - rw / 2;
-          by = cy - rh / 2;
-          bw = rw;
-          bh = rh;
-        }
         if (bx < minX) minX = bx;
         if (by < minY) minY = by;
         if (bx + bw > maxX) maxX = bx + bw;
@@ -516,6 +587,10 @@ export const CanvasModel = types
             shapeEl.setStrokeColor(color);
           }
         }
+        const strokes = self.selectedStrokes as any[];
+        for (const strokeEl of strokes) {
+          strokeEl.setColor(color);
+        }
       },
       setColorTarget(target: "stroke" | "fill") {
         self.colorTarget = target;
@@ -688,6 +763,7 @@ export const CanvasModel = types
         self.activeTool = tool;
         if (tool !== "select") {
           self.selectedElements.clear();
+          self.selectionAnchor = null;
           self.interactionMode = "draw";
         }
       },
@@ -789,6 +865,9 @@ export const CanvasModel = types
         }
         if (self.selectedElements.length === 0) {
           self.interactionMode = "draw";
+          self.selectionAnchor = null;
+        } else {
+          (self as any).recomputeSelectionAnchor();
         }
 
         self.saveToHistory();
@@ -802,16 +881,96 @@ export const CanvasModel = types
         }
       },
 
+      // Rebuild selectionAnchor. Set whenever rotation needs persistent tracking — i.e. any
+      // multi-selection, OR a single stroke (no own rotation field). Single shape/image use
+      // their own rotation, so anchor stays null for them.
+      recomputeSelectionAnchor() {
+        if (self.selectedElements.length === 0) {
+          self.selectionAnchor = null;
+          return;
+        }
+        if (self.selectedElements.length === 1) {
+          const ref = self.selectedElements[0];
+          if (!ref.elementId) {
+            self.selectionAnchor = null;
+            return;
+          }
+          const layer = self.layers.find((l) => l.id === ref.layerId);
+          if (!layer || layer.type !== "draw") {
+            self.selectionAnchor = null;
+            return;
+          }
+          const el = (layer as any).findElement(ref.elementId);
+          if (!el || "shapeType" in el) {
+            self.selectionAnchor = null;
+            return;
+          }
+          if (!el.points || el.points.length === 0) {
+            self.selectionAnchor = null;
+            return;
+          }
+          // Stroke: AABB of points + size/2 margin.
+          let xMin = Infinity,
+            yMin = Infinity,
+            xMax = -Infinity,
+            yMax = -Infinity;
+          for (const p of el.points) {
+            if (p.x < xMin) xMin = p.x;
+            if (p.y < yMin) yMin = p.y;
+            if (p.x > xMax) xMax = p.x;
+            if (p.y > yMax) yMax = p.y;
+          }
+          const half = (el.size ?? 1) / 2;
+          self.selectionAnchor = {
+            x: xMin - half,
+            y: yMin - half,
+            width: xMax - xMin + half * 2,
+            height: yMax - yMin + half * 2,
+            rotation: 0,
+          };
+          return;
+        }
+        const bounds = self.selectionUnionBounds;
+        if (!bounds) {
+          self.selectionAnchor = null;
+          return;
+        }
+        self.selectionAnchor = {
+          x: bounds.x,
+          y: bounds.y,
+          width: bounds.width,
+          height: bounds.height,
+          rotation: 0,
+        };
+      },
+
+      setSelectionAnchorRotation(rotation: number) {
+        if (self.selectionAnchor) {
+          self.selectionAnchor.rotation = ((rotation % 360) + 360) % 360;
+        }
+      },
+
+      setSelectionAnchorBounds(x: number, y: number, w: number, h: number) {
+        if (self.selectionAnchor) {
+          self.selectionAnchor.x = x;
+          self.selectionAnchor.y = y;
+          self.selectionAnchor.width = w;
+          self.selectionAnchor.height = h;
+        }
+      },
+
       setInteractionMode(mode: "draw" | "transform") {
         self.interactionMode = mode;
         if (mode === "draw") {
           self.selectedElements.clear();
+          self.selectionAnchor = null;
         }
       },
 
       // Replace selection with a whole layer (used for image layers).
       selectLayer(layerId: string | null) {
         self.selectedElements.clear();
+        self.selectionAnchor = null;
         if (layerId === null) {
           self.interactionMode = "draw";
           return;
@@ -828,9 +987,11 @@ export const CanvasModel = types
         const layer = self.layers.find((l) => l.id === layerId);
         if (!layer) return;
         self.selectedElements.clear();
+        self.selectionAnchor = null;
         self.selectedElements.push({ layerId, elementId });
         self.interactionMode = "transform";
         self.activeLayerId = layerId;
+        (self as any).recomputeSelectionAnchor();
       },
 
       addToSelection(layerId: string, elementId: string | null) {
@@ -841,6 +1002,7 @@ export const CanvasModel = types
         self.selectedElements.push({ layerId, elementId });
         self.interactionMode = "transform";
         self.activeLayerId = layerId;
+        (self as any).recomputeSelectionAnchor();
       },
 
       // Toggle membership — used for shift-click.
@@ -858,6 +1020,7 @@ export const CanvasModel = types
           self.interactionMode = "transform";
           self.activeLayerId = layerId;
         }
+        (self as any).recomputeSelectionAnchor();
       },
 
       // Replace selection with everything inside a marquee rect (canvas-space AABB).
@@ -869,6 +1032,12 @@ export const CanvasModel = types
         if (!additive) self.selectedElements.clear();
         const bx2 = bounds.x + bounds.width;
         const by2 = bounds.y + bounds.height;
+        const addOnce = (layerId: string, elementId: string | null) => {
+          const exists = self.selectedElements.some(
+            (s) => s.layerId === layerId && s.elementId === elementId,
+          );
+          if (!exists) self.selectedElements.push({ layerId, elementId });
+        };
         for (const layer of self.layers) {
           if (!layer.visible || layer.locked) continue;
           if (layer.type === "image") {
@@ -879,25 +1048,39 @@ export const CanvasModel = types
               il.y < by2 &&
               il.y + il.height > bounds.y
             ) {
-              const exists = self.selectedElements.some(
-                (s) => s.layerId === layer.id && s.elementId === null,
-              );
-              if (!exists) self.selectedElements.push({ layerId: layer.id, elementId: null });
+              addOnce(layer.id, null);
             }
           } else if (layer.type === "draw") {
             for (const el of (layer as any).elements) {
-              if (!("shapeType" in el)) continue;
-              if (
-                el.x < bx2 &&
-                el.x + el.width > bounds.x &&
-                el.y < by2 &&
-                el.y + el.height > bounds.y
-              ) {
-                const exists = self.selectedElements.some(
-                  (s) => s.layerId === layer.id && s.elementId === el.id,
-                );
-                if (!exists)
-                  self.selectedElements.push({ layerId: layer.id, elementId: el.id });
+              if ("shapeType" in el) {
+                if (
+                  el.x < bx2 &&
+                  el.x + el.width > bounds.x &&
+                  el.y < by2 &&
+                  el.y + el.height > bounds.y
+                ) {
+                  addOnce(layer.id, el.id);
+                }
+              } else if (el.brushStyle !== "eraser" && el.points && el.points.length > 0) {
+                let sxMin = Infinity,
+                  syMin = Infinity,
+                  sxMax = -Infinity,
+                  syMax = -Infinity;
+                for (const p of el.points) {
+                  if (p.x < sxMin) sxMin = p.x;
+                  if (p.y < syMin) syMin = p.y;
+                  if (p.x > sxMax) sxMax = p.x;
+                  if (p.y > syMax) syMax = p.y;
+                }
+                const half = (el.size ?? 1) / 2;
+                if (
+                  sxMin - half < bx2 &&
+                  sxMax + half > bounds.x &&
+                  syMin - half < by2 &&
+                  syMax + half > bounds.y
+                ) {
+                  addOnce(layer.id, el.id);
+                }
               }
             }
           }
@@ -905,14 +1088,16 @@ export const CanvasModel = types
         if (self.selectedElements.length > 0) {
           self.interactionMode = "transform";
         }
+        (self as any).recomputeSelectionAnchor();
       },
 
       deselectLayer() {
         self.selectedElements.clear();
+        self.selectionAnchor = null;
         self.interactionMode = "draw";
       },
 
-      // Translate every selected shape element by (dx, dy). Used for group-drag.
+      // Translate every selected element by (dx, dy). Used for group-drag.
       moveSelectedBy(dx: number, dy: number) {
         for (const ref of self.selectedElements) {
           if (!ref.elementId) {
@@ -925,7 +1110,14 @@ export const CanvasModel = types
           const layer = self.layers.find((l) => l.id === ref.layerId);
           if (!layer || layer.type !== "draw" || layer.locked) continue;
           const el = (layer as any).findElement(ref.elementId);
-          if (el && "shapeType" in el) el.move(dx, dy);
+          if (!el) continue;
+          if ("shapeType" in el) el.move(dx, dy);
+          else if (el.translate) el.translate(dx, dy);
+        }
+        // Keep the rotated anchor in sync with the moved elements.
+        if (self.selectionAnchor) {
+          self.selectionAnchor.x += dx;
+          self.selectionAnchor.y += dy;
         }
       },
 
@@ -1095,6 +1287,7 @@ export const CanvasModel = types
           if (self.selectedElements.length === 0) {
             self.interactionMode = "draw";
           }
+          (self as any).recomputeSelectionAnchor();
         }
         self.saveToHistory();
       },
@@ -1111,6 +1304,7 @@ export const CanvasModel = types
           removedAny = true;
         }
         self.selectedElements.clear();
+        self.selectionAnchor = null;
         self.interactionMode = "draw";
         if (removedAny) self.saveToHistory();
       },
