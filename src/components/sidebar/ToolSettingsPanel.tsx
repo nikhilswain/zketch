@@ -4,17 +4,12 @@ import { useCanvasStore } from "@/hooks/useStores";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 
-interface ToolSettingsPanelProps {
-  isDrawingMode: boolean;
-  onForceDrawingMode: () => void;
-}
-
-const ToolSettingsPanel: React.FC<ToolSettingsPanelProps> = observer(
-  ({ isDrawingMode, onForceDrawingMode }) => {
+const ToolSettingsPanel: React.FC = observer(
+  () => {
     const canvasStore = useCanvasStore();
 
     const forceDrawing = () => {
-      if (!isDrawingMode) onForceDrawingMode();
+      if (canvasStore.activeTool !== "brush") canvasStore.setActiveTool("brush");
     };
 
     if (canvasStore.currentBrushStyle === "eraser") {
@@ -41,7 +36,7 @@ const ToolSettingsPanel: React.FC<ToolSettingsPanelProps> = observer(
       );
     }
 
-    // Brush settings (ink, spray, texture)
+    // Brush settings (ink, spray)
     return (
       <div className="space-y-3">
         <div className="space-y-2">

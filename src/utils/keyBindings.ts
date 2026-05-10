@@ -41,25 +41,35 @@ export const KEY_BINDINGS: Record<string, KeyBinding> = {
   },
 
   // Drawing Tools
-  PEN_TOOL: {
+  SELECT_TOOL: {
+    key: "v",
+    description: "Select tool",
+    action: "selectSelectTool",
+  },
+  SELECT_TOOL_NUM: {
     key: "1",
+    description: "Select tool",
+    action: "selectSelectTool",
+  },
+  PEN_TOOL: {
+    key: "2",
     description: "Select pen tool",
     action: "selectPen",
   },
   ERASER_TOOL: {
-    key: "2",
+    key: "3",
     description: "Select eraser tool",
     action: "selectEraser",
   },
   SPRAY_TOOL: {
-    key: "3",
+    key: "4",
     description: "Select spray tool",
     action: "selectSpray",
   },
-  TEXTURE_TOOL: {
-    key: "4",
-    description: "Select texture tool",
-    action: "selectTexture",
+  SHAPE_TOOL: {
+    key: "5",
+    description: "Select shape tool",
+    action: "selectShapeTool",
   },
 
   // Canvas Navigation

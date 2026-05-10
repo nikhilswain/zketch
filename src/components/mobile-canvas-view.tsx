@@ -34,7 +34,7 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
     const settingsStore = useSettingsStore();
     const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
     const [drawingName, setDrawingName] = useState("Untitled Drawing");
-    const [isDrawingMode, setIsDrawingMode] = useState(true);
+    const isDrawingMode = canvasStore.activeTool !== "pan";
     const [showExportDialog, setShowExportDialog] = useState(false);
     const [sidebarOpen, setSidebarOpen] = useState(false);
     // Track the current drawing ID (may differ from prop after first save of new drawing)
@@ -293,10 +293,6 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
       }
     };
 
-    const handleToggleDrawingMode = () => {
-      setIsDrawingMode(!isDrawingMode);
-    };
-
     const handleShowExportDialog = () => {
       setShowExportDialog(true);
       setSidebarOpen(false);
@@ -360,10 +356,7 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
             />
           </div>
 
-          <FloatingDock
-            isDrawingMode={isDrawingMode}
-            onToggleDrawingMode={handleToggleDrawingMode}
-          />
+          <FloatingDock />
         </div>
 
         {/* Mobile Status Bar */}

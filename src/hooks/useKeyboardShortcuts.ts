@@ -35,18 +35,24 @@ export const useKeyboardShortcuts = (
     });
 
     // Tool selection
-    KeyBindingManager.registerHandler("selectPen", () =>
-      canvasStore.setBrushStyle("ink")
+    KeyBindingManager.registerHandler("selectSelectTool", () =>
+      canvasStore.setActiveTool("select")
     );
-    KeyBindingManager.registerHandler("selectEraser", () =>
-      canvasStore.setBrushStyle("eraser")
+    KeyBindingManager.registerHandler("selectShapeTool", () =>
+      canvasStore.setActiveTool("shape")
     );
-    KeyBindingManager.registerHandler("selectSpray", () =>
-      canvasStore.setBrushStyle("spray")
-    );
-    KeyBindingManager.registerHandler("selectTexture", () =>
-      canvasStore.setBrushStyle("texture")
-    );
+    KeyBindingManager.registerHandler("selectPen", () => {
+      canvasStore.setActiveTool("brush");
+      canvasStore.setBrushStyle("ink");
+    });
+    KeyBindingManager.registerHandler("selectEraser", () => {
+      canvasStore.setActiveTool("brush");
+      canvasStore.setBrushStyle("eraser");
+    });
+    KeyBindingManager.registerHandler("selectSpray", () => {
+      canvasStore.setActiveTool("brush");
+      canvasStore.setBrushStyle("spray");
+    });
 
     // Zoom controls
     KeyBindingManager.registerHandler("zoomIn", () => {
@@ -98,6 +104,13 @@ export const useKeyboardShortcuts = (
       canvasStore.setPenSize(Math.max(1, canvasStore.currentSize - 2));
     });
 
+    const SHAPE_KIND_KEYS: Record<string, "rectangle" | "circle" | "diamond" | "triangle"> = {
+      "1": "rectangle",
+      "2": "circle",
+      "3": "diamond",
+      "4": "triangle",
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't trigger shortcuts when typing in inputs
       if (
@@ -105,6 +118,22 @@ export const useKeyboardShortcuts = (
         e.target instanceof HTMLTextAreaElement
       ) {
         return;
+      }
+
+      // While the shape tool is active, 1–4 pick the shape kind instead of brushes/select.
+      if (
+        canvasStore.activeTool === "shape" &&
+        !e.ctrlKey &&
+        !e.shiftKey &&
+        !e.altKey &&
+        !e.metaKey
+      ) {
+        const kind = SHAPE_KIND_KEYS[e.key];
+        if (kind) {
+          e.preventDefault();
+          canvasStore.setCurrentShapeType(kind);
+          return;
+        }
       }
 
       // Handle the key event through the KeyBindingManager

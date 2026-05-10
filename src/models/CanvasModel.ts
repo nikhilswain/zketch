@@ -70,9 +70,9 @@ export const CanvasModel = types
     ),
     // Currently selected layer for transformation
     selectedLayerId: types.optional(types.maybeNull(types.string), null),
-    // Active tool: "brush" for drawing strokes, "shape" for placing shapes
+    // Active tool: "pan" navigates, "select" hit-tests, "brush" draws, "shape" creates
     activeTool: types.optional(
-      types.enumeration("ActiveTool", ["brush", "shape"]),
+      types.enumeration("ActiveTool", ["pan", "select", "brush", "shape"]),
       "brush",
     ),
     currentShapeType: types.optional(
@@ -639,8 +639,13 @@ export const CanvasModel = types
         return newLayer.id;
       },
 
-      setActiveTool(tool: "brush" | "shape") {
+      setActiveTool(tool: "pan" | "select" | "brush" | "shape") {
         self.activeTool = tool;
+        // Only Select keeps a selection / transform handles visible.
+        if (tool !== "select") {
+          self.selectedLayerId = null;
+          self.interactionMode = "draw";
+        }
       },
       setCurrentShapeType(t: ShapeKind) {
         self.currentShapeType = t;
