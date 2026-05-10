@@ -57,6 +57,7 @@ export class CanvasEngine {
   private background: EngineConfig["background"];
   private preview: StrokeLike | null = null;
   private previewShape: ShapeElementLike | null = null;
+  private marquee: { x: number; y: number; width: number; height: number } | null = null;
   private cursor: { visible: boolean; x?: number; y?: number; r?: number } = {
     visible: false,
   };
@@ -144,6 +145,10 @@ export class CanvasEngine {
   }
   setCursor(c: { visible: boolean; x?: number; y?: number; r?: number }) {
     this.cursor = c;
+    this.invalidate();
+  }
+  setMarquee(rect: { x: number; y: number; width: number; height: number } | null) {
+    this.marquee = rect;
     this.invalidate();
   }
 
@@ -637,8 +642,10 @@ export class CanvasEngine {
     const c = this.ui;
     ctx.clearRect(0, 0, c.width, c.height);
 
-    // Render transform handles if a layer is selected
+    // Selection outlines (every selected element) + transform handles (only when single).
+    this.renderSelectionOutlines(ctx);
     this.renderTransformHandles(ctx);
+    this.renderMarquee(ctx);
 
     // Render cursor overlay (eraser circle)
     if (
@@ -658,6 +665,82 @@ export class CanvasEngine {
     ctx.restore();
   }
 
+  // Visual gap between a shape's stroke and its selection rect, in screen pixels.
+  private static readonly SELECTION_GAP_PX = 8;
+
+  // Padding (in world units) for the selection rect / handles around an element.
+  private selectionPaddingWorld(layer: any, element: any | null) {
+    const gapWorld = CanvasEngine.SELECTION_GAP_PX / this.pz.zoom;
+    if (element && isShapeElement(element)) {
+      return (element.strokeWidth ?? 0) / 2 + gapWorld;
+    }
+    // Images have no stroke — just the gap.
+    return gapWorld;
+  }
+
+  private renderSelectionOutlines(ctx: CanvasRenderingContext2D) {
+    const refs = this.config.getSelectedElements?.() ?? [];
+    if (refs.length === 0) return;
+    const layers = this.config.getLayers?.() || [];
+    ctx.save();
+    ctx.strokeStyle = "#3b82f6";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    for (const ref of refs) {
+      const layer = layers.find((l) => l.id === ref.layerId);
+      if (!layer) continue;
+      let bbox: { x: number; y: number; width: number; height: number; rotation: number } | null = null;
+      let element: any = null;
+      if (layer.type === "image") {
+        bbox = layer as any;
+      } else if (layer.type === "draw" && ref.elementId) {
+        const el = (layer as any).elements.find((e: any) => e.id === ref.elementId);
+        if (el && isShapeElement(el)) {
+          bbox = el as any;
+          element = el;
+        }
+      }
+      if (!bbox) continue;
+      const pad = this.selectionPaddingWorld(layer, element);
+      const ix = bbox.x - pad;
+      const iy = bbox.y - pad;
+      const iw = bbox.width + pad * 2;
+      const ih = bbox.height + pad * 2;
+      const screenX = ix * this.pz.zoom + this.pz.panX;
+      const screenY = iy * this.pz.zoom + this.pz.panY;
+      const screenW = iw * this.pz.zoom;
+      const screenH = ih * this.pz.zoom;
+      ctx.save();
+      if (bbox.rotation) {
+        const cx = screenX + screenW / 2;
+        const cy = screenY + screenH / 2;
+        ctx.translate(cx, cy);
+        ctx.rotate((bbox.rotation * Math.PI) / 180);
+        ctx.translate(-cx, -cy);
+      }
+      ctx.strokeRect(screenX, screenY, screenW, screenH);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  private renderMarquee(ctx: CanvasRenderingContext2D) {
+    if (!this.marquee) return;
+    const m = this.marquee;
+    const x = m.x * this.pz.zoom + this.pz.panX;
+    const y = m.y * this.pz.zoom + this.pz.panY;
+    const w = m.width * this.pz.zoom;
+    const h = m.height * this.pz.zoom;
+    ctx.save();
+    ctx.fillStyle = "rgba(59, 130, 246, 0.08)";
+    ctx.strokeStyle = "#3b82f6";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeRect(x, y, w, h);
+    ctx.restore();
+  }
+
   private renderTransformHandles(ctx: CanvasRenderingContext2D) {
     const selectedLayerId = this.config.getSelectedLayerId?.();
     if (!selectedLayerId) return;
@@ -667,6 +750,7 @@ export class CanvasEngine {
     if (!selectedLayer) return;
 
     let transformable: TransformableLayer | null = null;
+    let element: any = null;
     if (selectedLayer.type === "image") {
       transformable = selectedLayer as TransformableLayer;
     } else if (selectedLayer.type === "draw") {
@@ -675,13 +759,17 @@ export class CanvasEngine {
         const el = (selectedLayer as any).elements.find(
           (e: any) => e.id === elementId,
         );
-        if (el && isShapeElement(el)) transformable = el as TransformableLayer;
+        if (el && isShapeElement(el)) {
+          transformable = el as TransformableLayer;
+          element = el;
+        }
       }
     }
     if (!transformable) return;
 
+    const pad = this.selectionPaddingWorld(selectedLayer, element);
     const dpr = window.devicePixelRatio || 1;
-    transformController.renderHandles(ctx, transformable, this.pz, dpr);
+    transformController.renderHandles(ctx, transformable, this.pz, dpr, pad);
   }
 
   // Get or create an offscreen canvas for a layer

@@ -74,6 +74,18 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       curX: number;
       curY: number;
     } | null>(null);
+    const marqueeRef = useRef<{
+      startX: number;
+      startY: number;
+      curX: number;
+      curY: number;
+      additive: boolean;
+    } | null>(null);
+    const groupDragRef = useRef<{
+      lastX: number;
+      lastY: number;
+      hasMoved: boolean;
+    } | null>(null);
     // InputManager is mounted once; route live values via refs so its closures stay current.
     const isDrawingModeRef = useRef(isDrawingMode);
     useEffect(() => {
@@ -130,6 +142,11 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         getActiveLayerId: () => canvasStore.activeLayerId,
         getSelectedLayerId: () => canvasStore.selectedLayerId,
         getSelectedElementId: () => canvasStore.selectedElementId,
+        getSelectedElements: () =>
+          canvasStore.selectedElements.map((s) => ({
+            layerId: s.layerId,
+            elementId: s.elementId,
+          })),
         // Use a dynamic brush options builder bound to the latest settings
         getBrushOptions: (brush, size) =>
           createGetBrushOptions(canvasStore.brushSettings as any)(
@@ -247,10 +264,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       [canvasStore.visibleLayers],
     );
 
-    // Hit test transform handles - returns handle type if hit, null otherwise
     const hitTestTransformHandles = useCallback(
       (screenX: number, screenY: number): TransformHandleType | null => {
-        const selectedLayer = canvasStore.selectedTransformableLayer;
+        const selectedLayer = canvasStore.selectedTransformableLayer as any;
         if (!selectedLayer) return null;
 
         const root = rootRef.current;
@@ -265,10 +281,18 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           zoom: canvasStore.zoom,
         };
 
+        // Match the visual padding used by the engine (8px screen + half stroke for shapes).
+        const gapWorld = 8 / canvasStore.zoom;
+        const pad =
+          "shapeType" in selectedLayer
+            ? (selectedLayer.strokeWidth ?? 0) / 2 + gapWorld
+            : gapWorld;
+
         return transformController.hitTest(
           { x: localX, y: localY },
           selectedLayer as TransformableLayer,
           viewport,
+          pad,
         );
       },
       [
@@ -498,14 +522,14 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           const canvasPoint = screenToCanvas(pt.x, pt.y);
           canvasPoint.pressure = pt.pressure;
 
-          // Select tool owns hit-testing for selection and transform handles.
           if (canvasStore.activeTool === "select") {
+            // Resize / rotate handles only meaningful when exactly one element is selected.
             if (
-              canvasStore.isTransformMode &&
+              canvasStore.selectionCount === 1 &&
               canvasStore.selectedTransformableLayer
             ) {
               const handle = hitTestTransformHandles(pt.x, pt.y);
-              if (handle) {
+              if (handle && handle !== "move") {
                 const rect = root.getBoundingClientRect();
                 const localX = pt.x - rect.left;
                 const localY = pt.y - rect.top;
@@ -527,15 +551,44 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             }
 
             const hit = hitTestSelectableLayers(canvasPoint.x, canvasPoint.y);
+            const shift = shiftDownRef.current;
             if (hit) {
-              if (hit.elementId) {
-                canvasStore.selectElement(hit.layerId, hit.elementId);
-              } else {
-                canvasStore.selectLayer(hit.layerId);
+              if (shift) {
+                canvasStore.toggleSelection(hit.layerId, hit.elementId);
+                return;
               }
-            } else if (canvasStore.isTransformMode) {
+              const alreadySelected = canvasStore.isSelected(
+                hit.layerId,
+                hit.elementId,
+              );
+              if (!alreadySelected) {
+                if (hit.elementId) {
+                  canvasStore.selectElement(hit.layerId, hit.elementId);
+                } else {
+                  canvasStore.selectLayer(hit.layerId);
+                }
+              }
+              groupDragRef.current = {
+                lastX: canvasPoint.x,
+                lastY: canvasPoint.y,
+                hasMoved: false,
+              };
+              drawingStartedRef.current = true;
+              return;
+            }
+
+            // Empty space: start a marquee. Plain click without drag will deselect on release.
+            if (!shift && canvasStore.hasSelection) {
               canvasStore.deselectLayer();
             }
+            marqueeRef.current = {
+              startX: canvasPoint.x,
+              startY: canvasPoint.y,
+              curX: canvasPoint.x,
+              curY: canvasPoint.y,
+              additive: shift,
+            };
+            drawingStartedRef.current = true;
             return;
           }
 
@@ -560,6 +613,31 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           if (!drawingStartedRef.current) return;
           const canvasPoint = screenToCanvas(pt.x, pt.y);
           canvasPoint.pressure = pt.pressure;
+
+          if (groupDragRef.current) {
+            const dx = canvasPoint.x - groupDragRef.current.lastX;
+            const dy = canvasPoint.y - groupDragRef.current.lastY;
+            if (dx !== 0 || dy !== 0) {
+              canvasStore.moveSelectedBy(dx, dy);
+              groupDragRef.current.lastX = canvasPoint.x;
+              groupDragRef.current.lastY = canvasPoint.y;
+              groupDragRef.current.hasMoved = true;
+            }
+            return;
+          }
+
+          if (marqueeRef.current) {
+            marqueeRef.current.curX = canvasPoint.x;
+            marqueeRef.current.curY = canvasPoint.y;
+            const m = marqueeRef.current;
+            engineRef.current?.setMarquee({
+              x: Math.min(m.startX, m.curX),
+              y: Math.min(m.startY, m.curY),
+              width: Math.abs(m.curX - m.startX),
+              height: Math.abs(m.curY - m.startY),
+            });
+            return;
+          }
 
           if (shapeCreationRef.current) {
             const start = shapeCreationRef.current;
@@ -633,6 +711,34 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         onDrawEnd: () => {
           drawingStartedRef.current = false;
 
+          if (groupDragRef.current) {
+            if (groupDragRef.current.hasMoved) {
+              canvasStore.saveCurrentStateToHistory();
+            }
+            groupDragRef.current = null;
+            return;
+          }
+
+          if (marqueeRef.current) {
+            const m = marqueeRef.current;
+            engineRef.current?.setMarquee(null);
+            const w = Math.abs(m.curX - m.startX);
+            const h = Math.abs(m.curY - m.startY);
+            if (w > 3 || h > 3) {
+              canvasStore.selectInBounds(
+                {
+                  x: Math.min(m.startX, m.curX),
+                  y: Math.min(m.startY, m.curY),
+                  width: w,
+                  height: h,
+                },
+                m.additive,
+              );
+            }
+            marqueeRef.current = null;
+            return;
+          }
+
           if (shapeCreationRef.current) {
             const ref = shapeCreationRef.current;
             shapeCreationRef.current = null;
@@ -671,6 +777,13 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
         onDrawCancel: () => {
           drawingStartedRef.current = false;
+          if (groupDragRef.current) {
+            groupDragRef.current = null;
+          }
+          if (marqueeRef.current) {
+            marqueeRef.current = null;
+            engineRef.current?.setMarquee(null);
+          }
           if (shapeCreationRef.current) {
             shapeCreationRef.current = null;
             engineRef.current?.setPreviewShape(null);

@@ -7,10 +7,12 @@ import { Label } from "@/components/ui/label";
 const ShapeSettingsPanel: React.FC = observer(() => {
   const canvasStore = useCanvasStore();
 
-  const editingShape = canvasStore.selectedShapeElement as any;
+  const selectedShapes = canvasStore.selectedShapeElements as any[];
+  const editingShape = selectedShapes[0] ?? null;
+  const multi = selectedShapes.length > 1;
   const shapeToolActive = canvasStore.activeTool === "shape";
 
-  if (!editingShape && !shapeToolActive) {
+  if (selectedShapes.length === 0 && !shapeToolActive) {
     return (
       <div className="text-xs text-gray-500 leading-relaxed">
         Select the Shapes tool in the dock or pick a shape layer to edit its
@@ -34,27 +36,32 @@ const ShapeSettingsPanel: React.FC = observer(() => {
     : canvasStore.currentShapeType;
   const supportsCornerRadius = shapeType !== "circle";
 
+  const applyToAll = (fn: (s: any) => void) => {
+    if (selectedShapes.length === 0) return false;
+    selectedShapes.forEach(fn);
+    return true;
+  };
+
   const setStrokeWidth = (v: number) => {
-    if (editingShape) editingShape.setStrokeWidth(v);
-    else canvasStore.setShapeStrokeWidth(v);
+    if (!applyToAll((s) => s.setStrokeWidth(v))) canvasStore.setShapeStrokeWidth(v);
   };
   const setOpacity = (v: number) => {
-    if (editingShape) editingShape.setOpacity(v);
-    else canvasStore.setShapeOpacity(v);
+    if (!applyToAll((s) => s.setOpacity(v))) canvasStore.setShapeOpacity(v);
   };
   const setCornerRadius = (v: number) => {
-    if (editingShape) editingShape.setCornerRadius(v);
-    else canvasStore.setShapeCornerRadius(v);
+    if (!applyToAll((s) => s.setCornerRadius(v))) canvasStore.setShapeCornerRadius(v);
   };
   const toggleFill = (on: boolean) => {
     if (on) {
       const initial = canvasStore.currentColor;
-      if (editingShape) editingShape.setFillColor(initial);
-      else canvasStore.setShapeFillColor(initial);
+      if (!applyToAll((s) => s.setFillColor(initial))) {
+        canvasStore.setShapeFillColor(initial);
+      }
       canvasStore.setColorTarget("fill");
     } else {
-      if (editingShape) editingShape.setFillColor(null);
-      else canvasStore.setShapeFillColor(null);
+      if (!applyToAll((s) => s.setFillColor(null))) {
+        canvasStore.setShapeFillColor(null);
+      }
       canvasStore.setColorTarget("stroke");
     }
   };
@@ -63,7 +70,10 @@ const ShapeSettingsPanel: React.FC = observer(() => {
     <div className="space-y-3">
       {editingShape && (
         <div className="text-xs text-gray-500">
-          Editing: <span className="font-medium">{editingShape.shapeType}</span>
+          Editing:{" "}
+          <span className="font-medium">
+            {multi ? `${selectedShapes.length} shapes` : editingShape.shapeType}
+          </span>
         </div>
       )}
 

@@ -69,11 +69,15 @@ export const CanvasModel = types
       types.enumeration("InteractionMode", ["draw", "transform"]),
       "draw",
     ),
-    // Currently selected layer for transformation
-    selectedLayerId: types.optional(types.maybeNull(types.string), null),
-    // Currently selected element WITHIN the selected layer (for shape elements in a draw layer).
-    // Null means the whole layer is selected (used for image layers).
-    selectedElementId: types.optional(types.maybeNull(types.string), null),
+    selectedElements: types.optional(
+      types.array(
+        types.model("SelectedElementRef", {
+          layerId: types.string,
+          elementId: types.maybeNull(types.string),
+        }),
+      ),
+      [],
+    ),
     // Active tool: "pan" navigates, "select" hit-tests, "brush" draws, "shape" creates
     activeTool: types.optional(
       types.enumeration("ActiveTool", ["pan", "select", "brush", "shape"]),
@@ -219,40 +223,74 @@ export const CanvasModel = types
       }
       return "white"; // White paint for white/grid backgrounds
     },
-    // Get the currently selected layer
+    get selectionCount() {
+      return self.selectedElements.length;
+    },
+    get hasSelection() {
+      return self.selectedElements.length > 0;
+    },
+    get isMultiSelect() {
+      return self.selectedElements.length > 1;
+    },
+    // Single-selection compat: return the single ref, else null.
+    get selectedLayerId() {
+      return self.selectedElements.length === 1
+        ? self.selectedElements[0].layerId
+        : null;
+    },
+    get selectedElementId() {
+      return self.selectedElements.length === 1
+        ? self.selectedElements[0].elementId
+        : null;
+    },
+    isSelected(layerId: string, elementId: string | null) {
+      return self.selectedElements.some(
+        (s) => s.layerId === layerId && s.elementId === elementId,
+      );
+    },
     get selectedLayer() {
-      if (!self.selectedLayerId) return null;
-      return self.layers.find((l) => l.id === self.selectedLayerId) || null;
+      if (self.selectedElements.length !== 1) return null;
+      const ref = self.selectedElements[0];
+      return self.layers.find((l) => l.id === ref.layerId) || null;
     },
-    // Get selected layer if it's an image layer
     get selectedImageLayer() {
-      if (!self.selectedLayerId) return null;
-      const layer = self.layers.find((l) => l.id === self.selectedLayerId);
-      if (layer && layer.type === "image") {
-        return layer;
-      }
-      return null;
+      if (self.selectedElements.length !== 1) return null;
+      const ref = self.selectedElements[0];
+      const layer = self.layers.find((l) => l.id === ref.layerId);
+      return layer && layer.type === "image" ? layer : null;
     },
-    // Get the selected shape element (lives inside a draw layer).
     get selectedShapeElement() {
-      if (!self.selectedLayerId || !self.selectedElementId) return null;
-      const layer = self.layers.find((l) => l.id === self.selectedLayerId);
+      if (self.selectedElements.length !== 1) return null;
+      const ref = self.selectedElements[0];
+      if (!ref.elementId) return null;
+      const layer = self.layers.find((l) => l.id === ref.layerId);
       if (!layer || layer.type !== "draw") return null;
-      const element = (layer as any).findElement(self.selectedElementId);
-      if (element && "shapeType" in element) return element;
-      return null;
+      const element = (layer as any).findElement(ref.elementId);
+      return element && "shapeType" in element ? element : null;
     },
-    // Get the currently selected transformable thing — image layer OR shape element.
     get selectedTransformableLayer() {
-      if (!self.selectedLayerId) return null;
-      const layer = self.layers.find((l) => l.id === self.selectedLayerId);
+      if (self.selectedElements.length !== 1) return null;
+      const ref = self.selectedElements[0];
+      const layer = self.layers.find((l) => l.id === ref.layerId);
       if (!layer) return null;
       if (layer.type === "image") return layer;
-      if (layer.type === "draw" && self.selectedElementId) {
-        const element = (layer as any).findElement(self.selectedElementId);
+      if (layer.type === "draw" && ref.elementId) {
+        const element = (layer as any).findElement(ref.elementId);
         if (element && "shapeType" in element) return element;
       }
       return null;
+    },
+    // All selected shape elements (for bulk color / opacity edits).
+    get selectedShapeElements() {
+      const out: any[] = [];
+      for (const ref of self.selectedElements) {
+        if (!ref.elementId) continue;
+        const layer = self.layers.find((l) => l.id === ref.layerId);
+        if (!layer || layer.type !== "draw") continue;
+        const element = (layer as any).findElement(ref.elementId);
+        if (element && "shapeType" in element) out.push(element);
+      }
+      return out;
     },
     // Check if we're in transform mode
     get isTransformMode() {
@@ -420,8 +458,8 @@ export const CanvasModel = types
       },
       setColor(color: string) {
         self.currentColor = color;
-        const shapeEl = self.selectedShapeElement as any;
-        if (shapeEl) {
+        const shapes = self.selectedShapeElements as any[];
+        for (const shapeEl of shapes) {
           if (self.colorTarget === "fill") {
             shapeEl.setFillColor(color);
           } else {
@@ -599,8 +637,7 @@ export const CanvasModel = types
       setActiveTool(tool: "pan" | "select" | "brush" | "shape") {
         self.activeTool = tool;
         if (tool !== "select") {
-          self.selectedLayerId = null;
-          self.selectedElementId = null;
+          self.selectedElements.clear();
           self.interactionMode = "draw";
         }
       },
@@ -683,20 +720,25 @@ export const CanvasModel = types
         return newLayer.id;
       },
 
-      // Remove a layer by ID
       removeLayer(layerId: string) {
         const index = self.layers.findIndex((l) => l.id === layerId);
         if (index === -1) return;
-
-        // Don't allow removing the last layer
         if (self.layers.length === 1) return;
 
         self.layers.splice(index, 1);
 
-        // If we removed the active layer, select another one
         if (self.activeLayerId === layerId) {
           self.activeLayerId =
             self.layers[Math.min(index, self.layers.length - 1)]?.id || "";
+        }
+        // Drop any dangling selection refs to the removed layer.
+        for (let i = self.selectedElements.length - 1; i >= 0; i--) {
+          if (self.selectedElements[i].layerId === layerId) {
+            self.selectedElements.splice(i, 1);
+          }
+        }
+        if (self.selectedElements.length === 0) {
+          self.interactionMode = "draw";
         }
 
         self.saveToHistory();
@@ -710,47 +752,131 @@ export const CanvasModel = types
         }
       },
 
-      // Set interaction mode (draw or transform)
       setInteractionMode(mode: "draw" | "transform") {
         self.interactionMode = mode;
         if (mode === "draw") {
-          self.selectedLayerId = null;
-          self.selectedElementId = null;
+          self.selectedElements.clear();
         }
       },
 
-      // Select a layer for transformation (used for image layers — whole layer is the target).
+      // Replace selection with a whole layer (used for image layers).
       selectLayer(layerId: string | null) {
+        self.selectedElements.clear();
         if (layerId === null) {
-          self.selectedLayerId = null;
-          self.selectedElementId = null;
           self.interactionMode = "draw";
-        } else {
-          const layer = self.layers.find((l) => l.id === layerId);
-          if (layer) {
-            self.selectedLayerId = layerId;
-            self.selectedElementId = null;
-            self.interactionMode = "transform";
-            self.activeLayerId = layerId;
-          }
+          return;
         }
-      },
-
-      // Select a specific element inside a draw layer (a shape).
-      selectElement(layerId: string, elementId: string) {
         const layer = self.layers.find((l) => l.id === layerId);
         if (!layer) return;
-        self.selectedLayerId = layerId;
-        self.selectedElementId = elementId;
+        self.selectedElements.push({ layerId, elementId: null });
         self.interactionMode = "transform";
         self.activeLayerId = layerId;
       },
 
-      // Deselect any current selection and return to draw mode.
+      // Replace selection with a single element inside a draw layer.
+      selectElement(layerId: string, elementId: string) {
+        const layer = self.layers.find((l) => l.id === layerId);
+        if (!layer) return;
+        self.selectedElements.clear();
+        self.selectedElements.push({ layerId, elementId });
+        self.interactionMode = "transform";
+        self.activeLayerId = layerId;
+      },
+
+      addToSelection(layerId: string, elementId: string | null) {
+        const exists = self.selectedElements.some(
+          (s) => s.layerId === layerId && s.elementId === elementId,
+        );
+        if (exists) return;
+        self.selectedElements.push({ layerId, elementId });
+        self.interactionMode = "transform";
+        self.activeLayerId = layerId;
+      },
+
+      // Toggle membership — used for shift-click.
+      toggleSelection(layerId: string, elementId: string | null) {
+        const idx = self.selectedElements.findIndex(
+          (s) => s.layerId === layerId && s.elementId === elementId,
+        );
+        if (idx >= 0) {
+          self.selectedElements.splice(idx, 1);
+          if (self.selectedElements.length === 0) {
+            self.interactionMode = "draw";
+          }
+        } else {
+          self.selectedElements.push({ layerId, elementId });
+          self.interactionMode = "transform";
+          self.activeLayerId = layerId;
+        }
+      },
+
+      // Replace selection with everything inside a marquee rect (canvas-space AABB).
+      // If `additive`, merges with existing selection (shift-marquee).
+      selectInBounds(
+        bounds: { x: number; y: number; width: number; height: number },
+        additive: boolean,
+      ) {
+        if (!additive) self.selectedElements.clear();
+        const bx2 = bounds.x + bounds.width;
+        const by2 = bounds.y + bounds.height;
+        for (const layer of self.layers) {
+          if (!layer.visible || layer.locked) continue;
+          if (layer.type === "image") {
+            const il = layer as any;
+            if (
+              il.x < bx2 &&
+              il.x + il.width > bounds.x &&
+              il.y < by2 &&
+              il.y + il.height > bounds.y
+            ) {
+              const exists = self.selectedElements.some(
+                (s) => s.layerId === layer.id && s.elementId === null,
+              );
+              if (!exists) self.selectedElements.push({ layerId: layer.id, elementId: null });
+            }
+          } else if (layer.type === "draw") {
+            for (const el of (layer as any).elements) {
+              if (!("shapeType" in el)) continue;
+              if (
+                el.x < bx2 &&
+                el.x + el.width > bounds.x &&
+                el.y < by2 &&
+                el.y + el.height > bounds.y
+              ) {
+                const exists = self.selectedElements.some(
+                  (s) => s.layerId === layer.id && s.elementId === el.id,
+                );
+                if (!exists)
+                  self.selectedElements.push({ layerId: layer.id, elementId: el.id });
+              }
+            }
+          }
+        }
+        if (self.selectedElements.length > 0) {
+          self.interactionMode = "transform";
+        }
+      },
+
       deselectLayer() {
-        self.selectedLayerId = null;
-        self.selectedElementId = null;
+        self.selectedElements.clear();
         self.interactionMode = "draw";
+      },
+
+      // Translate every selected shape element by (dx, dy). Used for group-drag.
+      moveSelectedBy(dx: number, dy: number) {
+        for (const ref of self.selectedElements) {
+          if (!ref.elementId) {
+            const layer = self.layers.find((l) => l.id === ref.layerId);
+            if (layer && layer.type === "image" && !layer.locked) {
+              (layer as any).move(dx, dy);
+            }
+            continue;
+          }
+          const layer = self.layers.find((l) => l.id === ref.layerId);
+          if (!layer || layer.type !== "draw" || layer.locked) continue;
+          const el = (layer as any).findElement(ref.elementId);
+          if (el && "shapeType" in el) el.move(dx, dy);
+        }
       },
 
       // Move layer to a new position (index)
@@ -907,17 +1033,36 @@ export const CanvasModel = types
         }
       },
 
-      // Remove a single element (stroke or shape) from a draw layer.
       removeElement(layerId: string, elementId: string) {
         const layer = self.layers.find((l) => l.id === layerId);
         if (!layer || layer.type !== "draw" || layer.locked) return;
         (layer as any).removeElement(elementId);
-        if (self.selectedElementId === elementId) {
-          self.selectedElementId = null;
-          self.selectedLayerId = null;
-          self.interactionMode = "draw";
+        const idx = self.selectedElements.findIndex(
+          (s) => s.layerId === layerId && s.elementId === elementId,
+        );
+        if (idx >= 0) {
+          self.selectedElements.splice(idx, 1);
+          if (self.selectedElements.length === 0) {
+            self.interactionMode = "draw";
+          }
         }
         self.saveToHistory();
+      },
+
+      // Bulk-remove every selected element. Skips locked layers and image layers (those need explicit deletion).
+      removeSelectedElements() {
+        const refs = self.selectedElements.slice();
+        let removedAny = false;
+        for (const ref of refs) {
+          if (!ref.elementId) continue;
+          const layer = self.layers.find((l) => l.id === ref.layerId);
+          if (!layer || layer.type !== "draw" || layer.locked) continue;
+          (layer as any).removeElement(ref.elementId);
+          removedAny = true;
+        }
+        self.selectedElements.clear();
+        self.interactionMode = "draw";
+        if (removedAny) self.saveToHistory();
       },
 
       // Duplicate a layer (deep-clones elements for draw layers).
