@@ -292,6 +292,56 @@ export const CanvasModel = types
       }
       return out;
     },
+    // Axis-aligned union of every selected element's *rotated* AABB.
+    get selectionUnionBounds() {
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
+      let any = false;
+      for (const ref of self.selectedElements) {
+        const layer = self.layers.find((l) => l.id === ref.layerId);
+        if (!layer) continue;
+        let bbox: any = null;
+        if (layer.type === "image") {
+          bbox = layer;
+        } else if (layer.type === "draw" && ref.elementId) {
+          const el = (layer as any).findElement(ref.elementId);
+          if (el && "shapeType" in el) bbox = el;
+        }
+        if (!bbox) continue;
+        any = true;
+        const rot = bbox.rotation ?? 0;
+        let bx = bbox.x;
+        let by = bbox.y;
+        let bw = bbox.width;
+        let bh = bbox.height;
+        if (rot) {
+          const cx = bx + bw / 2;
+          const cy = by + bh / 2;
+          const rad = (rot * Math.PI) / 180;
+          const absCos = Math.abs(Math.cos(rad));
+          const absSin = Math.abs(Math.sin(rad));
+          const rw = bw * absCos + bh * absSin;
+          const rh = bw * absSin + bh * absCos;
+          bx = cx - rw / 2;
+          by = cy - rh / 2;
+          bw = rw;
+          bh = rh;
+        }
+        if (bx < minX) minX = bx;
+        if (by < minY) minY = by;
+        if (bx + bw > maxX) maxX = bx + bw;
+        if (by + bh > maxY) maxY = by + bh;
+      }
+      if (!any) return null;
+      return {
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY,
+      };
+    },
     // Check if we're in transform mode
     get isTransformMode() {
       return self.interactionMode === "transform";

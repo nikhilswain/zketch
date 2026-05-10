@@ -58,6 +58,9 @@ export class CanvasEngine {
   private preview: StrokeLike | null = null;
   private previewShape: ShapeElementLike | null = null;
   private marquee: { x: number; y: number; width: number; height: number } | null = null;
+  // While the user is actively rotating a multi-selection, freeze the union bbox so the
+  // rotate handle stays under their finger instead of following the recomputed AABB.
+  private activeGroupTransform: TransformableLayer | null = null;
   private cursor: { visible: boolean; x?: number; y?: number; r?: number } = {
     visible: false,
   };
@@ -149,6 +152,10 @@ export class CanvasEngine {
   }
   setMarquee(rect: { x: number; y: number; width: number; height: number } | null) {
     this.marquee = rect;
+    this.invalidate();
+  }
+  setActiveGroupTransform(t: TransformableLayer | null) {
+    this.activeGroupTransform = t;
     this.invalidate();
   }
 
@@ -681,6 +688,8 @@ export class CanvasEngine {
   private renderSelectionOutlines(ctx: CanvasRenderingContext2D) {
     const refs = this.config.getSelectedElements?.() ?? [];
     if (refs.length === 0) return;
+    // Multi-select: union handles already convey the selection — skip per-element outlines.
+    if (refs.length > 1) return;
     const layers = this.config.getLayers?.() || [];
     ctx.save();
     ctx.strokeStyle = "#3b82f6";
@@ -742,34 +751,88 @@ export class CanvasEngine {
   }
 
   private renderTransformHandles(ctx: CanvasRenderingContext2D) {
-    const selectedLayerId = this.config.getSelectedLayerId?.();
-    if (!selectedLayerId) return;
-
+    const refs = this.config.getSelectedElements?.() ?? [];
     const layers = this.config.getLayers?.() || [];
-    const selectedLayer = layers.find((l) => l.id === selectedLayerId);
-    if (!selectedLayer) return;
+    const dpr = window.devicePixelRatio || 1;
 
-    let transformable: TransformableLayer | null = null;
-    let element: any = null;
-    if (selectedLayer.type === "image") {
-      transformable = selectedLayer as TransformableLayer;
-    } else if (selectedLayer.type === "draw") {
-      const elementId = this.config.getSelectedElementId?.();
-      if (elementId) {
-        const el = (selectedLayer as any).elements.find(
-          (e: any) => e.id === elementId,
-        );
+    if (refs.length === 0) return;
+
+    if (refs.length === 1) {
+      const ref = refs[0];
+      const layer = layers.find((l) => l.id === ref.layerId);
+      if (!layer) return;
+      let transformable: TransformableLayer | null = null;
+      let element: any = null;
+      if (layer.type === "image") {
+        transformable = layer as TransformableLayer;
+      } else if (layer.type === "draw" && ref.elementId) {
+        const el = (layer as any).elements.find((e: any) => e.id === ref.elementId);
         if (el && isShapeElement(el)) {
           transformable = el as TransformableLayer;
           element = el;
         }
       }
+      if (!transformable) return;
+      const pad = this.selectionPaddingWorld(layer, element);
+      transformController.renderHandles(ctx, transformable, this.pz, dpr, pad);
+      return;
     }
-    if (!transformable) return;
 
-    const pad = this.selectionPaddingWorld(selectedLayer, element);
-    const dpr = window.devicePixelRatio || 1;
-    transformController.renderHandles(ctx, transformable, this.pz, dpr, pad);
+    // Multi-select: synthesize a union bbox and render handles around it.
+    // If the caller is actively rotating, use the frozen override instead of recomputing.
+    let union: TransformableLayer | null = this.activeGroupTransform;
+    if (!union) {
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
+      let any = false;
+      for (const ref of refs) {
+        const layer = layers.find((l) => l.id === ref.layerId);
+        if (!layer) continue;
+        let bbox: any = null;
+        if (layer.type === "image") {
+          bbox = layer;
+        } else if (layer.type === "draw" && ref.elementId) {
+          const el = (layer as any).elements.find((e: any) => e.id === ref.elementId);
+          if (el && isShapeElement(el)) bbox = el;
+        }
+        if (!bbox) continue;
+        any = true;
+        const rot = bbox.rotation ?? 0;
+        let bx = bbox.x;
+        let by = bbox.y;
+        let bw = bbox.width;
+        let bh = bbox.height;
+        if (rot) {
+          const cx = bx + bw / 2;
+          const cy = by + bh / 2;
+          const rad = (rot * Math.PI) / 180;
+          const absCos = Math.abs(Math.cos(rad));
+          const absSin = Math.abs(Math.sin(rad));
+          const rw = bw * absCos + bh * absSin;
+          const rh = bw * absSin + bh * absCos;
+          bx = cx - rw / 2;
+          by = cy - rh / 2;
+          bw = rw;
+          bh = rh;
+        }
+        if (bx < minX) minX = bx;
+        if (by < minY) minY = by;
+        if (bx + bw > maxX) maxX = bx + bw;
+        if (by + bh > maxY) maxY = by + bh;
+      }
+      if (!any) return;
+      union = {
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY,
+        rotation: 0,
+      };
+    }
+    const pad = CanvasEngine.SELECTION_GAP_PX / this.pz.zoom;
+    transformController.renderHandles(ctx, union, this.pz, dpr, pad);
   }
 
   // Get or create an offscreen canvas for a layer

@@ -86,6 +86,16 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       lastY: number;
       hasMoved: boolean;
     } | null>(null);
+    // Per-element bbox snapshot taken at the start of a group resize/rotate.
+    const groupTransformRef = useRef<Array<{
+      layerId: string;
+      elementId: string | null;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      rotation: number;
+    }> | null>(null);
     // InputManager is mounted once; route live values via refs so its closures stay current.
     const isDrawingModeRef = useRef(isDrawingMode);
     useEffect(() => {
@@ -266,8 +276,15 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
     const hitTestTransformHandles = useCallback(
       (screenX: number, screenY: number): TransformHandleType | null => {
-        const selectedLayer = canvasStore.selectedTransformableLayer as any;
-        if (!selectedLayer) return null;
+        const single = canvasStore.selectedTransformableLayer as any;
+        const union = canvasStore.selectionUnionBounds;
+        const target =
+          canvasStore.selectionCount === 1
+            ? single
+            : union
+              ? ({ ...union, rotation: 0 } as TransformableLayer)
+              : null;
+        if (!target) return null;
 
         const root = rootRef.current;
         if (!root) return null;
@@ -281,22 +298,23 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           zoom: canvasStore.zoom,
         };
 
-        // Match the visual padding used by the engine (8px screen + half stroke for shapes).
         const gapWorld = 8 / canvasStore.zoom;
         const pad =
-          "shapeType" in selectedLayer
-            ? (selectedLayer.strokeWidth ?? 0) / 2 + gapWorld
+          single && "shapeType" in single
+            ? (single.strokeWidth ?? 0) / 2 + gapWorld
             : gapWorld;
 
         return transformController.hitTest(
           { x: localX, y: localY },
-          selectedLayer as TransformableLayer,
+          target,
           viewport,
           pad,
         );
       },
       [
         canvasStore.selectedTransformableLayer,
+        canvasStore.selectionUnionBounds,
+        canvasStore.selectionCount,
         canvasStore.zoom,
         canvasStore.panX,
         canvasStore.panY,
@@ -523,11 +541,29 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           canvasPoint.pressure = pt.pressure;
 
           if (canvasStore.activeTool === "select") {
-            // Resize / rotate handles only meaningful when exactly one element is selected.
-            if (
-              canvasStore.selectionCount === 1 &&
-              canvasStore.selectedTransformableLayer
-            ) {
+            const shift = shiftDownRef.current;
+
+            // Shift+click on an element: toggle membership; never start a drag.
+            if (shift) {
+              const hit = hitTestSelectableLayers(canvasPoint.x, canvasPoint.y);
+              if (hit) {
+                canvasStore.toggleSelection(hit.layerId, hit.elementId);
+                return;
+              }
+              // Shift on empty → additive marquee.
+              marqueeRef.current = {
+                startX: canvasPoint.x,
+                startY: canvasPoint.y,
+                curX: canvasPoint.x,
+                curY: canvasPoint.y,
+                additive: true,
+              };
+              drawingStartedRef.current = true;
+              return;
+            }
+
+            // Resize / rotate / move handle on the current selection takes priority.
+            if (canvasStore.selectionCount >= 1) {
               const handle = hitTestTransformHandles(pt.x, pt.y);
               if (handle && handle !== "move") {
                 const rect = root.getBoundingClientRect();
@@ -538,25 +574,80 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                   panY: canvasStore.panY,
                   zoom: canvasStore.zoom,
                 };
-                const startState = transformController.captureStartState(
-                  { x: localX, y: localY },
-                  canvasStore.selectedTransformableLayer as TransformableLayer,
-                  viewport,
-                );
-                setIsTransforming(true);
-                setTransformHandle(handle);
-                setTransformStart(startState);
+                const single = canvasStore.selectedTransformableLayer as any;
+                const target: TransformableLayer | null =
+                  canvasStore.selectionCount === 1
+                    ? single
+                    : canvasStore.selectionUnionBounds
+                      ? ({
+                          ...canvasStore.selectionUnionBounds,
+                          rotation: 0,
+                        } as TransformableLayer)
+                      : null;
+                if (target) {
+                  const startState = transformController.captureStartState(
+                    { x: localX, y: localY },
+                    target,
+                    viewport,
+                  );
+                  setIsTransforming(true);
+                  setTransformHandle(handle);
+                  setTransformStart(startState);
+                  if (canvasStore.selectionCount > 1) {
+                    const snap: Array<{
+                      layerId: string;
+                      elementId: string | null;
+                      x: number;
+                      y: number;
+                      width: number;
+                      height: number;
+                      rotation: number;
+                    }> = [];
+                    for (const ref of canvasStore.selectedElements) {
+                      const layer = canvasStore.layers.find(
+                        (l) => l.id === ref.layerId,
+                      ) as any;
+                      if (!layer) continue;
+                      let bbox: any = null;
+                      if (layer.type === "image") bbox = layer;
+                      else if (layer.type === "draw" && ref.elementId) {
+                        bbox = layer.findElement(ref.elementId);
+                      }
+                      if (!bbox || (layer.type === "draw" && !("shapeType" in bbox))) continue;
+                      snap.push({
+                        layerId: ref.layerId,
+                        elementId: ref.elementId,
+                        x: bbox.x,
+                        y: bbox.y,
+                        width: bbox.width,
+                        height: bbox.height,
+                        rotation: bbox.rotation ?? 0,
+                      });
+                    }
+                    groupTransformRef.current = snap;
+                    if (handle === "rotate") {
+                      engineRef.current?.setActiveGroupTransform({ ...target });
+                    }
+                  }
+                  return;
+                }
+              }
+              // Click anywhere inside the selection bbox → group-drag (covers the gap
+              // between elements when 2+ are selected).
+              if (handle === "move") {
+                groupDragRef.current = {
+                  lastX: canvasPoint.x,
+                  lastY: canvasPoint.y,
+                  hasMoved: false,
+                };
+                drawingStartedRef.current = true;
                 return;
               }
             }
 
+            // Outside the selection bbox: try element hit-test.
             const hit = hitTestSelectableLayers(canvasPoint.x, canvasPoint.y);
-            const shift = shiftDownRef.current;
             if (hit) {
-              if (shift) {
-                canvasStore.toggleSelection(hit.layerId, hit.elementId);
-                return;
-              }
               const alreadySelected = canvasStore.isSelected(
                 hit.layerId,
                 hit.elementId,
@@ -577,16 +668,14 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               return;
             }
 
-            // Empty space: start a marquee. Plain click without drag will deselect on release.
-            if (!shift && canvasStore.hasSelection) {
-              canvasStore.deselectLayer();
-            }
+            // Empty space: deselect, then start a marquee.
+            if (canvasStore.hasSelection) canvasStore.deselectLayer();
             marqueeRef.current = {
               startX: canvasPoint.x,
               startY: canvasPoint.y,
               curX: canvasPoint.x,
               curY: canvasPoint.y,
-              additive: shift,
+              additive: false,
             };
             drawingStartedRef.current = true;
             return;
@@ -1031,18 +1120,13 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       renderStrokes();
     }, [renderStrokes]);
 
-    // Handle transform pointer moves (image/shape layer move/resize/rotate)
     const handleTransformMove = useCallback(
       (e: React.PointerEvent) => {
-        if (
-          !isTransforming ||
-          !transformHandle ||
-          !transformStart ||
-          !canvasStore.selectedTransformableLayer
-        )
-          return;
+        if (!isTransforming || !transformHandle || !transformStart) return;
+        const isGroup = !!groupTransformRef.current;
+        const single = canvasStore.selectedTransformableLayer as any;
+        if (!isGroup && !single) return;
 
-        const layer = canvasStore.selectedTransformableLayer as any;
         const root = rootRef.current;
         if (!root) return;
         const rect = root.getBoundingClientRect();
@@ -1055,32 +1139,128 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           zoom: canvasStore.zoom,
         };
 
-        let result;
-        if (transformHandle === "move") {
-          result = transformController.applyMove(
+        if (!isGroup) {
+          let result;
+          if (transformHandle === "move") {
+            result = transformController.applyMove(
+              { x: localX, y: localY },
+              transformStart,
+              viewport,
+            );
+            single.setPosition(result.x, result.y);
+          } else if (transformHandle === "rotate") {
+            result = transformController.applyRotation(
+              { x: localX, y: localY },
+              transformStart,
+              viewport,
+            );
+            single.setRotation(result.rotation);
+          } else if (["nw", "ne", "se", "sw"].includes(transformHandle)) {
+            const maintainAspect = !e.shiftKey;
+            result = transformController.applyResize(
+              transformHandle as "nw" | "ne" | "se" | "sw",
+              { x: localX, y: localY },
+              transformStart,
+              viewport,
+              maintainAspect,
+            );
+            single.setPosition(result.x, result.y);
+            single.setSize(result.width, result.height, false);
+          }
+          return;
+        }
+
+        // Group transform — scale or rotate every snapshotted element relative to the union.
+        const starts = groupTransformRef.current!;
+        if (transformHandle === "rotate") {
+          const r = transformController.applyRotation(
             { x: localX, y: localY },
             transformStart,
             viewport,
           );
-          layer.setPosition(result.x, result.y);
-        } else if (transformHandle === "rotate") {
-          result = transformController.applyRotation(
-            { x: localX, y: localY },
-            transformStart,
-            viewport,
-          );
-          layer.setRotation(result.rotation);
-        } else if (["nw", "ne", "se", "sw"].includes(transformHandle)) {
+          let deltaDeg = r.rotation - transformStart.layerRotation;
+          // Normalize to (-180, 180] so signs are intuitive.
+          deltaDeg = ((deltaDeg % 360) + 540) % 360 - 180;
+          const cx = transformStart.layerCenterX;
+          const cy = transformStart.layerCenterY;
+          const rad = (deltaDeg * Math.PI) / 180;
+          const cos = Math.cos(rad);
+          const sin = Math.sin(rad);
+          for (const s of starts) {
+            const layer = canvasStore.layers.find((l) => l.id === s.layerId) as any;
+            if (!layer) continue;
+            const target =
+              s.elementId && layer.type === "draw"
+                ? layer.findElement(s.elementId)
+                : layer.type === "image"
+                  ? layer
+                  : null;
+            if (!target) continue;
+            const ecx = s.x + s.width / 2;
+            const ecy = s.y + s.height / 2;
+            const rx = (ecx - cx) * cos - (ecy - cy) * sin + cx;
+            const ry = (ecx - cx) * sin + (ecy - cy) * cos + cy;
+            target.setPosition(rx - s.width / 2, ry - s.height / 2);
+            target.setRotation(((s.rotation + deltaDeg) % 360 + 360) % 360);
+          }
+          // Keep the rotate handle under the user's finger by rotating the frozen union.
+          engineRef.current?.setActiveGroupTransform({
+            x: transformStart.layerX,
+            y: transformStart.layerY,
+            width: transformStart.layerWidth,
+            height: transformStart.layerHeight,
+            rotation: ((deltaDeg % 360) + 360) % 360,
+          });
+          return;
+        }
+
+        if (["nw", "ne", "se", "sw"].includes(transformHandle)) {
           const maintainAspect = !e.shiftKey;
-          result = transformController.applyResize(
+          const r = transformController.applyResize(
             transformHandle as "nw" | "ne" | "se" | "sw",
             { x: localX, y: localY },
             transformStart,
             viewport,
             maintainAspect,
           );
-          layer.setPosition(result.x, result.y);
-          layer.setSize(result.width, result.height, false);
+          const oldW = transformStart.layerWidth;
+          const oldH = transformStart.layerHeight;
+          const sx = oldW > 0 ? r.width / oldW : 1;
+          const sy = oldH > 0 ? r.height / oldH : 1;
+          // Anchor = opposite corner of the dragged handle (stays put through the resize).
+          const anchor = (() => {
+            const sX = transformStart.layerX;
+            const sY = transformStart.layerY;
+            switch (transformHandle) {
+              case "nw":
+                return { x: sX + oldW, y: sY + oldH };
+              case "ne":
+                return { x: sX, y: sY + oldH };
+              case "se":
+                return { x: sX, y: sY };
+              case "sw":
+                return { x: sX + oldW, y: sY };
+              default:
+                return { x: sX, y: sY };
+            }
+          })();
+          for (const s of starts) {
+            const layer = canvasStore.layers.find((l) => l.id === s.layerId) as any;
+            if (!layer) continue;
+            const target =
+              s.elementId && layer.type === "draw"
+                ? layer.findElement(s.elementId)
+                : layer.type === "image"
+                  ? layer
+                  : null;
+            if (!target) continue;
+            const newX = anchor.x + (s.x - anchor.x) * sx;
+            const newY = anchor.y + (s.y - anchor.y) * sy;
+            const newW = Math.max(1, s.width * sx);
+            const newH = Math.max(1, s.height * sy);
+            target.setPosition(newX, newY);
+            target.setSize(newW, newH, false);
+          }
         }
       },
       [isTransforming, transformHandle, transformStart, canvasStore],
@@ -1092,6 +1272,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         setIsTransforming(false);
         setTransformHandle(null);
         setTransformStart(null);
+        groupTransformRef.current = null;
+        engineRef.current?.setActiveGroupTransform(null);
         canvasStore.saveCurrentStateToHistory();
       },
       [isTransforming, canvasStore],
