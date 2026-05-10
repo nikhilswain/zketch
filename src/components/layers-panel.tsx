@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { observer } from "mobx-react-lite";
 import { useCanvasStore } from "@/hooks/useStores";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import {
   Trash2,
   ChevronUp,
   ChevronDown,
+  ChevronRight,
   Copy,
   MoreHorizontal,
   Layers,
@@ -544,6 +545,67 @@ const LayerItem: React.FC<LayerItemProps> = observer(
   },
 );
 
+interface ShapeGroupRowProps {
+  count: number;
+  expanded: boolean;
+  containsActive: boolean;
+  onToggle: () => void;
+  children?: React.ReactNode;
+}
+
+const ShapeGroupRow: React.FC<ShapeGroupRowProps> = ({
+  count,
+  expanded,
+  containsActive,
+  onToggle,
+  children,
+}) => {
+  return (
+    <div
+      className={`border-b border-border ${
+        containsActive && !expanded ? "bg-primary/5" : ""
+      }`}
+    >
+      <div
+        className="flex items-center gap-2 p-2 cursor-pointer hover:bg-muted/50"
+        onClick={onToggle}
+      >
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 flex-shrink-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle();
+          }}
+          title={expanded ? "Collapse shapes" : "Expand shapes"}
+        >
+          {expanded ? (
+            <ChevronDown className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5" />
+          )}
+        </Button>
+        <div className="w-12 h-9 rounded border border-border bg-muted/30 flex items-center justify-center flex-shrink-0">
+          <ShapesIcon className="w-5 h-5 text-muted-foreground" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <span className="text-sm font-medium">Shapes</span>
+          <div className="text-xs text-muted-foreground">
+            {count} shape{count === 1 ? "" : "s"}
+            {containsActive && !expanded && (
+              <span className="ml-1 text-primary">• selected inside</span>
+            )}
+          </div>
+        </div>
+      </div>
+      {expanded && (
+        <div className="border-l-2 border-l-primary/30 ml-2">{children}</div>
+      )}
+    </div>
+  );
+};
+
 interface LayersPanelProps {
   className?: string;
   collapsed?: boolean;
@@ -577,6 +639,99 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
 
     // Reverse the layers for display (top layer first in UI)
     const displayLayers = [...canvasStore.layers].reverse();
+
+    // Coalesce runs of consecutive shape layers into collapsible groups.
+    type DisplayItem =
+      | { kind: "single"; layer: ILayer }
+      | { kind: "group"; layers: ILayer[]; key: string };
+
+    const items: DisplayItem[] = useMemo(() => {
+      const out: DisplayItem[] = [];
+      let i = 0;
+      while (i < displayLayers.length) {
+        if (displayLayers[i].type === "shape") {
+          let j = i;
+          while (j < displayLayers.length && displayLayers[j].type === "shape") j++;
+          const run = displayLayers.slice(i, j);
+          if (run.length === 1) {
+            out.push({ kind: "single", layer: run[0] });
+          } else {
+            out.push({ kind: "group", layers: run, key: run[0].id });
+          }
+          i = j;
+        } else {
+          out.push({ kind: "single", layer: displayLayers[i] });
+          i++;
+        }
+      }
+      return out;
+      // displayLayers identity changes whenever layers mutate, so it's a fine dep.
+    }, [displayLayers]);
+
+    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+    // Auto-expand a group when it contains the active or selected layer.
+    useEffect(() => {
+      const target = canvasStore.selectedLayerId ?? canvasStore.activeLayerId;
+      if (!target) return;
+      for (const item of items) {
+        if (item.kind === "group" && item.layers.some((l) => l.id === target)) {
+          setExpandedGroups((prev) => {
+            if (prev.has(item.key)) return prev;
+            const next = new Set(prev);
+            next.add(item.key);
+            return next;
+          });
+          return;
+        }
+      }
+    }, [canvasStore.selectedLayerId, canvasStore.activeLayerId, items]);
+
+    const toggleGroup = useCallback((key: string) => {
+      setExpandedGroups((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+    }, []);
+
+    const renderLayerItem = (layer: ILayer) => {
+      const actualIndex = canvasStore.layers.findIndex((l) => l.id === layer.id);
+      return (
+        <LayerItem
+          key={layer.id}
+          layer={layer}
+          isActive={layer.id === canvasStore.activeLayerId}
+          isFocused={canvasStore.focusedLayerId === layer.id}
+          onSelect={() => canvasStore.setActiveLayer(layer.id)}
+          onToggleVisibility={() =>
+            canvasStore.toggleLayerVisibility(layer.id)
+          }
+          onToggleLock={() => canvasStore.toggleLayerLock(layer.id)}
+          onToggleFocus={() => canvasStore.focusLayer(layer.id)}
+          onRename={(name) => canvasStore.renameLayer(layer.id, name)}
+          onDelete={() => canvasStore.removeLayer(layer.id)}
+          onClear={() => canvasStore.clearLayer(layer.id)}
+          onMoveUp={() => canvasStore.moveLayerUp(layer.id)}
+          onMoveDown={() => canvasStore.moveLayerDown(layer.id)}
+          onDuplicate={() => canvasStore.duplicateLayer(layer.id)}
+          onOpacityChange={(opacity) =>
+            canvasStore.setLayerOpacity(layer.id, opacity)
+          }
+          isFirst={actualIndex === 0}
+          isLast={actualIndex === canvasStore.layers.length - 1}
+          canDelete={canvasStore.layerCount > 1}
+          renderVersion={canvasStore.renderVersion}
+          onAnimationFrame={(strokes) =>
+            onAnimationFrame?.(layer.id, strokes)
+          }
+          onAnimationStateChange={(state) =>
+            onAnimationStateChange?.(layer.id, state)
+          }
+        />
+      );
+    };
 
     return (
       <div
@@ -651,40 +806,24 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
 
         {/* Layers List */}
         <div className="flex-1 overflow-y-auto max-h-72">
-          {displayLayers.map((layer, displayIndex) => {
-            const actualIndex = canvasStore.layers.length - 1 - displayIndex;
+          {items.map((item) => {
+            if (item.kind === "single") {
+              return renderLayerItem(item.layer);
+            }
+            const expanded = expandedGroups.has(item.key);
+            const containsActive = item.layers.some(
+              (l) => l.id === canvasStore.activeLayerId,
+            );
             return (
-              <LayerItem
-                key={layer.id}
-                layer={layer}
-                isActive={layer.id === canvasStore.activeLayerId}
-                isFocused={canvasStore.focusedLayerId === layer.id}
-                onSelect={() => canvasStore.setActiveLayer(layer.id)}
-                onToggleVisibility={() =>
-                  canvasStore.toggleLayerVisibility(layer.id)
-                }
-                onToggleLock={() => canvasStore.toggleLayerLock(layer.id)}
-                onToggleFocus={() => canvasStore.focusLayer(layer.id)}
-                onRename={(name) => canvasStore.renameLayer(layer.id, name)}
-                onDelete={() => canvasStore.removeLayer(layer.id)}
-                onClear={() => canvasStore.clearLayer(layer.id)}
-                onMoveUp={() => canvasStore.moveLayerUp(layer.id)}
-                onMoveDown={() => canvasStore.moveLayerDown(layer.id)}
-                onDuplicate={() => canvasStore.duplicateLayer(layer.id)}
-                onOpacityChange={(opacity) =>
-                  canvasStore.setLayerOpacity(layer.id, opacity)
-                }
-                isFirst={actualIndex === 0}
-                isLast={actualIndex === canvasStore.layers.length - 1}
-                canDelete={canvasStore.layerCount > 1}
-                renderVersion={canvasStore.renderVersion}
-                onAnimationFrame={(strokes) =>
-                  onAnimationFrame?.(layer.id, strokes)
-                }
-                onAnimationStateChange={(state) =>
-                  onAnimationStateChange?.(layer.id, state)
-                }
-              />
+              <ShapeGroupRow
+                key={item.key}
+                count={item.layers.length}
+                expanded={expanded}
+                containsActive={containsActive}
+                onToggle={() => toggleGroup(item.key)}
+              >
+                {expanded && item.layers.map(renderLayerItem)}
+              </ShapeGroupRow>
             );
           })}
         </div>
