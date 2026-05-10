@@ -333,16 +333,23 @@ export class CanvasEngine {
       return;
     }
     if (layer.type === "draw") {
+      const pending = this.config.getPendingEraserDeletes?.();
       // Two-pass within a draw layer: bake strokes first (raster, with destination-out
       // for eraser strokes), then render shape elements as vectors on top.
       for (const el of layer.elements) {
         if (!isShapeElement(el)) {
+          const faded = pending?.has((el as any).id);
+          if (faded) ctx.save(), (ctx.globalAlpha *= 0.25);
           this.renderStroke(ctx, el as StrokeLike, 1);
+          if (faded) ctx.restore();
         }
       }
       for (const el of layer.elements) {
         if (isShapeElement(el)) {
+          const faded = pending?.has((el as any).id);
+          if (faded) ctx.save(), (ctx.globalAlpha *= 0.25);
           this.renderShapeLayer(ctx, el as ShapeElementLike);
+          if (faded) ctx.restore();
         }
       }
     }

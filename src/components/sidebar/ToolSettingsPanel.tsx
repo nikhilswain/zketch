@@ -1,12 +1,13 @@
 import type React from "react";
 import { observer } from "mobx-react-lite";
-import { useCanvasStore } from "@/hooks/useStores";
+import { useCanvasStore, useSettingsStore } from "@/hooks/useStores";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 
 const ToolSettingsPanel: React.FC = observer(
   () => {
     const canvasStore = useCanvasStore();
+    const settingsStore = useSettingsStore();
 
     const forceDrawing = () => {
       if (canvasStore.activeTool !== "brush") canvasStore.setActiveTool("brush");
@@ -31,6 +32,22 @@ const ToolSettingsPanel: React.FC = observer(
               step={1}
               className="w-full"
             />
+          </div>
+          <label className="flex items-center justify-between gap-2 text-xs text-gray-600 cursor-pointer">
+            <span>Erase whole stroke</span>
+            <input
+              type="checkbox"
+              checked={settingsStore.eraserWholeStroke}
+              onChange={(e) =>
+                settingsStore.setEraserWholeStroke(e.target.checked)
+              }
+              className="cursor-pointer"
+            />
+          </label>
+          <div className="text-[11px] text-gray-500 leading-snug">
+            {settingsStore.eraserWholeStroke
+              ? "Hover deletes whole strokes and shapes on release."
+              : "Default: punches through strokes, deletes whole shapes."}
           </div>
         </div>
       );

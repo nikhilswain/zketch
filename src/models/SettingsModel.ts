@@ -37,6 +37,9 @@ export const SettingsModel = types
       types.enumeration("TouchMode", ["auto", "stylus-only", "touch-draw"]),
       "auto",
     ),
+    // Eraser mode: false = pixel eraser (destination-out, current behavior), true = object eraser
+    // (deletes whole strokes/shapes, fade preview, commit on release).
+    eraserWholeStroke: types.optional(types.boolean, false),
   })
   .views((self) => ({
     get defaultSettings() {
@@ -67,6 +70,7 @@ export const SettingsModel = types
           showGrid: self.showGrid,
           snapToGrid: self.snapToGrid,
           touchMode: self.touchMode,
+          eraserWholeStroke: self.eraserWholeStroke,
         };
         localStorage.setItem("drawing-app-settings", JSON.stringify(settings));
       } catch (error) {
@@ -101,6 +105,8 @@ export const SettingsModel = types
           self.showGrid = settings.showGrid ?? self.showGrid;
           self.snapToGrid = settings.snapToGrid ?? self.snapToGrid;
           self.touchMode = settings.touchMode ?? self.touchMode;
+          self.eraserWholeStroke =
+            settings.eraserWholeStroke ?? self.eraserWholeStroke;
         }
       } catch (error) {
         console.error("Failed to load settings:", error);
@@ -149,6 +155,10 @@ export const SettingsModel = types
       },
       setTouchMode(mode: "auto" | "stylus-only" | "touch-draw") {
         self.touchMode = mode;
+        saveToStorage();
+      },
+      setEraserWholeStroke(v: boolean) {
+        self.eraserWholeStroke = v;
         saveToStorage();
       },
       setUIPreferences(
