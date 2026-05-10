@@ -74,6 +74,11 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       curX: number;
       curY: number;
     } | null>(null);
+    // InputManager is mounted once; route live values via refs so its closures stay current.
+    const isDrawingModeRef = useRef(isDrawingMode);
+    useEffect(() => {
+      isDrawingModeRef.current = isDrawingMode;
+    }, [isDrawingMode]);
 
     // Mount layered engine (background + strokes). Engine handles its own resizing.
     useEffect(() => {
@@ -337,7 +342,10 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           if (canvasStore.isTransformMode) {
             e.preventDefault();
             canvasStore.deselectLayer();
-          } else if (canvasStore.activeTool === "shape") {
+          } else if (
+            canvasStore.activeTool === "shape" ||
+            canvasStore.activeTool === "select"
+          ) {
             e.preventDefault();
             canvasStore.setActiveTool("brush");
           }
@@ -464,7 +472,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
       const manager = new InputManager(root, {
         getTouchMode: () => settingsStore.touchMode as "auto" | "stylus-only" | "touch-draw",
-        getIsDrawingMode: () => isDrawingMode,
+        getIsDrawingMode: () => isDrawingModeRef.current,
         callbacks: {},
       });
 
@@ -490,40 +498,41 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           const canvasPoint = screenToCanvas(pt.x, pt.y);
           canvasPoint.pressure = pt.pressure;
 
-          if (
-            canvasStore.isTransformMode &&
-            canvasStore.selectedTransformableLayer
-          ) {
-            const handle = hitTestTransformHandles(pt.x, pt.y);
-            if (handle) {
-              const rect = root.getBoundingClientRect();
-              const localX = pt.x - rect.left;
-              const localY = pt.y - rect.top;
-              const viewport = {
-                panX: canvasStore.panX,
-                panY: canvasStore.panY,
-                zoom: canvasStore.zoom,
-              };
-              const startState = transformController.captureStartState(
-                { x: localX, y: localY },
-                canvasStore.selectedTransformableLayer as TransformableLayer,
-                viewport,
-              );
-              setIsTransforming(true);
-              setTransformHandle(handle);
-              setTransformStart(startState);
-              return;
+          // Select tool owns hit-testing for selection and transform handles.
+          if (canvasStore.activeTool === "select") {
+            if (
+              canvasStore.isTransformMode &&
+              canvasStore.selectedTransformableLayer
+            ) {
+              const handle = hitTestTransformHandles(pt.x, pt.y);
+              if (handle) {
+                const rect = root.getBoundingClientRect();
+                const localX = pt.x - rect.left;
+                const localY = pt.y - rect.top;
+                const viewport = {
+                  panX: canvasStore.panX,
+                  panY: canvasStore.panY,
+                  zoom: canvasStore.zoom,
+                };
+                const startState = transformController.captureStartState(
+                  { x: localX, y: localY },
+                  canvasStore.selectedTransformableLayer as TransformableLayer,
+                  viewport,
+                );
+                setIsTransforming(true);
+                setTransformHandle(handle);
+                setTransformStart(startState);
+                return;
+              }
             }
-          }
 
-          const hitLayerId = hitTestSelectableLayers(canvasPoint.x, canvasPoint.y);
-          if (hitLayerId) {
-            canvasStore.selectLayer(hitLayerId);
+            const hitLayerId = hitTestSelectableLayers(canvasPoint.x, canvasPoint.y);
+            if (hitLayerId) {
+              canvasStore.selectLayer(hitLayerId);
+            } else if (canvasStore.isTransformMode) {
+              canvasStore.deselectLayer();
+            }
             return;
-          }
-
-          if (canvasStore.isTransformMode) {
-            canvasStore.deselectLayer();
           }
 
           if (canvasStore.activeTool === "shape") {
@@ -979,6 +988,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         if (handle === "ne" || handle === "sw") return "cursor-nesw-resize";
       }
 
+      if (canvasStore.activeTool === "select") return "cursor-default";
       if (canvasStore.currentBrushStyle === "eraser") return "cursor-none"; // Hide cursor for eraser
       return "cursor-crosshair";
     };
@@ -992,6 +1002,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       if (
         mousePosition &&
         isDrawingMode &&
+        canvasStore.activeTool === "brush" &&
         canvasStore.currentBrushStyle === "eraser" &&
         !spacePressed &&
         !canvasLocked
@@ -1009,6 +1020,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     }, [
       mousePosition,
       isDrawingMode,
+      canvasStore.activeTool,
       canvasStore.currentBrushStyle,
       canvasStore.eraserSize,
       canvasStore.zoom,

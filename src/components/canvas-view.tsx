@@ -48,7 +48,8 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     const vaultStore = useVaultStore();
     const settingsStore = useSettingsStore();
     const [drawingName, setDrawingName] = useState("Untitled Drawing");
-    const [isDrawingMode, setIsDrawingMode] = useState(true);
+    // Pan tool == "not drawing"; every other tool puts the canvas in drawing mode.
+    const isDrawingMode = canvasStore.activeTool !== "pan";
     const [showExportDialog, setShowExportDialog] = useState(false);
     const [showImportDialog, setShowImportDialog] = useState(false);
     const [openPanels, setOpenPanels] = useState<Set<string>>(new Set());
@@ -487,10 +488,6 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
       }
     };
 
-    const handleToggleDrawingMode = () => {
-      setIsDrawingMode(!isDrawingMode);
-    };
-
     const handleShowExportDialog = () => {
       setShowExportDialog(true);
     };
@@ -520,10 +517,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             anchorIconIndex={0}
             onClose={() => togglePanel("tool-settings")}
           >
-            <ToolSettingsPanel
-              isDrawingMode={isDrawingMode}
-              onForceDrawingMode={() => setIsDrawingMode(true)}
-            />
+            <ToolSettingsPanel />
           </FloatingPanel>
         )}
 
@@ -723,10 +717,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         </div>
 
         {/* Floating dock */}
-        <FloatingDock
-          isDrawingMode={isDrawingMode}
-          onToggleDrawingMode={handleToggleDrawingMode}
-        />
+        <FloatingDock />
 
         {/* Export Dialog */}
         <ExportDialog
