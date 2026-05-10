@@ -138,10 +138,11 @@ export interface EngineConfig {
   getLayers?: () => LayerLike[];
   // Which layer is currently active (for visual indication)
   getActiveLayerId?: () => string;
-  // Which layer is selected for transformation
+  // Single-selection accessors (used for transform handles).
   getSelectedLayerId?: () => string | null;
-  // Which element is selected within the selected layer (for shape elements in a draw layer).
   getSelectedElementId?: () => string | null;
+  // Multi-selection accessor — every selected element. Used for outline rendering.
+  getSelectedElements?: () => Array<{ layerId: string; elementId: string | null }>;
   // Optional: provide per-brush rendering options (size, smoothing, taper, etc.)
   getBrushOptions?: (
     brush: BrushStyle,
