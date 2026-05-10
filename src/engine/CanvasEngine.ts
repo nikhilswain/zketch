@@ -58,9 +58,6 @@ export class CanvasEngine {
   private preview: StrokeLike | null = null;
   private previewShape: ShapeElementLike | null = null;
   private marquee: { x: number; y: number; width: number; height: number } | null = null;
-  // While the user is actively rotating a multi-selection, freeze the union bbox so the
-  // rotate handle stays under their finger instead of following the recomputed AABB.
-  private activeGroupTransform: TransformableLayer | null = null;
   private cursor: { visible: boolean; x?: number; y?: number; r?: number } = {
     visible: false,
   };
@@ -152,10 +149,6 @@ export class CanvasEngine {
   }
   setMarquee(rect: { x: number; y: number; width: number; height: number } | null) {
     this.marquee = rect;
-    this.invalidate();
-  }
-  setActiveGroupTransform(t: TransformableLayer | null) {
-    this.activeGroupTransform = t;
     this.invalidate();
   }
 
@@ -678,10 +671,14 @@ export class CanvasEngine {
   // Padding (in world units) for the selection rect / handles around an element.
   private selectionPaddingWorld(layer: any, element: any | null) {
     const gapWorld = CanvasEngine.SELECTION_GAP_PX / this.pz.zoom;
-    if (element && isShapeElement(element)) {
-      return (element.strokeWidth ?? 0) / 2 + gapWorld;
+    if (element) {
+      if (isShapeElement(element)) {
+        return (element.strokeWidth ?? 0) / 2 + gapWorld;
+      }
+      if ((element as any).points) {
+        return ((element as any).size ?? 0) / 2 + gapWorld;
+      }
     }
-    // Images have no stroke — just the gap.
     return gapWorld;
   }
 
@@ -690,6 +687,8 @@ export class CanvasEngine {
     if (refs.length === 0) return;
     // Multi-select: union handles already convey the selection — skip per-element outlines.
     if (refs.length > 1) return;
+    // When an anchor is rendering the bbox (single-stroke), no extra outline needed.
+    if (this.config.getSelectionAnchor?.()) return;
     const layers = this.config.getLayers?.() || [];
     ctx.save();
     ctx.strokeStyle = "#3b82f6";
@@ -704,9 +703,31 @@ export class CanvasEngine {
         bbox = layer as any;
       } else if (layer.type === "draw" && ref.elementId) {
         const el = (layer as any).elements.find((e: any) => e.id === ref.elementId);
-        if (el && isShapeElement(el)) {
-          bbox = el as any;
+        if (el) {
           element = el;
+          if (isShapeElement(el)) {
+            bbox = el as any;
+          } else if ((el as any).points && (el as any).points.length > 0) {
+            // Stroke: AABB of its points (no rotation).
+            const pts = (el as any).points;
+            let sxMin = Infinity,
+              syMin = Infinity,
+              sxMax = -Infinity,
+              syMax = -Infinity;
+            for (const p of pts) {
+              if (p.x < sxMin) sxMin = p.x;
+              if (p.y < syMin) syMin = p.y;
+              if (p.x > sxMax) sxMax = p.x;
+              if (p.y > syMax) syMax = p.y;
+            }
+            bbox = {
+              x: sxMin,
+              y: syMin,
+              width: sxMax - sxMin,
+              height: syMax - syMin,
+              rotation: 0,
+            };
+          }
         }
       }
       if (!bbox) continue;
@@ -761,78 +782,37 @@ export class CanvasEngine {
       const ref = refs[0];
       const layer = layers.find((l) => l.id === ref.layerId);
       if (!layer) return;
-      let transformable: TransformableLayer | null = null;
+
       let element: any = null;
+      if (layer.type === "draw" && ref.elementId) {
+        element = (layer as any).elements.find((e: any) => e.id === ref.elementId);
+      }
+      const pad = this.selectionPaddingWorld(layer, element);
+
+      // For strokes (no own rotation field), the persistent anchor carries the bbox + rotation.
+      const anchor = this.config.getSelectionAnchor?.();
+      if (anchor) {
+        transformController.renderHandles(ctx, anchor, this.pz, dpr, pad);
+        return;
+      }
+
+      // Single shape/image — render handles around the element directly.
+      let transformable: TransformableLayer | null = null;
       if (layer.type === "image") {
         transformable = layer as TransformableLayer;
-      } else if (layer.type === "draw" && ref.elementId) {
-        const el = (layer as any).elements.find((e: any) => e.id === ref.elementId);
-        if (el && isShapeElement(el)) {
-          transformable = el as TransformableLayer;
-          element = el;
-        }
+      } else if (element && isShapeElement(element)) {
+        transformable = element as TransformableLayer;
       }
       if (!transformable) return;
-      const pad = this.selectionPaddingWorld(layer, element);
       transformController.renderHandles(ctx, transformable, this.pz, dpr, pad);
       return;
     }
 
-    // Multi-select: synthesize a union bbox and render handles around it.
-    // If the caller is actively rotating, use the frozen override instead of recomputing.
-    let union: TransformableLayer | null = this.activeGroupTransform;
-    if (!union) {
-      let minX = Infinity,
-        minY = Infinity,
-        maxX = -Infinity,
-        maxY = -Infinity;
-      let any = false;
-      for (const ref of refs) {
-        const layer = layers.find((l) => l.id === ref.layerId);
-        if (!layer) continue;
-        let bbox: any = null;
-        if (layer.type === "image") {
-          bbox = layer;
-        } else if (layer.type === "draw" && ref.elementId) {
-          const el = (layer as any).elements.find((e: any) => e.id === ref.elementId);
-          if (el && isShapeElement(el)) bbox = el;
-        }
-        if (!bbox) continue;
-        any = true;
-        const rot = bbox.rotation ?? 0;
-        let bx = bbox.x;
-        let by = bbox.y;
-        let bw = bbox.width;
-        let bh = bbox.height;
-        if (rot) {
-          const cx = bx + bw / 2;
-          const cy = by + bh / 2;
-          const rad = (rot * Math.PI) / 180;
-          const absCos = Math.abs(Math.cos(rad));
-          const absSin = Math.abs(Math.sin(rad));
-          const rw = bw * absCos + bh * absSin;
-          const rh = bw * absSin + bh * absCos;
-          bx = cx - rw / 2;
-          by = cy - rh / 2;
-          bw = rw;
-          bh = rh;
-        }
-        if (bx < minX) minX = bx;
-        if (by < minY) minY = by;
-        if (bx + bw > maxX) maxX = bx + bw;
-        if (by + bh > maxY) maxY = by + bh;
-      }
-      if (!any) return;
-      union = {
-        x: minX,
-        y: minY,
-        width: maxX - minX,
-        height: maxY - minY,
-        rotation: 0,
-      };
-    }
+    // Multi-select: use the persistent rotated anchor stored on the model.
+    const anchor = this.config.getSelectionAnchor?.();
+    if (!anchor) return;
     const pad = CanvasEngine.SELECTION_GAP_PX / this.pz.zoom;
-    transformController.renderHandles(ctx, union, this.pz, dpr, pad);
+    transformController.renderHandles(ctx, anchor, this.pz, dpr, pad);
   }
 
   // Get or create an offscreen canvas for a layer

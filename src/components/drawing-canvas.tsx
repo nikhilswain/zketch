@@ -3,7 +3,8 @@ import { useRef, useEffect, useState, useCallback } from "react";
 import { observer } from "mobx-react-lite";
 import { getSnapshot } from "mobx-state-tree";
 import { useCanvasStore, useSettingsStore } from "../hooks/useStores";
-import type { IPoint } from "@/models/CanvasModel";
+// Plain point shape for raw coordinate tuples — distinct from MST PointLike instance type.
+type PointLike = { x: number; y: number; pressure: number };
 import { CanvasEngine, transformController, InputManager } from "@/engine";
 import type {
   StrokeLike,
@@ -49,7 +50,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     const lastShiftUpTsRef = useRef<number>(0);
     const prevIsDrawingRef = useRef(false);
     const [isDrawing, setIsDrawing] = useState(false);
-    const [currentPoints, setCurrentPoints] = useState<IPoint[]>([]);
+    const [currentPoints, setCurrentPoints] = useState<PointLike[]>([]);
     const [spacePressed, setSpacePressed] = useState(false);
     const [mousePosition, setMousePosition] = useState<{
       x: number;
@@ -86,8 +87,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       lastY: number;
       hasMoved: boolean;
     } | null>(null);
-    // Per-element bbox snapshot taken at the start of a group resize/rotate.
-    const groupTransformRef = useRef<Array<{
+    // Per-element snapshot taken at the start of a group resize/rotate.
+    // Strokes carry their original point list + size so we can transform points freshly each frame.
+    type GroupSnap = {
       layerId: string;
       elementId: string | null;
       x: number;
@@ -95,7 +97,11 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       width: number;
       height: number;
       rotation: number;
-    }> | null>(null);
+      isStroke?: boolean;
+      points?: Array<{ x: number; y: number; pressure: number }>;
+      size?: number;
+    };
+    const groupTransformRef = useRef<GroupSnap[] | null>(null);
     // InputManager is mounted once; route live values via refs so its closures stay current.
     const isDrawingModeRef = useRef(isDrawingMode);
     useEffect(() => {
@@ -157,6 +163,16 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             layerId: s.layerId,
             elementId: s.elementId,
           })),
+        getSelectionAnchor: () =>
+          canvasStore.selectionAnchor
+            ? {
+                x: canvasStore.selectionAnchor.x,
+                y: canvasStore.selectionAnchor.y,
+                width: canvasStore.selectionAnchor.width,
+                height: canvasStore.selectionAnchor.height,
+                rotation: canvasStore.selectionAnchor.rotation,
+              }
+            : null,
         // Use a dynamic brush options builder bound to the latest settings
         getBrushOptions: (brush, size) =>
           createGetBrushOptions(canvasStore.brushSettings as any)(
@@ -212,7 +228,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
     // Coordinate conversion
     const screenToCanvas = useCallback(
-      (clientX: number, clientY: number): IPoint => {
+      (clientX: number, clientY: number): PointLike => {
         const root = rootRef.current;
         if (!root) return { x: 0, y: 0, pressure: 0.5 };
         const rect = root.getBoundingClientRect();
@@ -253,8 +269,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
           if (layer.type === "draw") {
             const elements = (layer as any).elements;
-            // Iterate top-down within the layer's elements; shapes render on top of strokes,
-            // so we hit-test shapes first (in reverse order so the topmost shape wins).
+            // Shapes render on top of strokes, so check shapes first (top-down).
             for (let j = elements.length - 1; j >= 0; j--) {
               const el = elements[j];
               if (!el || !("shapeType" in el)) continue;
@@ -267,23 +282,81 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                 return { layerId: layer.id, elementId: el.id };
               }
             }
+            // Then strokes (point-to-polyline distance, threshold = size/2 + 4px screen).
+            const tol = 4 / canvasStore.zoom;
+            for (let j = elements.length - 1; j >= 0; j--) {
+              const el = elements[j];
+              if (!el || "shapeType" in el) continue;
+              if (el.brushStyle === "eraser") continue;
+              if (!el.points || el.points.length === 0) continue;
+              // AABB pre-filter
+              const half = (el.size ?? 1) / 2 + tol;
+              let sxMin = Infinity,
+                syMin = Infinity,
+                sxMax = -Infinity,
+                syMax = -Infinity;
+              for (const p of el.points) {
+                if (p.x < sxMin) sxMin = p.x;
+                if (p.y < syMin) syMin = p.y;
+                if (p.x > sxMax) sxMax = p.x;
+                if (p.y > syMax) syMax = p.y;
+              }
+              if (
+                canvasX < sxMin - half ||
+                canvasX > sxMax + half ||
+                canvasY < syMin - half ||
+                canvasY > syMax + half
+              )
+                continue;
+
+              if (el.points.length === 1) {
+                const p = el.points[0];
+                const d = Math.hypot(canvasX - p.x, canvasY - p.y);
+                if (d <= half) return { layerId: layer.id, elementId: el.id };
+                continue;
+              }
+              let minDist = Infinity;
+              for (let k = 0; k < el.points.length - 1; k++) {
+                const p1 = el.points[k];
+                const p2 = el.points[k + 1];
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const lenSq = dx * dx + dy * dy;
+                let t = lenSq === 0 ? 0 : ((canvasX - p1.x) * dx + (canvasY - p1.y) * dy) / lenSq;
+                t = Math.max(0, Math.min(1, t));
+                const cxp = p1.x + t * dx;
+                const cyp = p1.y + t * dy;
+                const d = Math.hypot(canvasX - cxp, canvasY - cyp);
+                if (d < minDist) minDist = d;
+                if (minDist <= half) break;
+              }
+              if (minDist <= half) {
+                return { layerId: layer.id, elementId: el.id };
+              }
+            }
           }
         }
         return null;
       },
-      [canvasStore.visibleLayers],
+      [canvasStore.visibleLayers, canvasStore.zoom],
     );
 
     const hitTestTransformHandles = useCallback(
       (screenX: number, screenY: number): TransformHandleType | null => {
         const single = canvasStore.selectedTransformableLayer as any;
-        const union = canvasStore.selectionUnionBounds;
-        const target =
-          canvasStore.selectionCount === 1
+        const anchor = canvasStore.selectionAnchor;
+        // Priority: persistent anchor (multi OR single-stroke) → single shape/image.
+        const target: TransformableLayer | null = anchor
+          ? ({
+              x: anchor.x,
+              y: anchor.y,
+              width: anchor.width,
+              height: anchor.height,
+              rotation: anchor.rotation,
+            } as TransformableLayer)
+          : single
             ? single
-            : union
-              ? ({ ...union, rotation: 0 } as TransformableLayer)
-              : null;
+            : null;
         if (!target) return null;
 
         const root = rootRef.current;
@@ -299,20 +372,32 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         };
 
         const gapWorld = 8 / canvasStore.zoom;
-        const pad =
-          single && "shapeType" in single
-            ? (single.strokeWidth ?? 0) / 2 + gapWorld
-            : gapWorld;
+        let pad = gapWorld;
+        if (single && "shapeType" in single) {
+          pad = (single.strokeWidth ?? 0) / 2 + gapWorld;
+        } else if (canvasStore.selectionCount === 1 && !single) {
+          // Stroke single-select — match the engine's rendered padding (size/2 + gap).
+          const ref = canvasStore.selectedElements[0];
+          if (ref && ref.elementId) {
+            const layer = canvasStore.layers.find((l) => l.id === ref.layerId) as any;
+            if (layer && layer.type === "draw") {
+              const el = layer.findElement(ref.elementId);
+              if (el && !("shapeType" in el)) pad = (el.size ?? 0) / 2 + gapWorld;
+            }
+          }
+        }
 
-        return transformController.hitTest(
+        const handle = transformController.hitTest(
           { x: localX, y: localY },
           target,
           viewport,
           pad,
         );
+        return handle;
       },
       [
         canvasStore.selectedTransformableLayer,
+        canvasStore.selectionAnchor,
         canvasStore.selectionUnionBounds,
         canvasStore.selectionCount,
         canvasStore.zoom,
@@ -557,15 +642,21 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                   zoom: canvasStore.zoom,
                 };
                 const single = canvasStore.selectedTransformableLayer as any;
-                const target: TransformableLayer | null =
-                  canvasStore.selectionCount === 1
-                    ? single
-                    : canvasStore.selectionUnionBounds
-                      ? ({
-                          ...canvasStore.selectionUnionBounds,
-                          rotation: 0,
-                        } as TransformableLayer)
-                      : null;
+                const anchor = canvasStore.selectionAnchor;
+                const isSingleStroke =
+                  canvasStore.selectionCount === 1 && !single && !!anchor;
+                let target: TransformableLayer | null = null;
+                if (anchor) {
+                  target = {
+                    x: anchor.x,
+                    y: anchor.y,
+                    width: anchor.width,
+                    height: anchor.height,
+                    rotation: anchor.rotation,
+                  };
+                } else if (single) {
+                  target = single;
+                }
                 if (target) {
                   const startState = transformController.captureStartState(
                     { x: localX, y: localY },
@@ -575,41 +666,66 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                   setIsTransforming(true);
                   setTransformHandle(handle);
                   setTransformStart(startState);
-                  if (canvasStore.selectionCount > 1) {
-                    const snap: Array<{
-                      layerId: string;
-                      elementId: string | null;
-                      x: number;
-                      y: number;
-                      width: number;
-                      height: number;
-                      rotation: number;
-                    }> = [];
+                  if (canvasStore.selectionCount > 1 || isSingleStroke) {
+                    const snap: GroupSnap[] = [];
                     for (const ref of canvasStore.selectedElements) {
                       const layer = canvasStore.layers.find(
                         (l) => l.id === ref.layerId,
                       ) as any;
                       if (!layer) continue;
-                      let bbox: any = null;
-                      if (layer.type === "image") bbox = layer;
-                      else if (layer.type === "draw" && ref.elementId) {
-                        bbox = layer.findElement(ref.elementId);
+                      if (layer.type === "image") {
+                        snap.push({
+                          layerId: ref.layerId,
+                          elementId: null,
+                          x: layer.x,
+                          y: layer.y,
+                          width: layer.width,
+                          height: layer.height,
+                          rotation: layer.rotation ?? 0,
+                        });
+                        continue;
                       }
-                      if (!bbox || (layer.type === "draw" && !("shapeType" in bbox))) continue;
-                      snap.push({
-                        layerId: ref.layerId,
-                        elementId: ref.elementId,
-                        x: bbox.x,
-                        y: bbox.y,
-                        width: bbox.width,
-                        height: bbox.height,
-                        rotation: bbox.rotation ?? 0,
-                      });
+                      if (layer.type === "draw" && ref.elementId) {
+                        const el = layer.findElement(ref.elementId);
+                        if (!el) continue;
+                        if ("shapeType" in el) {
+                          snap.push({
+                            layerId: ref.layerId,
+                            elementId: ref.elementId,
+                            x: el.x,
+                            y: el.y,
+                            width: el.width,
+                            height: el.height,
+                            rotation: el.rotation ?? 0,
+                          });
+                        } else if (el.points && el.points.length > 0) {
+                          // Compute stroke bbox + capture points.
+                          let xMin = Infinity, yMin = Infinity, xMax = -Infinity, yMax = -Infinity;
+                          const pts: Array<{x:number;y:number;pressure:number}> = [];
+                          for (const p of el.points) {
+                            pts.push({ x: p.x, y: p.y, pressure: p.pressure });
+                            if (p.x < xMin) xMin = p.x;
+                            if (p.y < yMin) yMin = p.y;
+                            if (p.x > xMax) xMax = p.x;
+                            if (p.y > yMax) yMax = p.y;
+                          }
+                          const half = (el.size ?? 1) / 2;
+                          snap.push({
+                            layerId: ref.layerId,
+                            elementId: ref.elementId,
+                            x: xMin - half,
+                            y: yMin - half,
+                            width: xMax - xMin + half * 2,
+                            height: yMax - yMin + half * 2,
+                            rotation: 0,
+                            isStroke: true,
+                            points: pts,
+                            size: el.size,
+                          });
+                        }
+                      }
                     }
                     groupTransformRef.current = snap;
-                    if (handle === "rotate") {
-                      engineRef.current?.setActiveGroupTransform({ ...target });
-                    }
                   }
                   return;
                 }
@@ -1168,22 +1284,27 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           return;
         }
 
-        // Group transform — scale or rotate every snapshotted element relative to the union.
+        // Group transform — operate on selectionAnchor + each snapshotted element.
         const starts = groupTransformRef.current!;
+        const anchorRotationStart = transformStart.layerRotation;
+        const anchorCenterStart = {
+          x: transformStart.layerCenterX,
+          y: transformStart.layerCenterY,
+        };
+
         if (transformHandle === "rotate") {
           const r = transformController.applyRotation(
             { x: localX, y: localY },
             transformStart,
             viewport,
           );
-          let deltaDeg = r.rotation - transformStart.layerRotation;
-          // Normalize to (-180, 180] so signs are intuitive.
+          let deltaDeg = r.rotation - anchorRotationStart;
           deltaDeg = ((deltaDeg % 360) + 540) % 360 - 180;
-          const cx = transformStart.layerCenterX;
-          const cy = transformStart.layerCenterY;
           const rad = (deltaDeg * Math.PI) / 180;
           const cos = Math.cos(rad);
           const sin = Math.sin(rad);
+          const cx = anchorCenterStart.x;
+          const cy = anchorCenterStart.y;
           for (const s of starts) {
             const layer = canvasStore.layers.find((l) => l.id === s.layerId) as any;
             if (!layer) continue;
@@ -1194,26 +1315,30 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                   ? layer
                   : null;
             if (!target) continue;
-            const ecx = s.x + s.width / 2;
-            const ecy = s.y + s.height / 2;
-            const rx = (ecx - cx) * cos - (ecy - cy) * sin + cx;
-            const ry = (ecx - cx) * sin + (ecy - cy) * cos + cy;
-            target.setPosition(rx - s.width / 2, ry - s.height / 2);
-            target.setRotation(((s.rotation + deltaDeg) % 360 + 360) % 360);
+            if (s.isStroke && s.points) {
+              // Rotate each point around the anchor center.
+              for (let i = 0; i < s.points.length && i < target.points.length; i++) {
+                const sp = s.points[i];
+                const rx = (sp.x - cx) * cos - (sp.y - cy) * sin + cx;
+                const ry = (sp.x - cx) * sin + (sp.y - cy) * cos + cy;
+                target.points[i].set(rx, ry);
+              }
+            } else {
+              const ecx = s.x + s.width / 2;
+              const ecy = s.y + s.height / 2;
+              const rx = (ecx - cx) * cos - (ecy - cy) * sin + cx;
+              const ry = (ecx - cx) * sin + (ecy - cy) * cos + cy;
+              target.setPosition(rx - s.width / 2, ry - s.height / 2);
+              target.setRotation(((s.rotation + deltaDeg) % 360 + 360) % 360);
+            }
           }
-          // Keep the rotate handle under the user's finger by rotating the frozen union.
-          engineRef.current?.setActiveGroupTransform({
-            x: transformStart.layerX,
-            y: transformStart.layerY,
-            width: transformStart.layerWidth,
-            height: transformStart.layerHeight,
-            rotation: ((deltaDeg % 360) + 360) % 360,
-          });
+          canvasStore.setSelectionAnchorRotation(anchorRotationStart + deltaDeg);
           return;
         }
 
         if (["nw", "ne", "se", "sw"].includes(transformHandle)) {
-          const maintainAspect = !e.shiftKey;
+          // Force aspect-preserve only on rotated anchors; otherwise shift breaks aspect.
+          const maintainAspect = anchorRotationStart !== 0 || !e.shiftKey;
           const r = transformController.applyResize(
             transformHandle as "nw" | "ne" | "se" | "sw",
             { x: localX, y: localY },
@@ -1225,23 +1350,25 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           const oldH = transformStart.layerHeight;
           const sx = oldW > 0 ? r.width / oldW : 1;
           const sy = oldH > 0 ? r.height / oldH : 1;
-          // Anchor = opposite corner of the dragged handle (stays put through the resize).
-          const anchor = (() => {
-            const sX = transformStart.layerX;
-            const sY = transformStart.layerY;
-            switch (transformHandle) {
-              case "nw":
-                return { x: sX + oldW, y: sY + oldH };
-              case "ne":
-                return { x: sX, y: sY + oldH };
-              case "se":
-                return { x: sX, y: sY };
-              case "sw":
-                return { x: sX + oldW, y: sY };
-              default:
-                return { x: sX, y: sY };
-            }
-          })();
+          const uniformScale = (sx + sy) / 2;
+          const newCenter = {
+            x: r.x + r.width / 2,
+            y: r.y + r.height / 2,
+          };
+          const oldCenter = anchorCenterStart;
+          const rad = (anchorRotationStart * Math.PI) / 180;
+          const cos = Math.cos(rad);
+          const sin = Math.sin(rad);
+          const unCos = Math.cos(-rad);
+          const unSin = Math.sin(-rad);
+          const localScale = (lx: number, ly: number) => {
+            const sxScaled = lx * sx;
+            const syScaled = ly * sy;
+            return {
+              wx: sxScaled * cos - syScaled * sin + newCenter.x,
+              wy: sxScaled * sin + syScaled * cos + newCenter.y,
+            };
+          };
           for (const s of starts) {
             const layer = canvasStore.layers.find((l) => l.id === s.layerId) as any;
             if (!layer) continue;
@@ -1252,13 +1379,36 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                   ? layer
                   : null;
             if (!target) continue;
-            const newX = anchor.x + (s.x - anchor.x) * sx;
-            const newY = anchor.y + (s.y - anchor.y) * sy;
-            const newW = Math.max(1, s.width * sx);
-            const newH = Math.max(1, s.height * sy);
-            target.setPosition(newX, newY);
-            target.setSize(newW, newH, false);
+            if (s.isStroke && s.points) {
+              for (let i = 0; i < s.points.length && i < target.points.length; i++) {
+                const sp = s.points[i];
+                const lx = (sp.x - oldCenter.x) * unCos - (sp.y - oldCenter.y) * unSin;
+                const ly = (sp.x - oldCenter.x) * unSin + (sp.y - oldCenter.y) * unCos;
+                const { wx, wy } = localScale(lx, ly);
+                target.points[i].set(wx, wy);
+              }
+              // Only scale thickness on uniform resize. Non-uniform (shift) keeps thickness
+              // constant and lets the path distort — matches Excalidraw.
+              if (
+                target.setSize &&
+                typeof s.size === "number" &&
+                Math.abs(sx - sy) < 0.001
+              ) {
+                target.setSize(Math.max(1, s.size * uniformScale));
+              }
+            } else {
+              const ecx = s.x + s.width / 2;
+              const ecy = s.y + s.height / 2;
+              const lx = (ecx - oldCenter.x) * unCos - (ecy - oldCenter.y) * unSin;
+              const ly = (ecx - oldCenter.x) * unSin + (ecy - oldCenter.y) * unCos;
+              const { wx, wy } = localScale(lx, ly);
+              const newW = Math.max(1, s.width * sx);
+              const newH = Math.max(1, s.height * sy);
+              target.setPosition(wx - newW / 2, wy - newH / 2);
+              target.setSize(newW, newH, false);
+            }
           }
+          canvasStore.setSelectionAnchorBounds(r.x, r.y, r.width, r.height);
         }
       },
       [isTransforming, transformHandle, transformStart, canvasStore],
@@ -1271,7 +1421,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         setTransformHandle(null);
         setTransformStart(null);
         groupTransformRef.current = null;
-        engineRef.current?.setActiveGroupTransform(null);
         canvasStore.saveCurrentStateToHistory();
       },
       [isTransforming, canvasStore],

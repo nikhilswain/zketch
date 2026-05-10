@@ -143,6 +143,14 @@ export interface EngineConfig {
   getSelectedElementId?: () => string | null;
   // Multi-selection accessor — every selected element. Used for outline rendering.
   getSelectedElements?: () => Array<{ layerId: string; elementId: string | null }>;
+  // Persistent rotated bbox around the multi-selection. Null when fewer than 2 elements selected.
+  getSelectionAnchor?: () => {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    rotation: number;
+  } | null;
   // Optional: provide per-brush rendering options (size, smoothing, taper, etc.)
   getBrushOptions?: (
     brush: BrushStyle,
