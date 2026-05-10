@@ -9,9 +9,7 @@ const commonColors = ["#000000", "#FF0000", "#00FF00", "#0000FF", "#FFFF00"];
 const ColorPanel: React.FC = observer(() => {
   const canvasStore = useCanvasStore();
 
-  const selected = canvasStore.selectedLayer;
-  const editingShape =
-    selected && selected.type === "shape" ? (selected as any) : null;
+  const editingShape = canvasStore.selectedShapeElement as any;
 
   const handleColorChange = (color: ZColorResult<["hex"]>) => {
     canvasStore.setColor(color.hex);

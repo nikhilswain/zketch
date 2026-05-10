@@ -140,6 +140,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               }
 
               if (layer.type === "shape") {
+                // Legacy single-shape layer — loader migrates into a draw layer.
                 return {
                   ...baseLayerData,
                   shapeType: layer.shapeType,
@@ -155,7 +156,15 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
                 };
               }
 
-              // Stroke layer (default)
+              if (layer.type === "draw") {
+                // New unified draw layer — pass elements through verbatim.
+                return {
+                  ...baseLayerData,
+                  elements: layer.elements ?? [],
+                };
+              }
+
+              // Legacy stroke layer (default)
               return {
                 ...baseLayerData,
                 strokes: (layer.strokes || []).map((stroke: any) => ({
@@ -209,34 +218,66 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             opacity: layer.opacity,
           };
 
-          if (layer.type === "stroke") {
-            const strokeLayer = layer as any;
-            const strokesData = strokeLayer.strokes.map((stroke: any) => ({
-              id: stroke.id,
-              points: stroke.points.map((p: any) => ({
-                x: p.x,
-                y: p.y,
-                pressure: p.pressure,
-              })),
-              color: stroke.color,
-              size: stroke.size,
-              opacity: stroke.opacity ?? 1,
-              brushStyle: stroke.brushStyle,
-              timestamp: stroke.timestamp,
-              startTime: stroke.startTime ?? null,
-              duration: stroke.duration ?? null,
-              thinning: stroke.thinning,
-              smoothing: stroke.smoothing,
-              streamline: stroke.streamline,
-              taperStart: stroke.taperStart,
-              taperEnd: stroke.taperEnd,
-            }));
+          if (layer.type === "draw") {
+            const drawLayer = layer as any;
+            const elementsData = drawLayer.elements.map((el: any) => {
+              if ("shapeType" in el) {
+                return {
+                  id: el.id,
+                  shapeType: el.shapeType,
+                  x: el.x,
+                  y: el.y,
+                  width: el.width,
+                  height: el.height,
+                  rotation: el.rotation,
+                  strokeColor: el.strokeColor,
+                  strokeWidth: el.strokeWidth,
+                  cornerRadius: el.cornerRadius,
+                  fillColor: el.fillColor ?? null,
+                  opacity: el.opacity,
+                };
+              }
+              return {
+                id: el.id,
+                points: el.points.map((p: any) => ({
+                  x: p.x,
+                  y: p.y,
+                  pressure: p.pressure,
+                })),
+                color: el.color,
+                size: el.size,
+                opacity: el.opacity ?? 1,
+                brushStyle: el.brushStyle,
+                timestamp: el.timestamp,
+                startTime: el.startTime ?? null,
+                duration: el.duration ?? null,
+                thinning: el.thinning,
+                smoothing: el.smoothing,
+                streamline: el.streamline,
+                taperStart: el.taperStart,
+                taperEnd: el.taperEnd,
+              };
+            });
 
-            const optimizedStrokes = optimizeStrokes(strokesData);
+            // Run optimization on stroke elements only.
+            const strokeElements = elementsData.filter(
+              (e: any) => !("shapeType" in e),
+            );
+            const shapeElements = elementsData.filter(
+              (e: any) => "shapeType" in e,
+            );
+            const optimizedStrokes = optimizeStrokes(strokeElements as any);
+            // Preserve original element ordering: rebuild by matching ids.
+            const optimizedById = new Map<string, any>(
+              optimizedStrokes.map((s: any) => [s.id, s]),
+            );
+            const finalElements = elementsData.map((e: any) =>
+              "shapeType" in e ? e : (optimizedById.get(e.id) ?? e),
+            );
 
             return {
               ...baseLayerData,
-              strokes: optimizedStrokes,
+              elements: finalElements,
             };
           } else if (layer.type === "image") {
             const imageLayer = layer as any;
@@ -251,21 +292,6 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               height: imageLayer.height,
               rotation: imageLayer.rotation,
               aspectLocked: imageLayer.aspectLocked,
-            };
-          } else if (layer.type === "shape") {
-            const shapeLayer = layer as any;
-            return {
-              ...baseLayerData,
-              shapeType: shapeLayer.shapeType,
-              x: shapeLayer.x,
-              y: shapeLayer.y,
-              width: shapeLayer.width,
-              height: shapeLayer.height,
-              rotation: shapeLayer.rotation,
-              strokeColor: shapeLayer.strokeColor,
-              strokeWidth: shapeLayer.strokeWidth,
-              cornerRadius: shapeLayer.cornerRadius,
-              fillColor: shapeLayer.fillColor ?? null,
             };
           }
           return baseLayerData;

@@ -7,9 +7,7 @@ import { Label } from "@/components/ui/label";
 const ShapeSettingsPanel: React.FC = observer(() => {
   const canvasStore = useCanvasStore();
 
-  const selected = canvasStore.selectedLayer;
-  const editingShape =
-    selected && selected.type === "shape" ? (selected as any) : null;
+  const editingShape = canvasStore.selectedShapeElement as any;
   const shapeToolActive = canvasStore.activeTool === "shape";
 
   if (!editingShape && !shapeToolActive) {
@@ -65,7 +63,7 @@ const ShapeSettingsPanel: React.FC = observer(() => {
     <div className="space-y-3">
       {editingShape && (
         <div className="text-xs text-gray-500">
-          Editing: <span className="font-medium">{editingShape.name}</span>
+          Editing: <span className="font-medium">{editingShape.shapeType}</span>
         </div>
       )}
 

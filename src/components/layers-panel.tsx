@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { observer } from "mobx-react-lite";
 import { useCanvasStore } from "@/hooks/useStores";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,6 @@ import {
   Trash2,
   ChevronUp,
   ChevronDown,
-  ChevronRight,
   Copy,
   MoreHorizontal,
   Layers,
@@ -39,9 +38,9 @@ import LayerAnimationControls from "@/components/layer-animation-controls";
 import type { StrokeLike } from "@/engine";
 import type { PlaybackState } from "@/engine/AnimationPlaybackEngine";
 
-// Generate a small thumbnail preview of a layer's strokes (simplified for performance)
-function generateLayerThumbnail(
-  layerSnapshot: { strokes: readonly any[] },
+// Generate a small thumbnail preview of a draw layer (strokes + shapes).
+function generateDrawLayerThumbnail(
+  layerSnapshot: { elements: readonly any[] },
   width: number = 48,
   height: number = 36,
 ): string {
@@ -51,69 +50,64 @@ function generateLayerThumbnail(
   const ctx = canvas.getContext("2d");
   if (!ctx) return "";
 
-  // Light background
   ctx.fillStyle = "#f5f5f5";
   ctx.fillRect(0, 0, width, height);
 
-  const strokes = layerSnapshot.strokes;
-  if (!strokes || strokes.length === 0) {
-    return canvas.toDataURL();
-  }
+  const elements = layerSnapshot.elements;
+  if (!elements || elements.length === 0) return canvas.toDataURL();
 
-  // Calculate bounds - limit to first 50 strokes for performance
-  const maxStrokesToCheck = Math.min(strokes.length, 50);
+  // Compute bounds across all elements (sample-capped for perf).
   let minX = Infinity,
     minY = Infinity,
     maxX = -Infinity,
     maxY = -Infinity;
-
-  for (let i = 0; i < maxStrokesToCheck; i++) {
-    const stroke = strokes[i];
-    for (const p of stroke.points) {
-      if (p.x < minX) minX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y > maxY) maxY = p.y;
+  const cap = Math.min(elements.length, 50);
+  for (let i = 0; i < cap; i++) {
+    const el = elements[i];
+    if (el.shapeType) {
+      minX = Math.min(minX, el.x);
+      minY = Math.min(minY, el.y);
+      maxX = Math.max(maxX, el.x + el.width);
+      maxY = Math.max(maxY, el.y + el.height);
+    } else if (el.points) {
+      for (const p of el.points) {
+        if (p.x < minX) minX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y > maxY) maxY = p.y;
+      }
     }
   }
-
   if (!isFinite(minX)) return canvas.toDataURL();
 
-  // Add padding and calculate scale
   const padding = 4;
-  const contentWidth = maxX - minX || 1;
-  const contentHeight = maxY - minY || 1;
+  const cw = maxX - minX || 1;
+  const ch = maxY - minY || 1;
   const scale = Math.min(
-    (width - padding * 2) / contentWidth,
-    (height - padding * 2) / contentHeight,
+    (width - padding * 2) / cw,
+    (height - padding * 2) / ch,
   );
-  const offsetX =
-    padding + (width - padding * 2 - contentWidth * scale) / 2 - minX * scale;
-  const offsetY =
-    padding + (height - padding * 2 - contentHeight * scale) / 2 - minY * scale;
+  const ox = padding + (width - padding * 2 - cw * scale) / 2 - minX * scale;
+  const oy = padding + (height - padding * 2 - ch * scale) / 2 - minY * scale;
 
   ctx.save();
-  ctx.translate(offsetX, offsetY);
+  ctx.translate(ox, oy);
   ctx.scale(scale, scale);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
-  // Draw strokes as simple lines (skip getStroke for performance)
-  // Limit to first 30 strokes to avoid lag
-  const maxStrokesToDraw = Math.min(strokes.length, 30);
-  for (let i = 0; i < maxStrokesToDraw; i++) {
-    const stroke = strokes[i];
-    if (stroke.brushStyle === "eraser" || stroke.points.length < 2) continue;
-
+  // Strokes first (skip eraser).
+  const strokeMax = Math.min(elements.length, 30);
+  for (let i = 0; i < strokeMax; i++) {
+    const el = elements[i];
+    if (el.shapeType || !el.points || el.points.length < 2) continue;
+    if (el.brushStyle === "eraser") continue;
     ctx.beginPath();
-    ctx.strokeStyle = stroke.color;
-    ctx.lineWidth = Math.max(1, stroke.size * 0.5);
-    ctx.globalAlpha = stroke.opacity ?? 1;
-
-    const pts = stroke.points;
+    ctx.strokeStyle = el.color;
+    ctx.lineWidth = Math.max(1, el.size * 0.5);
+    ctx.globalAlpha = el.opacity ?? 1;
+    const pts = el.points;
     ctx.moveTo(pts[0].x, pts[0].y);
-
-    // Sample points for very long strokes
     const step = pts.length > 100 ? Math.floor(pts.length / 50) : 1;
     for (let j = step; j < pts.length; j += step) {
       ctx.lineTo(pts[j].x, pts[j].y);
@@ -121,69 +115,45 @@ function generateLayerThumbnail(
     ctx.stroke();
   }
 
-  ctx.restore();
-  return canvas.toDataURL();
-}
-
-function generateShapeThumbnail(
-  snapshot: any,
-  width: number = 48,
-  height: number = 36,
-): string {
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return "";
-
-  ctx.fillStyle = "#f5f5f5";
-  ctx.fillRect(0, 0, width, height);
-
-  const padding = 6;
-  const w = width - padding * 2;
-  const h = height - padding * 2;
-  const x = padding;
-  const y = padding;
-
-  ctx.strokeStyle = snapshot.strokeColor ?? "#000000";
-  ctx.lineWidth = 1.5;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  ctx.beginPath();
-
-  switch (snapshot.shapeType) {
-    case "circle":
-      ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
-      break;
-    case "rectangle": {
-      const r = 4;
-      ctx.moveTo(x + r, y);
-      ctx.lineTo(x + w - r, y);
-      ctx.arcTo(x + w, y, x + w, y + r, r);
-      ctx.lineTo(x + w, y + h - r);
-      ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
-      ctx.lineTo(x + r, y + h);
-      ctx.arcTo(x, y + h, x, y + h - r, r);
-      ctx.lineTo(x, y + r);
-      ctx.arcTo(x, y, x + r, y, r);
+  // Shapes on top (outline only — keep tiny thumbnails legible).
+  ctx.globalAlpha = 1;
+  for (const el of elements) {
+    if (!el.shapeType) continue;
+    ctx.strokeStyle = el.strokeColor ?? "#000";
+    ctx.lineWidth = Math.max(0.5, (el.strokeWidth ?? 2) * 0.4);
+    ctx.beginPath();
+    if (el.shapeType === "rectangle") {
+      ctx.rect(el.x, el.y, el.width, el.height);
+    } else if (el.shapeType === "circle") {
+      ctx.ellipse(
+        el.x + el.width / 2,
+        el.y + el.height / 2,
+        el.width / 2,
+        el.height / 2,
+        0,
+        0,
+        Math.PI * 2,
+      );
+    } else if (el.shapeType === "diamond") {
+      ctx.moveTo(el.x + el.width / 2, el.y);
+      ctx.lineTo(el.x + el.width, el.y + el.height / 2);
+      ctx.lineTo(el.x + el.width / 2, el.y + el.height);
+      ctx.lineTo(el.x, el.y + el.height / 2);
       ctx.closePath();
-      break;
+    } else if (el.shapeType === "triangle") {
+      ctx.moveTo(el.x + el.width / 2, el.y);
+      ctx.lineTo(el.x + el.width, el.y + el.height);
+      ctx.lineTo(el.x, el.y + el.height);
+      ctx.closePath();
     }
-    case "diamond":
-      ctx.moveTo(x + w / 2, y);
-      ctx.lineTo(x + w, y + h / 2);
-      ctx.lineTo(x + w / 2, y + h);
-      ctx.lineTo(x, y + h / 2);
-      ctx.closePath();
-      break;
-    case "triangle":
-      ctx.moveTo(x + w / 2, y);
-      ctx.lineTo(x + w, y + h);
-      ctx.lineTo(x, y + h);
-      ctx.closePath();
-      break;
+    if (el.fillColor) {
+      ctx.fillStyle = el.fillColor;
+      ctx.fill();
+    }
+    ctx.stroke();
   }
-  ctx.stroke();
+
+  ctx.restore();
   return canvas.toDataURL();
 }
 
@@ -244,13 +214,19 @@ const LayerItem: React.FC<LayerItemProps> = observer(
     // Update layerId ref when layer changes
     layerIdRef.current = layer.id;
 
-    // Generate thumbnail when layer strokes change (debounced)
-    // Use snapshot to avoid MST detachment issues during reordering
-    const strokeCount =
-      layer.type === "stroke" ? (layer as any).strokes.length : 0;
+    // Generate thumbnail when layer elements change (debounced).
+    // Signature includes a count + a small mix of shape geometry to invalidate on tweaks.
+    const elementCount =
+      layer.type === "draw" ? (layer as any).elements.length : 0;
     const shapeSig =
-      layer.type === "shape"
-        ? `${(layer as any).shapeType}:${(layer as any).strokeColor}:${(layer as any).strokeWidth}:${(layer as any).cornerRadius}:${(layer as any).rotation}:${(layer as any).width}:${(layer as any).height}`
+      layer.type === "draw"
+        ? (layer as any).elements
+            .filter((e: any) => "shapeType" in e)
+            .map(
+              (e: any) =>
+                `${e.shapeType}:${e.x}:${e.y}:${e.width}:${e.height}:${e.rotation}:${e.strokeColor}:${e.fillColor ?? ""}`,
+            )
+            .join("|")
         : "";
     const layerId = layer.id;
 
@@ -266,7 +242,6 @@ const LayerItem: React.FC<LayerItemProps> = observer(
           // Use snapshot to avoid accessing detached MST nodes
           const snapshot = getSnapshot(layer) as any;
 
-          // Handle image layers - get thumbnail from blob
           if (snapshot.type === "image" && snapshot.blobId) {
             const blobUrl = await BlobStorageService.getBlobUrl(
               snapshot.blobId,
@@ -277,26 +252,13 @@ const LayerItem: React.FC<LayerItemProps> = observer(
             return;
           }
 
-          if (snapshot.type === "shape") {
-            const thumb = generateShapeThumbnail(snapshot);
-            if (layerIdRef.current === layerId) {
-              setThumbnail(thumb);
-            }
+          if (snapshot.type !== "draw" || !snapshot.elements) {
+            if (layerIdRef.current === layerId) setThumbnail("");
             return;
           }
 
-          // Only generate thumbnails for stroke layers
-          if (!snapshot.strokes) {
-            if (layerIdRef.current === layerId) {
-              setThumbnail("");
-            }
-            return;
-          }
-          const thumb = generateLayerThumbnail(snapshot);
-          // Only update if this is still the same layer
-          if (layerIdRef.current === layerId) {
-            setThumbnail(thumb);
-          }
+          const thumb = generateDrawLayerThumbnail(snapshot);
+          if (layerIdRef.current === layerId) setThumbnail(thumb);
         } catch (e) {
           // Layer may have been detached during reorder, ignore
           console.warn("Thumbnail generation skipped:", e);
@@ -308,7 +270,7 @@ const LayerItem: React.FC<LayerItemProps> = observer(
           clearTimeout(thumbnailTimeoutRef.current);
         }
       };
-    }, [layerId, strokeCount, shapeSig]);
+    }, [layerId, elementCount, shapeSig]);
 
     const handleNameSubmit = () => {
       if (editName.trim()) {
@@ -342,8 +304,6 @@ const LayerItem: React.FC<LayerItemProps> = observer(
               />
             ) : layer.type === "image" ? (
               <ImageIcon className="w-5 h-5 text-muted-foreground" />
-            ) : layer.type === "shape" ? (
-              <ShapesIcon className="w-5 h-5 text-muted-foreground" />
             ) : null}
           </div>
 
@@ -378,11 +338,22 @@ const LayerItem: React.FC<LayerItemProps> = observer(
                   {layer.name}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {layer.type === "stroke"
-                    ? `${(layer as any).strokes?.length || 0} strokes`
-                    : layer.type === "image"
-                      ? "Image"
-                      : `Shape — ${(layer as any).shapeType}`}
+                  {layer.type === "image"
+                    ? "Image"
+                    : (() => {
+                        const els = (layer as any).elements ?? [];
+                        const strokes = els.filter(
+                          (e: any) => !("shapeType" in e),
+                        ).length;
+                        const shapes = els.length - strokes;
+                        if (strokes === 0 && shapes === 0) return "Empty";
+                        const parts: string[] = [];
+                        if (strokes > 0)
+                          parts.push(`${strokes} stroke${strokes === 1 ? "" : "s"}`);
+                        if (shapes > 0)
+                          parts.push(`${shapes} shape${shapes === 1 ? "" : "s"}`);
+                        return parts.join(" · ");
+                      })()}
                 </span>
               </div>
             )}
@@ -477,7 +448,7 @@ const LayerItem: React.FC<LayerItemProps> = observer(
                 <DropdownMenuItem onClick={() => setShowOpacity(!showOpacity)}>
                   Opacity
                 </DropdownMenuItem>
-                {layer.type === "stroke" && (
+                {layer.type === "draw" && (layer as any).strokeCount > 0 && (
                   <DropdownMenuItem
                     onClick={() => setShowAnimation(!showAnimation)}
                   >
@@ -488,14 +459,14 @@ const LayerItem: React.FC<LayerItemProps> = observer(
                 <DropdownMenuItem
                   onClick={onClear}
                   disabled={
-                    layer.type !== "stroke" ||
-                    (layer as any).strokes?.length === 0 ||
+                    layer.type !== "draw" ||
+                    ((layer as any).strokeCount ?? 0) === 0 ||
                     layer.locked
                   }
                   className="text-orange-600 focus:text-orange-600"
                 >
                   <Eraser className="h-3.5 w-3.5 mr-2" />
-                  Clear Layer
+                  Clear Strokes
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={onDelete}
@@ -532,8 +503,8 @@ const LayerItem: React.FC<LayerItemProps> = observer(
           </div>
         )}
 
-        {/* Animation Controls (expandable, only for stroke layers) */}
-        {showAnimation && layer.type === "stroke" && (
+        {/* Animation Controls (expandable, only for draw layers with strokes) */}
+        {showAnimation && layer.type === "draw" && (
           <LayerAnimationControls
             layer={layer as IStrokeLayer}
             onPlaybackFrame={onAnimationFrame}
@@ -544,67 +515,6 @@ const LayerItem: React.FC<LayerItemProps> = observer(
     );
   },
 );
-
-interface ShapeGroupRowProps {
-  count: number;
-  expanded: boolean;
-  containsActive: boolean;
-  onToggle: () => void;
-  children?: React.ReactNode;
-}
-
-const ShapeGroupRow: React.FC<ShapeGroupRowProps> = ({
-  count,
-  expanded,
-  containsActive,
-  onToggle,
-  children,
-}) => {
-  return (
-    <div
-      className={`border-b border-border ${
-        containsActive && !expanded ? "bg-primary/5" : ""
-      }`}
-    >
-      <div
-        className="flex items-center gap-2 p-2 cursor-pointer hover:bg-muted/50"
-        onClick={onToggle}
-      >
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 flex-shrink-0"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggle();
-          }}
-          title={expanded ? "Collapse shapes" : "Expand shapes"}
-        >
-          {expanded ? (
-            <ChevronDown className="h-3.5 w-3.5" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5" />
-          )}
-        </Button>
-        <div className="w-12 h-9 rounded border border-border bg-muted/30 flex items-center justify-center flex-shrink-0">
-          <ShapesIcon className="w-5 h-5 text-muted-foreground" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <span className="text-sm font-medium">Shapes</span>
-          <div className="text-xs text-muted-foreground">
-            {count} shape{count === 1 ? "" : "s"}
-            {containsActive && !expanded && (
-              <span className="ml-1 text-primary">• selected inside</span>
-            )}
-          </div>
-        </div>
-      </div>
-      {expanded && (
-        <div className="border-l-2 border-l-primary/30 ml-2">{children}</div>
-      )}
-    </div>
-  );
-};
 
 interface LayersPanelProps {
   className?: string;
@@ -639,62 +549,6 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
 
     // Reverse the layers for display (top layer first in UI)
     const displayLayers = [...canvasStore.layers].reverse();
-
-    // Coalesce runs of consecutive shape layers into collapsible groups.
-    type DisplayItem =
-      | { kind: "single"; layer: ILayer }
-      | { kind: "group"; layers: ILayer[]; key: string };
-
-    const items: DisplayItem[] = useMemo(() => {
-      const out: DisplayItem[] = [];
-      let i = 0;
-      while (i < displayLayers.length) {
-        if (displayLayers[i].type === "shape") {
-          let j = i;
-          while (j < displayLayers.length && displayLayers[j].type === "shape") j++;
-          const run = displayLayers.slice(i, j);
-          if (run.length === 1) {
-            out.push({ kind: "single", layer: run[0] });
-          } else {
-            out.push({ kind: "group", layers: run, key: run[0].id });
-          }
-          i = j;
-        } else {
-          out.push({ kind: "single", layer: displayLayers[i] });
-          i++;
-        }
-      }
-      return out;
-      // displayLayers identity changes whenever layers mutate, so it's a fine dep.
-    }, [displayLayers]);
-
-    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-
-    // Auto-expand a group when it contains the active or selected layer.
-    useEffect(() => {
-      const target = canvasStore.selectedLayerId ?? canvasStore.activeLayerId;
-      if (!target) return;
-      for (const item of items) {
-        if (item.kind === "group" && item.layers.some((l) => l.id === target)) {
-          setExpandedGroups((prev) => {
-            if (prev.has(item.key)) return prev;
-            const next = new Set(prev);
-            next.add(item.key);
-            return next;
-          });
-          return;
-        }
-      }
-    }, [canvasStore.selectedLayerId, canvasStore.activeLayerId, items]);
-
-    const toggleGroup = useCallback((key: string) => {
-      setExpandedGroups((prev) => {
-        const next = new Set(prev);
-        if (next.has(key)) next.delete(key);
-        else next.add(key);
-        return next;
-      });
-    }, []);
 
     const renderLayerItem = (layer: ILayer) => {
       const actualIndex = canvasStore.layers.findIndex((l) => l.id === layer.id);
@@ -806,26 +660,7 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
 
         {/* Layers List */}
         <div className="flex-1 overflow-y-auto max-h-72">
-          {items.map((item) => {
-            if (item.kind === "single") {
-              return renderLayerItem(item.layer);
-            }
-            const expanded = expandedGroups.has(item.key);
-            const containsActive = item.layers.some(
-              (l) => l.id === canvasStore.activeLayerId,
-            );
-            return (
-              <ShapeGroupRow
-                key={item.key}
-                count={item.layers.length}
-                expanded={expanded}
-                containsActive={containsActive}
-                onToggle={() => toggleGroup(item.key)}
-              >
-                {expanded && item.layers.map(renderLayerItem)}
-              </ShapeGroupRow>
-            );
-          })}
+          {displayLayers.map(renderLayerItem)}
         </div>
 
         {/* Footer */}

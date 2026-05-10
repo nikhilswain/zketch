@@ -30,14 +30,18 @@ export interface IExportShapeLayer {
   visible: boolean;
 }
 
+// An element-data shape for export (mirrors what canvasModel.exportLayers produces).
+export type IExportElement =
+  | (IStroke & { shapeType?: undefined })
+  | IExportShapeLayer;
+
 // Generic layer for export (maintains z-order)
 export interface IExportLayer {
-  type: "stroke" | "image" | "shape";
+  type: "draw" | "image";
   visible: boolean;
   opacity: number;
-  strokes?: IStroke[];
+  elements?: IExportElement[];
   imageData?: IExportImageLayer;
-  shapeData?: IExportShapeLayer;
 }
 
 export class ExportService {
@@ -265,14 +269,24 @@ export class ExportService {
     for (const layer of layers) {
       if (!layer.visible) continue;
 
-      if (layer.type === "stroke" && layer.strokes) {
-        for (const stroke of layer.strokes) {
-          for (const point of stroke.points) {
-            minX = Math.min(minX, point.x);
-            minY = Math.min(minY, point.y);
-            maxX = Math.max(maxX, point.x);
-            maxY = Math.max(maxY, point.y);
+      if (layer.type === "draw" && layer.elements) {
+        for (const el of layer.elements) {
+          if ((el as any).shapeType) {
+            const s = el as IExportShapeLayer;
+            minX = Math.min(minX, s.x);
+            minY = Math.min(minY, s.y);
+            maxX = Math.max(maxX, s.x + s.width);
+            maxY = Math.max(maxY, s.y + s.height);
             hasContent = true;
+          } else {
+            const stroke = el as IStroke;
+            for (const point of stroke.points) {
+              minX = Math.min(minX, point.x);
+              minY = Math.min(minY, point.y);
+              maxX = Math.max(maxX, point.x);
+              maxY = Math.max(maxY, point.y);
+              hasContent = true;
+            }
           }
         }
       } else if (layer.type === "image" && layer.imageData) {
@@ -281,13 +295,6 @@ export class ExportService {
         minY = Math.min(minY, img.y);
         maxX = Math.max(maxX, img.x + img.width);
         maxY = Math.max(maxY, img.y + img.height);
-        hasContent = true;
-      } else if (layer.type === "shape" && layer.shapeData) {
-        const s = layer.shapeData;
-        minX = Math.min(minX, s.x);
-        minY = Math.min(minY, s.y);
-        maxX = Math.max(maxX, s.x + s.width);
-        maxY = Math.max(maxY, s.y + s.height);
         hasContent = true;
       }
     }
@@ -342,36 +349,44 @@ export class ExportService {
       const prevAlpha = ctx.globalAlpha;
       ctx.globalAlpha = layer.opacity * prevAlpha;
 
-      if (layer.type === "stroke" && layer.strokes) {
-        // Render stroke layer - erasers need offscreen canvas
-        const strokeCanvas = document.createElement("canvas");
-        // Use a large canvas to accommodate original coordinates
-        const canvasSize =
-          Math.max(
-            bounds?.maxX || width,
-            bounds?.maxY || height,
-            width,
-            height,
-          ) + 100;
-        strokeCanvas.width = canvasSize;
-        strokeCanvas.height = canvasSize;
-        const strokeCtx = strokeCanvas.getContext("2d");
+      if (layer.type === "draw" && layer.elements) {
+        // Strokes bake into an offscreen so eraser destination-out works as a layer-local op.
+        const strokeOnly = layer.elements.filter(
+          (e) => !(e as any).shapeType,
+        ) as IStroke[];
 
-        if (strokeCtx) {
-          this.renderStrokesToCanvas(
-            strokeCtx,
-            layer.strokes,
-            canvasSize,
-            canvasSize,
-          );
-          // Draw at origin - the main ctx transform handles positioning
-          ctx.drawImage(strokeCanvas, 0, 0);
+        if (strokeOnly.length > 0) {
+          const strokeCanvas = document.createElement("canvas");
+          const canvasSize =
+            Math.max(
+              bounds?.maxX || width,
+              bounds?.maxY || height,
+              width,
+              height,
+            ) + 100;
+          strokeCanvas.width = canvasSize;
+          strokeCanvas.height = canvasSize;
+          const strokeCtx = strokeCanvas.getContext("2d");
+
+          if (strokeCtx) {
+            this.renderStrokesToCanvas(
+              strokeCtx,
+              strokeOnly,
+              canvasSize,
+              canvasSize,
+            );
+            ctx.drawImage(strokeCanvas, 0, 0);
+          }
+        }
+
+        // Shapes render as vectors on top, in element order.
+        for (const el of layer.elements) {
+          if ((el as any).shapeType) {
+            this.renderShape(ctx, el as IExportShapeLayer);
+          }
         }
       } else if (layer.type === "image" && layer.imageData) {
-        // Render image layer at its position
         await this.renderImageLayer(ctx, layer.imageData);
-      } else if (layer.type === "shape" && layer.shapeData) {
-        this.renderShape(ctx, layer.shapeData);
       }
 
       ctx.globalAlpha = prevAlpha;

@@ -12,9 +12,10 @@ import type {
   LayerLike,
   Brush,
   ImageLayerLike,
-  ShapeLayerLike,
+  ShapeElementLike,
   TransformableLayer,
 } from "./types";
+import { isShapeElement } from "./types";
 
 class BrushRegistry {
   private brushes = new Map<string, Brush>();
@@ -55,7 +56,7 @@ export class CanvasEngine {
   private invalid = true;
   private background: EngineConfig["background"];
   private preview: StrokeLike | null = null;
-  private previewShape: ShapeLayerLike | null = null;
+  private previewShape: ShapeElementLike | null = null;
   private cursor: { visible: boolean; x?: number; y?: number; r?: number } = {
     visible: false,
   };
@@ -137,7 +138,7 @@ export class CanvasEngine {
     this.preview = s;
     this.invalidate();
   }
-  setPreviewShape(s: ShapeLayerLike | null) {
+  setPreviewShape(s: ShapeElementLike | null) {
     this.previewShape = s;
     this.invalidate();
   }
@@ -322,20 +323,29 @@ export class CanvasEngine {
   }
 
   private renderLayer(ctx: CanvasRenderingContext2D, layer: LayerLike) {
-    if (layer.type === "stroke") {
-      for (const stroke of layer.strokes) {
-        this.renderStroke(ctx, stroke, 1);
-      }
-    } else if (layer.type === "image") {
+    if (layer.type === "image") {
       this.renderImageLayer(ctx, layer as ImageLayerLike);
-    } else if (layer.type === "shape") {
-      this.renderShapeLayer(ctx, layer as ShapeLayerLike);
+      return;
+    }
+    if (layer.type === "draw") {
+      // Two-pass within a draw layer: bake strokes first (raster, with destination-out
+      // for eraser strokes), then render shape elements as vectors on top.
+      for (const el of layer.elements) {
+        if (!isShapeElement(el)) {
+          this.renderStroke(ctx, el as StrokeLike, 1);
+        }
+      }
+      for (const el of layer.elements) {
+        if (isShapeElement(el)) {
+          this.renderShapeLayer(ctx, el as ShapeElementLike);
+        }
+      }
     }
   }
 
   private renderShapeLayer(
     ctx: CanvasRenderingContext2D,
-    layer: ShapeLayerLike,
+    layer: ShapeElementLike,
   ) {
     const {
       x,
@@ -346,9 +356,14 @@ export class CanvasEngine {
       strokeColor,
       strokeWidth,
       fillColor,
+      opacity,
     } = layer;
 
     ctx.save();
+    // Per-element opacity stacks on top of whatever the caller set.
+    if (opacity !== undefined && opacity !== 1) {
+      ctx.globalAlpha = ctx.globalAlpha * opacity;
+    }
     if (rotation !== 0) {
       const cx = x + width / 2;
       const cy = y + height / 2;
@@ -375,7 +390,7 @@ export class CanvasEngine {
     ctx.restore();
   }
 
-  private tracePath(ctx: CanvasRenderingContext2D, layer: ShapeLayerLike) {
+  private tracePath(ctx: CanvasRenderingContext2D, layer: ShapeElementLike) {
     const { shapeType, x, y, width, height, cornerRadius } = layer;
     switch (shapeType) {
       case "rectangle":
@@ -598,10 +613,19 @@ export class CanvasEngine {
 
     const key = s.brushStyle === "eraser" ? "ink" : s.brushStyle;
     const brush = this.registry.get(key);
-    if (!brush) return;
+    if (!brush) {
+      if (isEraser) ctx.globalCompositeOperation = prevComposite;
+      return;
+    }
+
+    // Erasers must paint solidly to punch holes — short eraser strokes get fully consumed by
+    // the default ink taper, leaving no destination-out region. Override taper for erasers.
+    const strokeForRender = isEraser
+      ? { ...s, taperStart: 0, taperEnd: 0, opacity: 1 }
+      : s;
 
     const opts = this.config.getBrushOptions?.(key, s.size);
-    brush.render(ctx, s, opts);
+    brush.render(ctx, strokeForRender, opts);
 
     if (isEraser) {
       ctx.globalCompositeOperation = prevComposite;
@@ -640,15 +664,23 @@ export class CanvasEngine {
 
     const layers = this.config.getLayers?.() || [];
     const selectedLayer = layers.find((l) => l.id === selectedLayerId);
-    if (
-      !selectedLayer ||
-      (selectedLayer.type !== "image" && selectedLayer.type !== "shape")
-    )
-      return;
+    if (!selectedLayer) return;
 
-    const transformable = selectedLayer as TransformableLayer;
+    let transformable: TransformableLayer | null = null;
+    if (selectedLayer.type === "image") {
+      transformable = selectedLayer as TransformableLayer;
+    } else if (selectedLayer.type === "draw") {
+      const elementId = this.config.getSelectedElementId?.();
+      if (elementId) {
+        const el = (selectedLayer as any).elements.find(
+          (e: any) => e.id === elementId,
+        );
+        if (el && isShapeElement(el)) transformable = el as TransformableLayer;
+      }
+    }
+    if (!transformable) return;
+
     const dpr = window.devicePixelRatio || 1;
-
     transformController.renderHandles(ctx, transformable, this.pz, dpr);
   }
 

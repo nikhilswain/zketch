@@ -8,7 +8,7 @@ import { CanvasEngine, transformController, InputManager } from "@/engine";
 import type {
   StrokeLike,
   TransformHandleType,
-  ShapeLayerLike,
+  ShapeElementLike,
   TransformableLayer,
 } from "@/engine";
 import type { TransformStartState } from "@/engine/TransformController";
@@ -90,22 +90,18 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         // Provide layers for multi-layer rendering - use snapshots to avoid MST detachment issues
         getLayers: () => {
           try {
-            // Use visibleLayers which respects focus mode
             return canvasStore.visibleLayers.map((layer) => {
               const snapshot = getSnapshot(layer) as any;
-              const layerType = snapshot.type || "stroke";
-
-              // Base layer properties
               const baseLayer = {
                 id: snapshot.id,
                 name: snapshot.name,
-                type: layerType,
+                type: snapshot.type,
                 visible: snapshot.visible,
                 locked: snapshot.locked,
                 opacity: snapshot.opacity,
               };
 
-              if (layerType === "image") {
+              if (snapshot.type === "image") {
                 return {
                   ...baseLayer,
                   blobId: snapshot.blobId,
@@ -120,37 +116,20 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                 };
               }
 
-              if (layerType === "shape") {
-                return {
-                  ...baseLayer,
-                  shapeType: snapshot.shapeType,
-                  x: snapshot.x,
-                  y: snapshot.y,
-                  width: snapshot.width,
-                  height: snapshot.height,
-                  rotation: snapshot.rotation,
-                  strokeColor: snapshot.strokeColor,
-                  strokeWidth: snapshot.strokeWidth,
-                  cornerRadius: snapshot.cornerRadius,
-                  fillColor: snapshot.fillColor ?? null,
-                };
-              }
-
-              // Stroke layer (default)
+              // Draw layer (default)
               return {
                 ...baseLayer,
-                strokes: snapshot.strokes || [],
+                elements: snapshot.elements || [],
               };
             }) as any;
           } catch (e) {
-            // During layer reordering, nodes may be detached
             console.warn("getLayers: layer access error", e);
             return [];
           }
         },
         getActiveLayerId: () => canvasStore.activeLayerId,
-        // Provide selected layer ID for transform handles
         getSelectedLayerId: () => canvasStore.selectedLayerId,
+        getSelectedElementId: () => canvasStore.selectedElementId,
         // Use a dynamic brush options builder bound to the latest settings
         getBrushOptions: (brush, size) =>
           createGetBrushOptions(canvasStore.brushSettings as any)(
@@ -220,26 +199,47 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       [canvasStore.panX, canvasStore.panY, canvasStore.zoom],
     );
 
-    // Hit test image/shape layers - returns the topmost transformable layer at canvas coords
+    // Hit test selectable things — returns the topmost image layer OR shape element under the point.
+    // For image hits: { layerId }. For shape hits: { layerId, elementId }.
     const hitTestSelectableLayers = useCallback(
-      (canvasX: number, canvasY: number): string | null => {
+      (
+        canvasX: number,
+        canvasY: number,
+      ): { layerId: string; elementId: string | null } | null => {
         const layers = canvasStore.visibleLayers;
         for (let i = layers.length - 1; i >= 0; i--) {
           const layer = layers[i];
-          if (
-            (layer.type !== "image" && layer.type !== "shape") ||
-            layer.locked
-          )
-            continue;
+          if (layer.locked) continue;
 
-          const t = layer as any;
-          if (
-            canvasX >= t.x &&
-            canvasX <= t.x + t.width &&
-            canvasY >= t.y &&
-            canvasY <= t.y + t.height
-          ) {
-            return layer.id;
+          if (layer.type === "image") {
+            const t = layer as any;
+            if (
+              canvasX >= t.x &&
+              canvasX <= t.x + t.width &&
+              canvasY >= t.y &&
+              canvasY <= t.y + t.height
+            ) {
+              return { layerId: layer.id, elementId: null };
+            }
+            continue;
+          }
+
+          if (layer.type === "draw") {
+            const elements = (layer as any).elements;
+            // Iterate top-down within the layer's elements; shapes render on top of strokes,
+            // so we hit-test shapes first (in reverse order so the topmost shape wins).
+            for (let j = elements.length - 1; j >= 0; j--) {
+              const el = elements[j];
+              if (!el || !("shapeType" in el)) continue;
+              if (
+                canvasX >= el.x &&
+                canvasX <= el.x + el.width &&
+                canvasY >= el.y &&
+                canvasY <= el.y + el.height
+              ) {
+                return { layerId: layer.id, elementId: el.id };
+              }
+            }
           }
         }
         return null;
@@ -526,9 +526,13 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               }
             }
 
-            const hitLayerId = hitTestSelectableLayers(canvasPoint.x, canvasPoint.y);
-            if (hitLayerId) {
-              canvasStore.selectLayer(hitLayerId);
+            const hit = hitTestSelectableLayers(canvasPoint.x, canvasPoint.y);
+            if (hit) {
+              if (hit.elementId) {
+                canvasStore.selectElement(hit.layerId, hit.elementId);
+              } else {
+                canvasStore.selectLayer(hit.layerId);
+              }
             } else if (canvasStore.isTransformMode) {
               canvasStore.deselectLayer();
             }
@@ -575,12 +579,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             const w = Math.max(1, Math.abs(curX - start.startX));
             const h = Math.max(1, Math.abs(curY - start.startY));
 
-            const previewShape: ShapeLayerLike = {
+            const previewShape: ShapeElementLike = {
               id: "preview",
-              name: "preview",
-              type: "shape",
-              visible: true,
-              locked: false,
               opacity: canvasStore.shapeOpacity,
               shapeType: canvasStore.currentShapeType as any,
               x,
@@ -595,6 +595,27 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             };
             engineRef.current?.setPreviewShape(previewShape);
             return;
+          }
+
+          // While erasing, also delete shapes the eraser passes over (active layer only).
+          if (canvasStore.currentBrushStyle === "eraser") {
+            const eraserR = canvasStore.eraserSize / 2;
+            const activeLayer = canvasStore.activeLayer as any;
+            if (activeLayer && activeLayer.type === "draw" && !activeLayer.locked) {
+              const elements = activeLayer.elements;
+              for (let j = elements.length - 1; j >= 0; j--) {
+                const el = elements[j];
+                if (!el || !("shapeType" in el)) continue;
+                // AABB-vs-circle: nearest point on box clamped to eraser center.
+                const nx = Math.max(el.x, Math.min(canvasPoint.x, el.x + el.width));
+                const ny = Math.max(el.y, Math.min(canvasPoint.y, el.y + el.height));
+                const ddx = canvasPoint.x - nx;
+                const ddy = canvasPoint.y - ny;
+                if (ddx * ddx + ddy * ddy <= eraserR * eraserR) {
+                  canvasStore.removeElement(activeLayer.id, el.id);
+                }
+              }
+            }
           }
 
           // Min-distance filter
@@ -625,15 +646,17 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               const y = Math.min(ref.startY, ref.curY);
               const w = Math.abs(dx);
               const h = Math.abs(dy);
-              const newId = canvasStore.addShapeLayer(
+              const created = canvasStore.addShape(
                 canvasStore.currentShapeType as any,
                 x,
                 y,
                 w,
                 h,
               );
-              if (newId) {
-                canvasStore.selectLayer(newId);
+              if (created) {
+                // Hand off to the Select tool so the user can immediately transform the new shape.
+                canvasStore.setActiveTool("select");
+                canvasStore.selectElement(created.layerId, created.elementId);
               }
             }
             return;
@@ -989,7 +1012,12 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       }
 
       if (canvasStore.activeTool === "select") return "cursor-default";
-      if (canvasStore.currentBrushStyle === "eraser") return "cursor-none"; // Hide cursor for eraser
+      // Eraser cursor is only hidden while the brush tool is actually using the eraser.
+      if (
+        canvasStore.activeTool === "brush" &&
+        canvasStore.currentBrushStyle === "eraser"
+      )
+        return "cursor-none";
       return "cursor-crosshair";
     };
 
