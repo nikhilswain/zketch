@@ -173,6 +173,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                 rotation: canvasStore.selectionAnchor.rotation,
               }
             : null,
+        getPendingEraserDeletes: () => canvasStore.pendingEraserDeletes,
         // Use a dynamic brush options builder bound to the latest settings
         getBrushOptions: (brush, size) =>
           createGetBrushOptions(canvasStore.brushSettings as any)(
@@ -415,7 +416,11 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       if (previewRafRef.current) cancelAnimationFrame(previewRafRef.current);
       previewRafRef.current = requestAnimationFrame(() => {
         if (!engineRef.current) return;
-        if (currentPoints.length > 1) {
+        // In whole-stroke eraser mode, the fade preview is the feedback — no destination-out path.
+        const suppressPreview =
+          canvasStore.currentBrushStyle === "eraser" &&
+          settingsStore.eraserWholeStroke;
+        if (currentPoints.length > 1 && !suppressPreview) {
           const temp: StrokeLike = {
             id: "temp",
             points: currentPoints.map((p) => ({
@@ -431,7 +436,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             opacity: canvasStore.brushSettings.opacity ?? 1,
             brushStyle: canvasStore.currentBrushStyle as any,
             timestamp: Date.now(),
-            // Include brush settings for accurate preview rendering
             thinning: canvasStore.brushSettings.thinning,
             smoothing: canvasStore.brushSettings.smoothing,
             streamline: canvasStore.brushSettings.streamline,
@@ -453,6 +457,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       canvasStore.currentSize,
       canvasStore.eraserSize,
       canvasStore.brushSettings.opacity,
+      settingsStore.eraserWholeStroke,
     ]);
 
     useEffect(() => {
@@ -878,24 +883,75 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             return;
           }
 
-          // While erasing, also delete shapes the eraser passes over (active layer only).
+          // Eraser: mark elements the cursor circle passes over as pending. Sticky — once
+          // marked they stay faded until release (commits the delete) or cancel.
           if (canvasStore.currentBrushStyle === "eraser") {
             const eraserR = canvasStore.eraserSize / 2;
+            const eraserRSq = eraserR * eraserR;
+            const wholeStroke = settingsStore.eraserWholeStroke;
             const activeLayer = canvasStore.activeLayer as any;
             if (activeLayer && activeLayer.type === "draw" && !activeLayer.locked) {
-              const elements = activeLayer.elements;
-              for (let j = elements.length - 1; j >= 0; j--) {
-                const el = elements[j];
-                if (!el || !("shapeType" in el)) continue;
-                // AABB-vs-circle: nearest point on box clamped to eraser center.
-                const nx = Math.max(el.x, Math.min(canvasPoint.x, el.x + el.width));
-                const ny = Math.max(el.y, Math.min(canvasPoint.y, el.y + el.height));
-                const ddx = canvasPoint.x - nx;
-                const ddy = canvasPoint.y - ny;
-                if (ddx * ddx + ddy * ddy <= eraserR * eraserR) {
-                  canvasStore.removeElement(activeLayer.id, el.id);
+              for (const el of activeLayer.elements) {
+                if (!el) continue;
+                if (canvasStore.pendingEraserDeletes.has(el.id)) continue;
+                if ("shapeType" in el) {
+                  const nx = Math.max(el.x, Math.min(canvasPoint.x, el.x + el.width));
+                  const ny = Math.max(el.y, Math.min(canvasPoint.y, el.y + el.height));
+                  const ddx = canvasPoint.x - nx;
+                  const ddy = canvasPoint.y - ny;
+                  if (ddx * ddx + ddy * ddy <= eraserRSq) {
+                    canvasStore.markPendingErase(el.id);
+                  }
+                } else if (wholeStroke && el.points && el.points.length > 0) {
+                  // Stroke: distance from eraser center to nearest segment ≤ R + size/2.
+                  const tol = (el.size ?? 1) / 2 + eraserR;
+                  const tolSq = tol * tol;
+                  // AABB pre-filter.
+                  let xMin = Infinity, yMin = Infinity, xMax = -Infinity, yMax = -Infinity;
+                  for (const p of el.points) {
+                    if (p.x < xMin) xMin = p.x;
+                    if (p.y < yMin) yMin = p.y;
+                    if (p.x > xMax) xMax = p.x;
+                    if (p.y > yMax) yMax = p.y;
+                  }
+                  if (
+                    canvasPoint.x < xMin - tol ||
+                    canvasPoint.x > xMax + tol ||
+                    canvasPoint.y < yMin - tol ||
+                    canvasPoint.y > yMax + tol
+                  )
+                    continue;
+                  let hit = false;
+                  if (el.points.length === 1) {
+                    const p = el.points[0];
+                    const dx = canvasPoint.x - p.x;
+                    const dy = canvasPoint.y - p.y;
+                    hit = dx * dx + dy * dy <= tolSq;
+                  } else {
+                    for (let k = 0; k < el.points.length - 1; k++) {
+                      const p1 = el.points[k];
+                      const p2 = el.points[k + 1];
+                      const dx = p2.x - p1.x;
+                      const dy = p2.y - p1.y;
+                      const lenSq = dx * dx + dy * dy;
+                      let t = lenSq === 0
+                        ? 0
+                        : ((canvasPoint.x - p1.x) * dx + (canvasPoint.y - p1.y) * dy) / lenSq;
+                      t = Math.max(0, Math.min(1, t));
+                      const cxp = p1.x + t * dx;
+                      const cyp = p1.y + t * dy;
+                      const ddx = canvasPoint.x - cxp;
+                      const ddy = canvasPoint.y - cyp;
+                      if (ddx * ddx + ddy * ddy <= tolSq) {
+                        hit = true;
+                        break;
+                      }
+                    }
+                  }
+                  if (hit) canvasStore.markPendingErase(el.id);
                 }
               }
+              engineRef.current?.invalidate();
             }
           }
 
@@ -993,6 +1049,10 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             engineRef.current?.invalidate();
             return;
           }
+          // Eraser was hovering pending erases — discard them on cancel.
+          if (canvasStore.currentBrushStyle === "eraser") {
+            canvasStore.clearPendingErase();
+          }
           setIsDrawing(false);
           setCurrentPoints([]);
           if (previewRafRef.current) {
@@ -1058,45 +1118,55 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
     // Commit stroke when drawing ends
     useEffect(() => {
-      // Detect transition from drawing -> not drawing
-      if (prevIsDrawingRef.current && !isDrawing && currentPoints.length > 1) {
-        const endTime = Date.now();
-        const startTime = strokeStartTimeRef.current ?? endTime;
-        const duration = endTime - startTime;
-        strokeStartTimeRef.current = null;
+      if (prevIsDrawingRef.current && !isDrawing) {
+        const isObjectEraser =
+          canvasStore.currentBrushStyle === "eraser" &&
+          settingsStore.eraserWholeStroke;
 
-        const strokeData = {
-          id: crypto.randomUUID(),
-          points: currentPoints.map((point) => ({ ...point })),
-          color: canvasStore.currentColor,
-          size:
-            canvasStore.currentBrushStyle === "eraser"
-              ? canvasStore.eraserSize
-              : canvasStore.currentSize,
-          opacity: canvasStore.brushSettings.opacity ?? 1,
-          brushStyle: canvasStore.currentBrushStyle,
-          timestamp: endTime,
-          startTime,
-          duration,
-          thinning: canvasStore.brushSettings.thinning,
-          smoothing: canvasStore.brushSettings.smoothing,
-          streamline: canvasStore.brushSettings.streamline,
-          taperStart: canvasStore.brushSettings.taperStart,
-          taperEnd: canvasStore.brushSettings.taperEnd,
-        };
+        if (currentPoints.length > 1 && !isObjectEraser) {
+          const endTime = Date.now();
+          const startTime = strokeStartTimeRef.current ?? endTime;
+          const duration = endTime - startTime;
 
-        if (canvasStore.hasLayers) {
-          canvasStore.addStrokeToActiveLayer(strokeData);
-        } else {
-          canvasStore.addStroke(strokeData);
+          const strokeData = {
+            id: crypto.randomUUID(),
+            points: currentPoints.map((point) => ({ ...point })),
+            color: canvasStore.currentColor,
+            size:
+              canvasStore.currentBrushStyle === "eraser"
+                ? canvasStore.eraserSize
+                : canvasStore.currentSize,
+            opacity: canvasStore.brushSettings.opacity ?? 1,
+            brushStyle: canvasStore.currentBrushStyle,
+            timestamp: endTime,
+            startTime,
+            duration,
+            thinning: canvasStore.brushSettings.thinning,
+            smoothing: canvasStore.brushSettings.smoothing,
+            streamline: canvasStore.brushSettings.streamline,
+            taperStart: canvasStore.brushSettings.taperStart,
+            taperEnd: canvasStore.brushSettings.taperEnd,
+          };
+
+          if (canvasStore.hasLayers) {
+            canvasStore.addStrokeToActiveLayer(strokeData);
+          } else {
+            canvasStore.addStroke(strokeData);
+          }
         }
 
+        // Always flush pending eraser deletes after a release with the eraser active.
+        if (canvasStore.currentBrushStyle === "eraser") {
+          canvasStore.commitPendingErase();
+        }
+
+        strokeStartTimeRef.current = null;
         setCurrentPoints([]);
         engineRef.current?.setPreviewStroke(null);
         engineRef.current?.invalidate();
       }
       prevIsDrawingRef.current = isDrawing;
-    }, [isDrawing, currentPoints, canvasStore]);
+    }, [isDrawing, currentPoints, canvasStore, settingsStore]);
 
     // Handle clipboard paste for image import
     const handleImagePaste = useCallback(

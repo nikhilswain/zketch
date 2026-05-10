@@ -121,6 +121,8 @@ export const CanvasModel = types
     historyIndex: -1,
     maxHistorySize: 50,
     renderVersion: 0, // force re-renders
+    // Element IDs currently faded for "pending erase". Committed (deleted) on drag-end.
+    pendingEraserDeletes: new Set<string>(),
   }))
   .views((self) => ({
     get canUndo() {
@@ -1271,6 +1273,44 @@ export const CanvasModel = types
           activeLayer.type === "draw"
         ) {
           (activeLayer as any).clearStrokes();
+          self.saveToHistory();
+        }
+      },
+
+      // Mark an element for pending erase (renders faded). Idempotent.
+      markPendingErase(elementId: string) {
+        if (self.pendingEraserDeletes.has(elementId)) return;
+        const next = new Set(self.pendingEraserDeletes);
+        next.add(elementId);
+        self.pendingEraserDeletes = next;
+      },
+      clearPendingErase() {
+        if (self.pendingEraserDeletes.size === 0) return;
+        self.pendingEraserDeletes = new Set();
+      },
+      // Splice every pending element from its layer and clear the set. One history entry.
+      commitPendingErase() {
+        if (self.pendingEraserDeletes.size === 0) return;
+        const ids = self.pendingEraserDeletes;
+        let removed = false;
+        for (const layer of self.layers) {
+          if (layer.type !== "draw" || layer.locked) continue;
+          const draw = layer as any;
+          for (let i = draw.elements.length - 1; i >= 0; i--) {
+            const el = draw.elements[i];
+            if (ids.has(el.id)) {
+              draw.removeElement(el.id);
+              removed = true;
+            }
+          }
+        }
+        for (let i = self.selectedElements.length - 1; i >= 0; i--) {
+          const eid = self.selectedElements[i].elementId;
+          if (eid && ids.has(eid)) self.selectedElements.splice(i, 1);
+        }
+        self.pendingEraserDeletes = new Set();
+        if (removed) {
+          (self as any).recomputeSelectionAnchor();
           self.saveToHistory();
         }
       },
