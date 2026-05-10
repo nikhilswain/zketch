@@ -543,26 +543,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           if (canvasStore.activeTool === "select") {
             const shift = shiftDownRef.current;
 
-            // Shift+click on an element: toggle membership; never start a drag.
-            if (shift) {
-              const hit = hitTestSelectableLayers(canvasPoint.x, canvasPoint.y);
-              if (hit) {
-                canvasStore.toggleSelection(hit.layerId, hit.elementId);
-                return;
-              }
-              // Shift on empty → additive marquee.
-              marqueeRef.current = {
-                startX: canvasPoint.x,
-                startY: canvasPoint.y,
-                curX: canvasPoint.x,
-                curY: canvasPoint.y,
-                additive: true,
-              };
-              drawingStartedRef.current = true;
-              return;
-            }
-
-            // Resize / rotate / move handle on the current selection takes priority.
+            // Resize / rotate handles always take priority — Shift only affects what
+            // the corner drag does (aspect-break), not whether it starts.
             if (canvasStore.selectionCount >= 1) {
               const handle = hitTestTransformHandles(pt.x, pt.y);
               if (handle && handle !== "move") {
@@ -632,9 +614,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                   return;
                 }
               }
-              // Click anywhere inside the selection bbox → group-drag (covers the gap
-              // between elements when 2+ are selected).
-              if (handle === "move") {
+              // Click inside the selection bbox (no shift) → group-drag.
+              if (handle === "move" && !shift) {
                 groupDragRef.current = {
                   lastX: canvasPoint.x,
                   lastY: canvasPoint.y,
@@ -645,8 +626,25 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               }
             }
 
-            // Outside the selection bbox: try element hit-test.
             const hit = hitTestSelectableLayers(canvasPoint.x, canvasPoint.y);
+
+            // Shift + element click → toggle membership; never start a drag.
+            if (shift) {
+              if (hit) {
+                canvasStore.toggleSelection(hit.layerId, hit.elementId);
+                return;
+              }
+              marqueeRef.current = {
+                startX: canvasPoint.x,
+                startY: canvasPoint.y,
+                curX: canvasPoint.x,
+                curY: canvasPoint.y,
+                additive: true,
+              };
+              drawingStartedRef.current = true;
+              return;
+            }
+
             if (hit) {
               const alreadySelected = canvasStore.isSelected(
                 hit.layerId,
