@@ -24,12 +24,39 @@ export interface IStrokeData {
   taperEnd?: number;
 }
 
-// Stroke layer data interface for persistence
+// Legacy stroke-only layer (pre-refactor).
 export interface IStrokeLayerData {
   type: "stroke";
   id: string;
   name: string;
   strokes: IStrokeData[];
+  visible: boolean;
+  locked: boolean;
+  opacity: number;
+}
+
+// Shape element data inside a draw layer.
+export interface IShapeElementData {
+  id: string;
+  shapeType: "rectangle" | "circle" | "diamond" | "triangle";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  strokeColor: string;
+  strokeWidth: number;
+  cornerRadius: number;
+  fillColor: string | null;
+  opacity: number;
+}
+
+// New unified draw layer — holds an ordered mix of stroke and shape elements.
+export interface IDrawLayerData {
+  type: "draw";
+  id: string;
+  name: string;
+  elements: Array<IStrokeData | IShapeElementData>;
   visible: boolean;
   locked: boolean;
   opacity: number;
@@ -73,8 +100,9 @@ export interface IShapeLayerData {
   opacity: number;
 }
 
-// Union type for layer data
+// Union type for layer data — old saves use stroke/shape, new saves use draw.
 export type ILayerData =
+  | IDrawLayerData
   | IStrokeLayerData
   | IImageLayerData
   | IShapeLayerData;

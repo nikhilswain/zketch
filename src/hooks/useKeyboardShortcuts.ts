@@ -27,6 +27,15 @@ export const useKeyboardShortcuts = (
     });
 
     KeyBindingManager.registerHandler("deleteSelected", () => {
+      // If an element (shape) is selected, delete just that element.
+      if (canvasStore.selectedElementId && canvasStore.selectedLayerId) {
+        canvasStore.removeElement(
+          canvasStore.selectedLayerId,
+          canvasStore.selectedElementId,
+        );
+        return;
+      }
+      // Otherwise, fall back to deleting the whole layer (image layers, etc.).
       const selected = canvasStore.selectedLayer;
       if (!selected || selected.locked) return;
       const id = selected.id;
