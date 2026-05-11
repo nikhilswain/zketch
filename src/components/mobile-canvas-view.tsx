@@ -82,7 +82,14 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
                 };
               }
 
-              // Stroke layer (default)
+              if (layer.type === "draw") {
+                return {
+                  ...baseLayerData,
+                  elements: layer.elements ?? [],
+                };
+              }
+
+              // Legacy stroke layer (default)
               return {
                 ...baseLayerData,
                 strokes: (layer.strokes || []).map((stroke: any) => ({
@@ -151,38 +158,61 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
           opacity: layer.opacity,
         };
 
-        if (layer.type === "stroke") {
-          const strokeLayer = layer as any;
-          // Map strokes to plain objects first
-          const strokesData = strokeLayer.strokes.map((stroke: any) => ({
-            id: stroke.id,
-            points: stroke.points.map((p: any) => ({
-              x: p.x,
-              y: p.y,
-              pressure: p.pressure,
-            })),
-            color: stroke.color,
-            size: stroke.size,
-            opacity: stroke.opacity ?? 1,
-            brushStyle: stroke.brushStyle,
-            timestamp: stroke.timestamp,
-            // Animation timing
-            startTime: stroke.startTime ?? null,
-            duration: stroke.duration ?? null,
-            // Brush settings per-stroke
-            thinning: stroke.thinning,
-            smoothing: stroke.smoothing,
-            streamline: stroke.streamline,
-            taperStart: stroke.taperStart,
-            taperEnd: stroke.taperEnd,
-          }));
+        if (layer.type === "draw") {
+          const drawLayer = layer as any;
+          const elementsData = drawLayer.elements.map((el: any) => {
+            if ("shapeType" in el) {
+              return {
+                id: el.id,
+                shapeType: el.shapeType,
+                x: el.x,
+                y: el.y,
+                width: el.width,
+                height: el.height,
+                rotation: el.rotation,
+                strokeColor: el.strokeColor,
+                strokeWidth: el.strokeWidth,
+                cornerRadius: el.cornerRadius,
+                fillColor: el.fillColor ?? null,
+                opacity: el.opacity,
+              };
+            }
+            return {
+              id: el.id,
+              points: el.points.map((p: any) => ({
+                x: p.x,
+                y: p.y,
+                pressure: p.pressure,
+              })),
+              color: el.color,
+              size: el.size,
+              opacity: el.opacity ?? 1,
+              brushStyle: el.brushStyle,
+              timestamp: el.timestamp,
+              startTime: el.startTime ?? null,
+              duration: el.duration ?? null,
+              thinning: el.thinning,
+              smoothing: el.smoothing,
+              streamline: el.streamline,
+              taperStart: el.taperStart,
+              taperEnd: el.taperEnd,
+            };
+          });
 
-          // Optimize strokes using RDP algorithm
-          const optimizedStrokes = optimizeStrokes(strokesData);
+          const strokeOnly = elementsData.filter(
+            (e: any) => !("shapeType" in e),
+          );
+          const optimizedStrokes = optimizeStrokes(strokeOnly as any);
+          const optimizedById = new Map<string, any>(
+            optimizedStrokes.map((s: any) => [s.id, s]),
+          );
+          const finalElements = elementsData.map((e: any) =>
+            "shapeType" in e ? e : (optimizedById.get(e.id) ?? e),
+          );
 
           return {
             ...baseLayerData,
-            strokes: optimizedStrokes,
+            elements: finalElements,
           };
         } else if (layer.type === "image") {
           const imageLayer = layer as any;
@@ -231,9 +261,14 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
           layersToSave as any,
           canvasStore.activeLayerId,
         );
-        // Update currentDrawingId so subsequent saves update instead of creating new
         if (newDrawing) {
           setCurrentDrawingId(newDrawing.id);
+          if (
+            typeof window !== "undefined" &&
+            window.location.pathname === "/draw"
+          ) {
+            window.history.replaceState({}, "", `/draw/${newDrawing.id}`);
+          }
         }
       }
 

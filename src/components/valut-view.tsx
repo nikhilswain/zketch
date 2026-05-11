@@ -167,8 +167,14 @@ const VaultView: React.FC<VaultViewProps> = observer(
     };
 
     const getStrokeCount = (drawing: ISavedDrawing) => {
-      // Count strokes from all stroke layers
-      return drawing.layers.reduce((total, layer) => {
+      return drawing.layers.reduce((total, layer: any) => {
+        if (layer.type === "draw" && Array.isArray(layer.elements)) {
+          return (
+            total +
+            layer.elements.filter((e: any) => !("shapeType" in e)).length
+          );
+        }
+        // Legacy stroke layer
         if (layer.type === "stroke" && layer.strokes) {
           return total + layer.strokes.length;
         }
@@ -177,11 +183,14 @@ const VaultView: React.FC<VaultViewProps> = observer(
     };
 
     const getColorCount = (drawing: ISavedDrawing) => {
-      // Get unique colors from all stroke layers
       const colors = new Set<string>();
-      drawing.layers.forEach((layer) => {
-        if (layer.type === "stroke" && layer.strokes) {
-          layer.strokes.forEach((stroke) => colors.add(stroke.color));
+      drawing.layers.forEach((layer: any) => {
+        if (layer.type === "draw" && Array.isArray(layer.elements)) {
+          layer.elements.forEach((e: any) => {
+            if (!("shapeType" in e)) colors.add(e.color);
+          });
+        } else if (layer.type === "stroke" && layer.strokes) {
+          layer.strokes.forEach((stroke: any) => colors.add(stroke.color));
         }
       });
       return colors.size;

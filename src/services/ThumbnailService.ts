@@ -98,30 +98,31 @@ export class ThumbnailService {
           ctx.restore();
         }
       } else if (
-        layer.type === "stroke" &&
-        "strokes" in layer &&
-        layer.strokes
+        layer.type === "draw" &&
+        "elements" in layer &&
+        Array.isArray((layer as any).elements)
       ) {
-        // Render strokes for this layer
-        this.renderStrokes(
-          ctx,
-          layer.strokes as IStroke[],
-          minX,
-          minY,
-          scale,
-          offsetX,
-          offsetY,
-        );
-      } else if (layer.type === "shape") {
-        this.renderShape(
-          ctx,
-          layer as any,
-          minX,
-          minY,
-          scale,
-          offsetX,
-          offsetY,
-        );
+        const elements = (layer as any).elements;
+        // Strokes first (raster), then shapes on top (vector).
+        const strokeEls = elements.filter(
+          (e: any) => !("shapeType" in e),
+        ) as IStroke[];
+        if (strokeEls.length > 0) {
+          this.renderStrokes(
+            ctx,
+            strokeEls,
+            minX,
+            minY,
+            scale,
+            offsetX,
+            offsetY,
+          );
+        }
+        for (const el of elements) {
+          if ("shapeType" in el) {
+            this.renderShape(ctx, el as any, minX, minY, scale, offsetX, offsetY);
+          }
+        }
       }
 
       ctx.globalAlpha = prevAlpha;
@@ -239,30 +240,30 @@ export class ThumbnailService {
           hasContent = true;
         }
       } else if (
-        layer.type === "stroke" &&
-        "strokes" in layer &&
-        layer.strokes
+        layer.type === "draw" &&
+        "elements" in layer &&
+        Array.isArray((layer as any).elements)
       ) {
-        for (const stroke of layer.strokes) {
-          for (const point of stroke.points) {
-            minX = Math.min(minX, point.x);
-            minY = Math.min(minY, point.y);
-            maxX = Math.max(maxX, point.x);
-            maxY = Math.max(maxY, point.y);
-            hasContent = true;
+        for (const el of (layer as any).elements) {
+          if ("shapeType" in el) {
+            const sw = el.width ?? 0;
+            const sh = el.height ?? 0;
+            if (sw > 0 && sh > 0) {
+              minX = Math.min(minX, el.x ?? 0);
+              minY = Math.min(minY, el.y ?? 0);
+              maxX = Math.max(maxX, (el.x ?? 0) + sw);
+              maxY = Math.max(maxY, (el.y ?? 0) + sh);
+              hasContent = true;
+            }
+          } else if (el.points) {
+            for (const point of el.points) {
+              minX = Math.min(minX, point.x);
+              minY = Math.min(minY, point.y);
+              maxX = Math.max(maxX, point.x);
+              maxY = Math.max(maxY, point.y);
+              hasContent = true;
+            }
           }
-        }
-      } else if (layer.type === "shape") {
-        const sx = (layer as any).x ?? 0;
-        const sy = (layer as any).y ?? 0;
-        const sw = (layer as any).width ?? 0;
-        const sh = (layer as any).height ?? 0;
-        if (sw > 0 && sh > 0) {
-          minX = Math.min(minX, sx);
-          minY = Math.min(minY, sy);
-          maxX = Math.max(maxX, sx + sw);
-          maxY = Math.max(maxY, sy + sh);
-          hasContent = true;
         }
       }
     }

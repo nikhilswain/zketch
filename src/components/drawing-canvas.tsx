@@ -3,12 +3,13 @@ import { useRef, useEffect, useState, useCallback } from "react";
 import { observer } from "mobx-react-lite";
 import { getSnapshot } from "mobx-state-tree";
 import { useCanvasStore, useSettingsStore } from "../hooks/useStores";
-import type { IPoint } from "@/models/CanvasModel";
+// Plain point shape for raw coordinate tuples — distinct from MST PointLike instance type.
+type PointLike = { x: number; y: number; pressure: number };
 import { CanvasEngine, transformController, InputManager } from "@/engine";
 import type {
   StrokeLike,
   TransformHandleType,
-  ShapeLayerLike,
+  ShapeElementLike,
   TransformableLayer,
 } from "@/engine";
 import type { TransformStartState } from "@/engine/TransformController";
@@ -49,7 +50,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     const lastShiftUpTsRef = useRef<number>(0);
     const prevIsDrawingRef = useRef(false);
     const [isDrawing, setIsDrawing] = useState(false);
-    const [currentPoints, setCurrentPoints] = useState<IPoint[]>([]);
+    const [currentPoints, setCurrentPoints] = useState<PointLike[]>([]);
     const [spacePressed, setSpacePressed] = useState(false);
     const [mousePosition, setMousePosition] = useState<{
       x: number;
@@ -74,6 +75,33 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       curX: number;
       curY: number;
     } | null>(null);
+    const marqueeRef = useRef<{
+      startX: number;
+      startY: number;
+      curX: number;
+      curY: number;
+      additive: boolean;
+    } | null>(null);
+    const groupDragRef = useRef<{
+      lastX: number;
+      lastY: number;
+      hasMoved: boolean;
+    } | null>(null);
+    // Per-element snapshot taken at the start of a group resize/rotate.
+    // Strokes carry their original point list + size so we can transform points freshly each frame.
+    type GroupSnap = {
+      layerId: string;
+      elementId: string | null;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      rotation: number;
+      isStroke?: boolean;
+      points?: Array<{ x: number; y: number; pressure: number }>;
+      size?: number;
+    };
+    const groupTransformRef = useRef<GroupSnap[] | null>(null);
     // InputManager is mounted once; route live values via refs so its closures stay current.
     const isDrawingModeRef = useRef(isDrawingMode);
     useEffect(() => {
@@ -90,22 +118,18 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         // Provide layers for multi-layer rendering - use snapshots to avoid MST detachment issues
         getLayers: () => {
           try {
-            // Use visibleLayers which respects focus mode
             return canvasStore.visibleLayers.map((layer) => {
               const snapshot = getSnapshot(layer) as any;
-              const layerType = snapshot.type || "stroke";
-
-              // Base layer properties
               const baseLayer = {
                 id: snapshot.id,
                 name: snapshot.name,
-                type: layerType,
+                type: snapshot.type,
                 visible: snapshot.visible,
                 locked: snapshot.locked,
                 opacity: snapshot.opacity,
               };
 
-              if (layerType === "image") {
+              if (snapshot.type === "image") {
                 return {
                   ...baseLayer,
                   blobId: snapshot.blobId,
@@ -120,37 +144,36 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                 };
               }
 
-              if (layerType === "shape") {
-                return {
-                  ...baseLayer,
-                  shapeType: snapshot.shapeType,
-                  x: snapshot.x,
-                  y: snapshot.y,
-                  width: snapshot.width,
-                  height: snapshot.height,
-                  rotation: snapshot.rotation,
-                  strokeColor: snapshot.strokeColor,
-                  strokeWidth: snapshot.strokeWidth,
-                  cornerRadius: snapshot.cornerRadius,
-                  fillColor: snapshot.fillColor ?? null,
-                };
-              }
-
-              // Stroke layer (default)
+              // Draw layer (default)
               return {
                 ...baseLayer,
-                strokes: snapshot.strokes || [],
+                elements: snapshot.elements || [],
               };
             }) as any;
           } catch (e) {
-            // During layer reordering, nodes may be detached
             console.warn("getLayers: layer access error", e);
             return [];
           }
         },
         getActiveLayerId: () => canvasStore.activeLayerId,
-        // Provide selected layer ID for transform handles
         getSelectedLayerId: () => canvasStore.selectedLayerId,
+        getSelectedElementId: () => canvasStore.selectedElementId,
+        getSelectedElements: () =>
+          canvasStore.selectedElements.map((s) => ({
+            layerId: s.layerId,
+            elementId: s.elementId,
+          })),
+        getSelectionAnchor: () =>
+          canvasStore.selectionAnchor
+            ? {
+                x: canvasStore.selectionAnchor.x,
+                y: canvasStore.selectionAnchor.y,
+                width: canvasStore.selectionAnchor.width,
+                height: canvasStore.selectionAnchor.height,
+                rotation: canvasStore.selectionAnchor.rotation,
+              }
+            : null,
+        getPendingEraserDeletes: () => canvasStore.pendingEraserDeletes,
         // Use a dynamic brush options builder bound to the latest settings
         getBrushOptions: (brush, size) =>
           createGetBrushOptions(canvasStore.brushSettings as any)(
@@ -206,7 +229,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
     // Coordinate conversion
     const screenToCanvas = useCallback(
-      (clientX: number, clientY: number): IPoint => {
+      (clientX: number, clientY: number): PointLike => {
         const root = rootRef.current;
         if (!root) return { x: 0, y: 0, pressure: 0.5 };
         const rect = root.getBoundingClientRect();
@@ -220,38 +243,122 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       [canvasStore.panX, canvasStore.panY, canvasStore.zoom],
     );
 
-    // Hit test image/shape layers - returns the topmost transformable layer at canvas coords
+    // Hit test selectable things — returns the topmost image layer OR shape element under the point.
+    // For image hits: { layerId }. For shape hits: { layerId, elementId }.
     const hitTestSelectableLayers = useCallback(
-      (canvasX: number, canvasY: number): string | null => {
+      (
+        canvasX: number,
+        canvasY: number,
+      ): { layerId: string; elementId: string | null } | null => {
         const layers = canvasStore.visibleLayers;
         for (let i = layers.length - 1; i >= 0; i--) {
           const layer = layers[i];
-          if (
-            (layer.type !== "image" && layer.type !== "shape") ||
-            layer.locked
-          )
-            continue;
+          if (layer.locked) continue;
 
-          const t = layer as any;
-          if (
-            canvasX >= t.x &&
-            canvasX <= t.x + t.width &&
-            canvasY >= t.y &&
-            canvasY <= t.y + t.height
-          ) {
-            return layer.id;
+          if (layer.type === "image") {
+            const t = layer as any;
+            if (
+              canvasX >= t.x &&
+              canvasX <= t.x + t.width &&
+              canvasY >= t.y &&
+              canvasY <= t.y + t.height
+            ) {
+              return { layerId: layer.id, elementId: null };
+            }
+            continue;
+          }
+
+          if (layer.type === "draw") {
+            const elements = (layer as any).elements;
+            // Shapes render on top of strokes, so check shapes first (top-down).
+            for (let j = elements.length - 1; j >= 0; j--) {
+              const el = elements[j];
+              if (!el || !("shapeType" in el)) continue;
+              if (
+                canvasX >= el.x &&
+                canvasX <= el.x + el.width &&
+                canvasY >= el.y &&
+                canvasY <= el.y + el.height
+              ) {
+                return { layerId: layer.id, elementId: el.id };
+              }
+            }
+            // Then strokes (point-to-polyline distance, threshold = size/2 + 4px screen).
+            const tol = 4 / canvasStore.zoom;
+            for (let j = elements.length - 1; j >= 0; j--) {
+              const el = elements[j];
+              if (!el || "shapeType" in el) continue;
+              if (el.brushStyle === "eraser") continue;
+              if (!el.points || el.points.length === 0) continue;
+              // AABB pre-filter
+              const half = (el.size ?? 1) / 2 + tol;
+              let sxMin = Infinity,
+                syMin = Infinity,
+                sxMax = -Infinity,
+                syMax = -Infinity;
+              for (const p of el.points) {
+                if (p.x < sxMin) sxMin = p.x;
+                if (p.y < syMin) syMin = p.y;
+                if (p.x > sxMax) sxMax = p.x;
+                if (p.y > syMax) syMax = p.y;
+              }
+              if (
+                canvasX < sxMin - half ||
+                canvasX > sxMax + half ||
+                canvasY < syMin - half ||
+                canvasY > syMax + half
+              )
+                continue;
+
+              if (el.points.length === 1) {
+                const p = el.points[0];
+                const d = Math.hypot(canvasX - p.x, canvasY - p.y);
+                if (d <= half) return { layerId: layer.id, elementId: el.id };
+                continue;
+              }
+              let minDist = Infinity;
+              for (let k = 0; k < el.points.length - 1; k++) {
+                const p1 = el.points[k];
+                const p2 = el.points[k + 1];
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const lenSq = dx * dx + dy * dy;
+                let t = lenSq === 0 ? 0 : ((canvasX - p1.x) * dx + (canvasY - p1.y) * dy) / lenSq;
+                t = Math.max(0, Math.min(1, t));
+                const cxp = p1.x + t * dx;
+                const cyp = p1.y + t * dy;
+                const d = Math.hypot(canvasX - cxp, canvasY - cyp);
+                if (d < minDist) minDist = d;
+                if (minDist <= half) break;
+              }
+              if (minDist <= half) {
+                return { layerId: layer.id, elementId: el.id };
+              }
+            }
           }
         }
         return null;
       },
-      [canvasStore.visibleLayers],
+      [canvasStore.visibleLayers, canvasStore.zoom],
     );
 
-    // Hit test transform handles - returns handle type if hit, null otherwise
     const hitTestTransformHandles = useCallback(
       (screenX: number, screenY: number): TransformHandleType | null => {
-        const selectedLayer = canvasStore.selectedTransformableLayer;
-        if (!selectedLayer) return null;
+        const single = canvasStore.selectedTransformableLayer as any;
+        const anchor = canvasStore.selectionAnchor;
+        // Priority: persistent anchor (multi OR single-stroke) → single shape/image.
+        const target: TransformableLayer | null = anchor
+          ? ({
+              x: anchor.x,
+              y: anchor.y,
+              width: anchor.width,
+              height: anchor.height,
+              rotation: anchor.rotation,
+            } as TransformableLayer)
+          : single
+            ? single
+            : null;
+        if (!target) return null;
 
         const root = rootRef.current;
         if (!root) return null;
@@ -265,14 +372,35 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           zoom: canvasStore.zoom,
         };
 
-        return transformController.hitTest(
+        const gapWorld = 8 / canvasStore.zoom;
+        let pad = gapWorld;
+        if (single && "shapeType" in single) {
+          pad = (single.strokeWidth ?? 0) / 2 + gapWorld;
+        } else if (canvasStore.selectionCount === 1 && !single) {
+          // Stroke single-select — match the engine's rendered padding (size/2 + gap).
+          const ref = canvasStore.selectedElements[0];
+          if (ref && ref.elementId) {
+            const layer = canvasStore.layers.find((l) => l.id === ref.layerId) as any;
+            if (layer && layer.type === "draw") {
+              const el = layer.findElement(ref.elementId);
+              if (el && !("shapeType" in el)) pad = (el.size ?? 0) / 2 + gapWorld;
+            }
+          }
+        }
+
+        const handle = transformController.hitTest(
           { x: localX, y: localY },
-          selectedLayer as TransformableLayer,
+          target,
           viewport,
+          pad,
         );
+        return handle;
       },
       [
         canvasStore.selectedTransformableLayer,
+        canvasStore.selectionAnchor,
+        canvasStore.selectionUnionBounds,
+        canvasStore.selectionCount,
         canvasStore.zoom,
         canvasStore.panX,
         canvasStore.panY,
@@ -288,7 +416,11 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       if (previewRafRef.current) cancelAnimationFrame(previewRafRef.current);
       previewRafRef.current = requestAnimationFrame(() => {
         if (!engineRef.current) return;
-        if (currentPoints.length > 1) {
+        // In whole-stroke eraser mode, the fade preview is the feedback — no destination-out path.
+        const suppressPreview =
+          canvasStore.currentBrushStyle === "eraser" &&
+          settingsStore.eraserWholeStroke;
+        if (currentPoints.length > 1 && !suppressPreview) {
           const temp: StrokeLike = {
             id: "temp",
             points: currentPoints.map((p) => ({
@@ -304,7 +436,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             opacity: canvasStore.brushSettings.opacity ?? 1,
             brushStyle: canvasStore.currentBrushStyle as any,
             timestamp: Date.now(),
-            // Include brush settings for accurate preview rendering
             thinning: canvasStore.brushSettings.thinning,
             smoothing: canvasStore.brushSettings.smoothing,
             streamline: canvasStore.brushSettings.streamline,
@@ -326,6 +457,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       canvasStore.currentSize,
       canvasStore.eraserSize,
       canvasStore.brushSettings.opacity,
+      settingsStore.eraserWholeStroke,
     ]);
 
     useEffect(() => {
@@ -498,14 +630,14 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           const canvasPoint = screenToCanvas(pt.x, pt.y);
           canvasPoint.pressure = pt.pressure;
 
-          // Select tool owns hit-testing for selection and transform handles.
           if (canvasStore.activeTool === "select") {
-            if (
-              canvasStore.isTransformMode &&
-              canvasStore.selectedTransformableLayer
-            ) {
+            const shift = shiftDownRef.current;
+
+            // Resize / rotate handles always take priority — Shift only affects what
+            // the corner drag does (aspect-break), not whether it starts.
+            if (canvasStore.selectionCount >= 1) {
               const handle = hitTestTransformHandles(pt.x, pt.y);
-              if (handle) {
+              if (handle && handle !== "move") {
                 const rect = root.getBoundingClientRect();
                 const localX = pt.x - rect.left;
                 const localY = pt.y - rect.top;
@@ -514,24 +646,157 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                   panY: canvasStore.panY,
                   zoom: canvasStore.zoom,
                 };
-                const startState = transformController.captureStartState(
-                  { x: localX, y: localY },
-                  canvasStore.selectedTransformableLayer as TransformableLayer,
-                  viewport,
-                );
-                setIsTransforming(true);
-                setTransformHandle(handle);
-                setTransformStart(startState);
+                const single = canvasStore.selectedTransformableLayer as any;
+                const anchor = canvasStore.selectionAnchor;
+                const isSingleStroke =
+                  canvasStore.selectionCount === 1 && !single && !!anchor;
+                let target: TransformableLayer | null = null;
+                if (anchor) {
+                  target = {
+                    x: anchor.x,
+                    y: anchor.y,
+                    width: anchor.width,
+                    height: anchor.height,
+                    rotation: anchor.rotation,
+                  };
+                } else if (single) {
+                  target = single;
+                }
+                if (target) {
+                  const startState = transformController.captureStartState(
+                    { x: localX, y: localY },
+                    target,
+                    viewport,
+                  );
+                  setIsTransforming(true);
+                  setTransformHandle(handle);
+                  setTransformStart(startState);
+                  if (canvasStore.selectionCount > 1 || isSingleStroke) {
+                    const snap: GroupSnap[] = [];
+                    for (const ref of canvasStore.selectedElements) {
+                      const layer = canvasStore.layers.find(
+                        (l) => l.id === ref.layerId,
+                      ) as any;
+                      if (!layer) continue;
+                      if (layer.type === "image") {
+                        snap.push({
+                          layerId: ref.layerId,
+                          elementId: null,
+                          x: layer.x,
+                          y: layer.y,
+                          width: layer.width,
+                          height: layer.height,
+                          rotation: layer.rotation ?? 0,
+                        });
+                        continue;
+                      }
+                      if (layer.type === "draw" && ref.elementId) {
+                        const el = layer.findElement(ref.elementId);
+                        if (!el) continue;
+                        if ("shapeType" in el) {
+                          snap.push({
+                            layerId: ref.layerId,
+                            elementId: ref.elementId,
+                            x: el.x,
+                            y: el.y,
+                            width: el.width,
+                            height: el.height,
+                            rotation: el.rotation ?? 0,
+                          });
+                        } else if (el.points && el.points.length > 0) {
+                          // Compute stroke bbox + capture points.
+                          let xMin = Infinity, yMin = Infinity, xMax = -Infinity, yMax = -Infinity;
+                          const pts: Array<{x:number;y:number;pressure:number}> = [];
+                          for (const p of el.points) {
+                            pts.push({ x: p.x, y: p.y, pressure: p.pressure });
+                            if (p.x < xMin) xMin = p.x;
+                            if (p.y < yMin) yMin = p.y;
+                            if (p.x > xMax) xMax = p.x;
+                            if (p.y > yMax) yMax = p.y;
+                          }
+                          const half = (el.size ?? 1) / 2;
+                          snap.push({
+                            layerId: ref.layerId,
+                            elementId: ref.elementId,
+                            x: xMin - half,
+                            y: yMin - half,
+                            width: xMax - xMin + half * 2,
+                            height: yMax - yMin + half * 2,
+                            rotation: 0,
+                            isStroke: true,
+                            points: pts,
+                            size: el.size,
+                          });
+                        }
+                      }
+                    }
+                    groupTransformRef.current = snap;
+                  }
+                  return;
+                }
+              }
+              // Click inside the selection bbox (no shift) → group-drag.
+              if (handle === "move" && !shift) {
+                groupDragRef.current = {
+                  lastX: canvasPoint.x,
+                  lastY: canvasPoint.y,
+                  hasMoved: false,
+                };
+                drawingStartedRef.current = true;
                 return;
               }
             }
 
-            const hitLayerId = hitTestSelectableLayers(canvasPoint.x, canvasPoint.y);
-            if (hitLayerId) {
-              canvasStore.selectLayer(hitLayerId);
-            } else if (canvasStore.isTransformMode) {
-              canvasStore.deselectLayer();
+            const hit = hitTestSelectableLayers(canvasPoint.x, canvasPoint.y);
+
+            // Shift + element click → toggle membership; never start a drag.
+            if (shift) {
+              if (hit) {
+                canvasStore.toggleSelection(hit.layerId, hit.elementId);
+                return;
+              }
+              marqueeRef.current = {
+                startX: canvasPoint.x,
+                startY: canvasPoint.y,
+                curX: canvasPoint.x,
+                curY: canvasPoint.y,
+                additive: true,
+              };
+              drawingStartedRef.current = true;
+              return;
             }
+
+            if (hit) {
+              const alreadySelected = canvasStore.isSelected(
+                hit.layerId,
+                hit.elementId,
+              );
+              if (!alreadySelected) {
+                if (hit.elementId) {
+                  canvasStore.selectElement(hit.layerId, hit.elementId);
+                } else {
+                  canvasStore.selectLayer(hit.layerId);
+                }
+              }
+              groupDragRef.current = {
+                lastX: canvasPoint.x,
+                lastY: canvasPoint.y,
+                hasMoved: false,
+              };
+              drawingStartedRef.current = true;
+              return;
+            }
+
+            // Empty space: deselect, then start a marquee.
+            if (canvasStore.hasSelection) canvasStore.deselectLayer();
+            marqueeRef.current = {
+              startX: canvasPoint.x,
+              startY: canvasPoint.y,
+              curX: canvasPoint.x,
+              curY: canvasPoint.y,
+              additive: false,
+            };
+            drawingStartedRef.current = true;
             return;
           }
 
@@ -557,6 +822,31 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           const canvasPoint = screenToCanvas(pt.x, pt.y);
           canvasPoint.pressure = pt.pressure;
 
+          if (groupDragRef.current) {
+            const dx = canvasPoint.x - groupDragRef.current.lastX;
+            const dy = canvasPoint.y - groupDragRef.current.lastY;
+            if (dx !== 0 || dy !== 0) {
+              canvasStore.moveSelectedBy(dx, dy);
+              groupDragRef.current.lastX = canvasPoint.x;
+              groupDragRef.current.lastY = canvasPoint.y;
+              groupDragRef.current.hasMoved = true;
+            }
+            return;
+          }
+
+          if (marqueeRef.current) {
+            marqueeRef.current.curX = canvasPoint.x;
+            marqueeRef.current.curY = canvasPoint.y;
+            const m = marqueeRef.current;
+            engineRef.current?.setMarquee({
+              x: Math.min(m.startX, m.curX),
+              y: Math.min(m.startY, m.curY),
+              width: Math.abs(m.curX - m.startX),
+              height: Math.abs(m.curY - m.startY),
+            });
+            return;
+          }
+
           if (shapeCreationRef.current) {
             const start = shapeCreationRef.current;
             let curX = canvasPoint.x;
@@ -575,12 +865,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             const w = Math.max(1, Math.abs(curX - start.startX));
             const h = Math.max(1, Math.abs(curY - start.startY));
 
-            const previewShape: ShapeLayerLike = {
+            const previewShape: ShapeElementLike = {
               id: "preview",
-              name: "preview",
-              type: "shape",
-              visible: true,
-              locked: false,
               opacity: canvasStore.shapeOpacity,
               shapeType: canvasStore.currentShapeType as any,
               x,
@@ -595,6 +881,78 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             };
             engineRef.current?.setPreviewShape(previewShape);
             return;
+          }
+
+          // Eraser: mark elements the cursor circle passes over as pending. Sticky — once
+          // marked they stay faded until release (commits the delete) or cancel.
+          if (canvasStore.currentBrushStyle === "eraser") {
+            const eraserR = canvasStore.eraserSize / 2;
+            const eraserRSq = eraserR * eraserR;
+            const wholeStroke = settingsStore.eraserWholeStroke;
+            const activeLayer = canvasStore.activeLayer as any;
+            if (activeLayer && activeLayer.type === "draw" && !activeLayer.locked) {
+              for (const el of activeLayer.elements) {
+                if (!el) continue;
+                if (canvasStore.pendingEraserDeletes.has(el.id)) continue;
+                if ("shapeType" in el) {
+                  const nx = Math.max(el.x, Math.min(canvasPoint.x, el.x + el.width));
+                  const ny = Math.max(el.y, Math.min(canvasPoint.y, el.y + el.height));
+                  const ddx = canvasPoint.x - nx;
+                  const ddy = canvasPoint.y - ny;
+                  if (ddx * ddx + ddy * ddy <= eraserRSq) {
+                    canvasStore.markPendingErase(el.id);
+                  }
+                } else if (wholeStroke && el.points && el.points.length > 0) {
+                  // Stroke: distance from eraser center to nearest segment ≤ R + size/2.
+                  const tol = (el.size ?? 1) / 2 + eraserR;
+                  const tolSq = tol * tol;
+                  // AABB pre-filter.
+                  let xMin = Infinity, yMin = Infinity, xMax = -Infinity, yMax = -Infinity;
+                  for (const p of el.points) {
+                    if (p.x < xMin) xMin = p.x;
+                    if (p.y < yMin) yMin = p.y;
+                    if (p.x > xMax) xMax = p.x;
+                    if (p.y > yMax) yMax = p.y;
+                  }
+                  if (
+                    canvasPoint.x < xMin - tol ||
+                    canvasPoint.x > xMax + tol ||
+                    canvasPoint.y < yMin - tol ||
+                    canvasPoint.y > yMax + tol
+                  )
+                    continue;
+                  let hit = false;
+                  if (el.points.length === 1) {
+                    const p = el.points[0];
+                    const dx = canvasPoint.x - p.x;
+                    const dy = canvasPoint.y - p.y;
+                    hit = dx * dx + dy * dy <= tolSq;
+                  } else {
+                    for (let k = 0; k < el.points.length - 1; k++) {
+                      const p1 = el.points[k];
+                      const p2 = el.points[k + 1];
+                      const dx = p2.x - p1.x;
+                      const dy = p2.y - p1.y;
+                      const lenSq = dx * dx + dy * dy;
+                      let t = lenSq === 0
+                        ? 0
+                        : ((canvasPoint.x - p1.x) * dx + (canvasPoint.y - p1.y) * dy) / lenSq;
+                      t = Math.max(0, Math.min(1, t));
+                      const cxp = p1.x + t * dx;
+                      const cyp = p1.y + t * dy;
+                      const ddx = canvasPoint.x - cxp;
+                      const ddy = canvasPoint.y - cyp;
+                      if (ddx * ddx + ddy * ddy <= tolSq) {
+                        hit = true;
+                        break;
+                      }
+                    }
+                  }
+                  if (hit) canvasStore.markPendingErase(el.id);
+                }
+              }
+              engineRef.current?.invalidate();
+            }
           }
 
           // Min-distance filter
@@ -612,6 +970,34 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         onDrawEnd: () => {
           drawingStartedRef.current = false;
 
+          if (groupDragRef.current) {
+            if (groupDragRef.current.hasMoved) {
+              canvasStore.saveCurrentStateToHistory();
+            }
+            groupDragRef.current = null;
+            return;
+          }
+
+          if (marqueeRef.current) {
+            const m = marqueeRef.current;
+            engineRef.current?.setMarquee(null);
+            const w = Math.abs(m.curX - m.startX);
+            const h = Math.abs(m.curY - m.startY);
+            if (w > 3 || h > 3) {
+              canvasStore.selectInBounds(
+                {
+                  x: Math.min(m.startX, m.curX),
+                  y: Math.min(m.startY, m.curY),
+                  width: w,
+                  height: h,
+                },
+                m.additive,
+              );
+            }
+            marqueeRef.current = null;
+            return;
+          }
+
           if (shapeCreationRef.current) {
             const ref = shapeCreationRef.current;
             shapeCreationRef.current = null;
@@ -625,15 +1011,17 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               const y = Math.min(ref.startY, ref.curY);
               const w = Math.abs(dx);
               const h = Math.abs(dy);
-              const newId = canvasStore.addShapeLayer(
+              const created = canvasStore.addShape(
                 canvasStore.currentShapeType as any,
                 x,
                 y,
                 w,
                 h,
               );
-              if (newId) {
-                canvasStore.selectLayer(newId);
+              if (created) {
+                // Hand off to the Select tool so the user can immediately transform the new shape.
+                canvasStore.setActiveTool("select");
+                canvasStore.selectElement(created.layerId, created.elementId);
               }
             }
             return;
@@ -648,11 +1036,22 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
         onDrawCancel: () => {
           drawingStartedRef.current = false;
+          if (groupDragRef.current) {
+            groupDragRef.current = null;
+          }
+          if (marqueeRef.current) {
+            marqueeRef.current = null;
+            engineRef.current?.setMarquee(null);
+          }
           if (shapeCreationRef.current) {
             shapeCreationRef.current = null;
             engineRef.current?.setPreviewShape(null);
             engineRef.current?.invalidate();
             return;
+          }
+          // Eraser was hovering pending erases — discard them on cancel.
+          if (canvasStore.currentBrushStyle === "eraser") {
+            canvasStore.clearPendingErase();
           }
           setIsDrawing(false);
           setCurrentPoints([]);
@@ -719,45 +1118,55 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
     // Commit stroke when drawing ends
     useEffect(() => {
-      // Detect transition from drawing -> not drawing
-      if (prevIsDrawingRef.current && !isDrawing && currentPoints.length > 1) {
-        const endTime = Date.now();
-        const startTime = strokeStartTimeRef.current ?? endTime;
-        const duration = endTime - startTime;
-        strokeStartTimeRef.current = null;
+      if (prevIsDrawingRef.current && !isDrawing) {
+        const isObjectEraser =
+          canvasStore.currentBrushStyle === "eraser" &&
+          settingsStore.eraserWholeStroke;
 
-        const strokeData = {
-          id: crypto.randomUUID(),
-          points: currentPoints.map((point) => ({ ...point })),
-          color: canvasStore.currentColor,
-          size:
-            canvasStore.currentBrushStyle === "eraser"
-              ? canvasStore.eraserSize
-              : canvasStore.currentSize,
-          opacity: canvasStore.brushSettings.opacity ?? 1,
-          brushStyle: canvasStore.currentBrushStyle,
-          timestamp: endTime,
-          startTime,
-          duration,
-          thinning: canvasStore.brushSettings.thinning,
-          smoothing: canvasStore.brushSettings.smoothing,
-          streamline: canvasStore.brushSettings.streamline,
-          taperStart: canvasStore.brushSettings.taperStart,
-          taperEnd: canvasStore.brushSettings.taperEnd,
-        };
+        if (currentPoints.length > 1 && !isObjectEraser) {
+          const endTime = Date.now();
+          const startTime = strokeStartTimeRef.current ?? endTime;
+          const duration = endTime - startTime;
 
-        if (canvasStore.hasLayers) {
-          canvasStore.addStrokeToActiveLayer(strokeData);
-        } else {
-          canvasStore.addStroke(strokeData);
+          const strokeData = {
+            id: crypto.randomUUID(),
+            points: currentPoints.map((point) => ({ ...point })),
+            color: canvasStore.currentColor,
+            size:
+              canvasStore.currentBrushStyle === "eraser"
+                ? canvasStore.eraserSize
+                : canvasStore.currentSize,
+            opacity: canvasStore.brushSettings.opacity ?? 1,
+            brushStyle: canvasStore.currentBrushStyle,
+            timestamp: endTime,
+            startTime,
+            duration,
+            thinning: canvasStore.brushSettings.thinning,
+            smoothing: canvasStore.brushSettings.smoothing,
+            streamline: canvasStore.brushSettings.streamline,
+            taperStart: canvasStore.brushSettings.taperStart,
+            taperEnd: canvasStore.brushSettings.taperEnd,
+          };
+
+          if (canvasStore.hasLayers) {
+            canvasStore.addStrokeToActiveLayer(strokeData);
+          } else {
+            canvasStore.addStroke(strokeData);
+          }
         }
 
+        // Always flush pending eraser deletes after a release with the eraser active.
+        if (canvasStore.currentBrushStyle === "eraser") {
+          canvasStore.commitPendingErase();
+        }
+
+        strokeStartTimeRef.current = null;
         setCurrentPoints([]);
         engineRef.current?.setPreviewStroke(null);
         engineRef.current?.invalidate();
       }
       prevIsDrawingRef.current = isDrawing;
-    }, [isDrawing, currentPoints, canvasStore]);
+    }, [isDrawing, currentPoints, canvasStore, settingsStore]);
 
     // Handle clipboard paste for image import
     const handleImagePaste = useCallback(
@@ -895,18 +1304,13 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       renderStrokes();
     }, [renderStrokes]);
 
-    // Handle transform pointer moves (image/shape layer move/resize/rotate)
     const handleTransformMove = useCallback(
       (e: React.PointerEvent) => {
-        if (
-          !isTransforming ||
-          !transformHandle ||
-          !transformStart ||
-          !canvasStore.selectedTransformableLayer
-        )
-          return;
+        if (!isTransforming || !transformHandle || !transformStart) return;
+        const isGroup = !!groupTransformRef.current;
+        const single = canvasStore.selectedTransformableLayer as any;
+        if (!isGroup && !single) return;
 
-        const layer = canvasStore.selectedTransformableLayer as any;
         const root = rootRef.current;
         if (!root) return;
         const rect = root.getBoundingClientRect();
@@ -919,32 +1323,162 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           zoom: canvasStore.zoom,
         };
 
-        let result;
-        if (transformHandle === "move") {
-          result = transformController.applyMove(
+        if (!isGroup) {
+          let result;
+          if (transformHandle === "move") {
+            result = transformController.applyMove(
+              { x: localX, y: localY },
+              transformStart,
+              viewport,
+            );
+            single.setPosition(result.x, result.y);
+          } else if (transformHandle === "rotate") {
+            result = transformController.applyRotation(
+              { x: localX, y: localY },
+              transformStart,
+              viewport,
+            );
+            single.setRotation(result.rotation);
+          } else if (["nw", "ne", "se", "sw"].includes(transformHandle)) {
+            const maintainAspect = !e.shiftKey;
+            result = transformController.applyResize(
+              transformHandle as "nw" | "ne" | "se" | "sw",
+              { x: localX, y: localY },
+              transformStart,
+              viewport,
+              maintainAspect,
+            );
+            single.setPosition(result.x, result.y);
+            single.setSize(result.width, result.height, false);
+          }
+          return;
+        }
+
+        // Group transform — operate on selectionAnchor + each snapshotted element.
+        const starts = groupTransformRef.current!;
+        const anchorRotationStart = transformStart.layerRotation;
+        const anchorCenterStart = {
+          x: transformStart.layerCenterX,
+          y: transformStart.layerCenterY,
+        };
+
+        if (transformHandle === "rotate") {
+          const r = transformController.applyRotation(
             { x: localX, y: localY },
             transformStart,
             viewport,
           );
-          layer.setPosition(result.x, result.y);
-        } else if (transformHandle === "rotate") {
-          result = transformController.applyRotation(
-            { x: localX, y: localY },
-            transformStart,
-            viewport,
-          );
-          layer.setRotation(result.rotation);
-        } else if (["nw", "ne", "se", "sw"].includes(transformHandle)) {
-          const maintainAspect = !e.shiftKey;
-          result = transformController.applyResize(
+          let deltaDeg = r.rotation - anchorRotationStart;
+          deltaDeg = ((deltaDeg % 360) + 540) % 360 - 180;
+          const rad = (deltaDeg * Math.PI) / 180;
+          const cos = Math.cos(rad);
+          const sin = Math.sin(rad);
+          const cx = anchorCenterStart.x;
+          const cy = anchorCenterStart.y;
+          for (const s of starts) {
+            const layer = canvasStore.layers.find((l) => l.id === s.layerId) as any;
+            if (!layer) continue;
+            const target =
+              s.elementId && layer.type === "draw"
+                ? layer.findElement(s.elementId)
+                : layer.type === "image"
+                  ? layer
+                  : null;
+            if (!target) continue;
+            if (s.isStroke && s.points) {
+              // Rotate each point around the anchor center.
+              for (let i = 0; i < s.points.length && i < target.points.length; i++) {
+                const sp = s.points[i];
+                const rx = (sp.x - cx) * cos - (sp.y - cy) * sin + cx;
+                const ry = (sp.x - cx) * sin + (sp.y - cy) * cos + cy;
+                target.points[i].set(rx, ry);
+              }
+            } else {
+              const ecx = s.x + s.width / 2;
+              const ecy = s.y + s.height / 2;
+              const rx = (ecx - cx) * cos - (ecy - cy) * sin + cx;
+              const ry = (ecx - cx) * sin + (ecy - cy) * cos + cy;
+              target.setPosition(rx - s.width / 2, ry - s.height / 2);
+              target.setRotation(((s.rotation + deltaDeg) % 360 + 360) % 360);
+            }
+          }
+          canvasStore.setSelectionAnchorRotation(anchorRotationStart + deltaDeg);
+          return;
+        }
+
+        if (["nw", "ne", "se", "sw"].includes(transformHandle)) {
+          // Force aspect-preserve only on rotated anchors; otherwise shift breaks aspect.
+          const maintainAspect = anchorRotationStart !== 0 || !e.shiftKey;
+          const r = transformController.applyResize(
             transformHandle as "nw" | "ne" | "se" | "sw",
             { x: localX, y: localY },
             transformStart,
             viewport,
             maintainAspect,
           );
-          layer.setPosition(result.x, result.y);
-          layer.setSize(result.width, result.height, false);
+          const oldW = transformStart.layerWidth;
+          const oldH = transformStart.layerHeight;
+          const sx = oldW > 0 ? r.width / oldW : 1;
+          const sy = oldH > 0 ? r.height / oldH : 1;
+          const uniformScale = (sx + sy) / 2;
+          const newCenter = {
+            x: r.x + r.width / 2,
+            y: r.y + r.height / 2,
+          };
+          const oldCenter = anchorCenterStart;
+          const rad = (anchorRotationStart * Math.PI) / 180;
+          const cos = Math.cos(rad);
+          const sin = Math.sin(rad);
+          const unCos = Math.cos(-rad);
+          const unSin = Math.sin(-rad);
+          const localScale = (lx: number, ly: number) => {
+            const sxScaled = lx * sx;
+            const syScaled = ly * sy;
+            return {
+              wx: sxScaled * cos - syScaled * sin + newCenter.x,
+              wy: sxScaled * sin + syScaled * cos + newCenter.y,
+            };
+          };
+          for (const s of starts) {
+            const layer = canvasStore.layers.find((l) => l.id === s.layerId) as any;
+            if (!layer) continue;
+            const target =
+              s.elementId && layer.type === "draw"
+                ? layer.findElement(s.elementId)
+                : layer.type === "image"
+                  ? layer
+                  : null;
+            if (!target) continue;
+            if (s.isStroke && s.points) {
+              for (let i = 0; i < s.points.length && i < target.points.length; i++) {
+                const sp = s.points[i];
+                const lx = (sp.x - oldCenter.x) * unCos - (sp.y - oldCenter.y) * unSin;
+                const ly = (sp.x - oldCenter.x) * unSin + (sp.y - oldCenter.y) * unCos;
+                const { wx, wy } = localScale(lx, ly);
+                target.points[i].set(wx, wy);
+              }
+              // Only scale thickness on uniform resize. Non-uniform (shift) keeps thickness
+              // constant and lets the path distort — matches Excalidraw.
+              if (
+                target.setSize &&
+                typeof s.size === "number" &&
+                Math.abs(sx - sy) < 0.001
+              ) {
+                target.setSize(Math.max(1, s.size * uniformScale));
+              }
+            } else {
+              const ecx = s.x + s.width / 2;
+              const ecy = s.y + s.height / 2;
+              const lx = (ecx - oldCenter.x) * unCos - (ecy - oldCenter.y) * unSin;
+              const ly = (ecx - oldCenter.x) * unSin + (ecy - oldCenter.y) * unCos;
+              const { wx, wy } = localScale(lx, ly);
+              const newW = Math.max(1, s.width * sx);
+              const newH = Math.max(1, s.height * sy);
+              target.setPosition(wx - newW / 2, wy - newH / 2);
+              target.setSize(newW, newH, false);
+            }
+          }
+          canvasStore.setSelectionAnchorBounds(r.x, r.y, r.width, r.height);
         }
       },
       [isTransforming, transformHandle, transformStart, canvasStore],
@@ -956,6 +1490,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         setIsTransforming(false);
         setTransformHandle(null);
         setTransformStart(null);
+        groupTransformRef.current = null;
         canvasStore.saveCurrentStateToHistory();
       },
       [isTransforming, canvasStore],
@@ -989,7 +1524,12 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       }
 
       if (canvasStore.activeTool === "select") return "cursor-default";
-      if (canvasStore.currentBrushStyle === "eraser") return "cursor-none"; // Hide cursor for eraser
+      // Eraser cursor is only hidden while the brush tool is actually using the eraser.
+      if (
+        canvasStore.activeTool === "brush" &&
+        canvasStore.currentBrushStyle === "eraser"
+      )
+        return "cursor-none";
       return "cursor-crosshair";
     };
 

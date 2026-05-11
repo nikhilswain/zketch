@@ -96,7 +96,9 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
 
       try {
         const snapshot = getSnapshot(layer) as any;
-        const strokes = (snapshot.strokes || []) as StrokeLike[];
+        // Animation only plays back stroke elements; shape elements stay static.
+        const elements = (snapshot.elements || []) as any[];
+        const strokes = elements.filter((e) => !("shapeType" in e)) as StrokeLike[];
         engine.setStrokes(strokes);
         const info = engine.getPlaybackInfo();
         setTotalDuration(info.totalDuration);
@@ -107,7 +109,7 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
         // Layer might be detached during reordering
         console.warn("LayerAnimationControls: layer access error", e);
       }
-    }, [layer, layer.strokes.length]);
+    }, [layer, (layer as any).elements?.length]);
 
     // Update speed
     useEffect(() => {
@@ -151,7 +153,7 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
     }, []);
 
     // Don't render if no strokes or no timing data
-    const strokeCount = layer.strokes.length;
+    const strokeCount = (layer as any).strokeCount ?? 0;
     if (strokeCount === 0 || totalDuration === 0) {
       return null;
     }
