@@ -12,9 +12,10 @@ import type {
   LayerLike,
   Brush,
   ImageLayerLike,
-  ShapeLayerLike,
+  ShapeElementLike,
   TransformableLayer,
 } from "./types";
+import { isShapeElement } from "./types";
 
 class BrushRegistry {
   private brushes = new Map<string, Brush>();
@@ -55,7 +56,8 @@ export class CanvasEngine {
   private invalid = true;
   private background: EngineConfig["background"];
   private preview: StrokeLike | null = null;
-  private previewShape: ShapeLayerLike | null = null;
+  private previewShape: ShapeElementLike | null = null;
+  private marquee: { x: number; y: number; width: number; height: number } | null = null;
   private cursor: { visible: boolean; x?: number; y?: number; r?: number } = {
     visible: false,
   };
@@ -137,12 +139,16 @@ export class CanvasEngine {
     this.preview = s;
     this.invalidate();
   }
-  setPreviewShape(s: ShapeLayerLike | null) {
+  setPreviewShape(s: ShapeElementLike | null) {
     this.previewShape = s;
     this.invalidate();
   }
   setCursor(c: { visible: boolean; x?: number; y?: number; r?: number }) {
     this.cursor = c;
+    this.invalidate();
+  }
+  setMarquee(rect: { x: number; y: number; width: number; height: number } | null) {
+    this.marquee = rect;
     this.invalidate();
   }
 
@@ -322,20 +328,36 @@ export class CanvasEngine {
   }
 
   private renderLayer(ctx: CanvasRenderingContext2D, layer: LayerLike) {
-    if (layer.type === "stroke") {
-      for (const stroke of layer.strokes) {
-        this.renderStroke(ctx, stroke, 1);
-      }
-    } else if (layer.type === "image") {
+    if (layer.type === "image") {
       this.renderImageLayer(ctx, layer as ImageLayerLike);
-    } else if (layer.type === "shape") {
-      this.renderShapeLayer(ctx, layer as ShapeLayerLike);
+      return;
+    }
+    if (layer.type === "draw") {
+      const pending = this.config.getPendingEraserDeletes?.();
+      // Two-pass within a draw layer: bake strokes first (raster, with destination-out
+      // for eraser strokes), then render shape elements as vectors on top.
+      for (const el of layer.elements) {
+        if (!isShapeElement(el)) {
+          const faded = pending?.has((el as any).id);
+          if (faded) ctx.save(), (ctx.globalAlpha *= 0.25);
+          this.renderStroke(ctx, el as StrokeLike, 1);
+          if (faded) ctx.restore();
+        }
+      }
+      for (const el of layer.elements) {
+        if (isShapeElement(el)) {
+          const faded = pending?.has((el as any).id);
+          if (faded) ctx.save(), (ctx.globalAlpha *= 0.25);
+          this.renderShapeLayer(ctx, el as ShapeElementLike);
+          if (faded) ctx.restore();
+        }
+      }
     }
   }
 
   private renderShapeLayer(
     ctx: CanvasRenderingContext2D,
-    layer: ShapeLayerLike,
+    layer: ShapeElementLike,
   ) {
     const {
       x,
@@ -346,9 +368,14 @@ export class CanvasEngine {
       strokeColor,
       strokeWidth,
       fillColor,
+      opacity,
     } = layer;
 
     ctx.save();
+    // Per-element opacity stacks on top of whatever the caller set.
+    if (opacity !== undefined && opacity !== 1) {
+      ctx.globalAlpha = ctx.globalAlpha * opacity;
+    }
     if (rotation !== 0) {
       const cx = x + width / 2;
       const cy = y + height / 2;
@@ -375,7 +402,7 @@ export class CanvasEngine {
     ctx.restore();
   }
 
-  private tracePath(ctx: CanvasRenderingContext2D, layer: ShapeLayerLike) {
+  private tracePath(ctx: CanvasRenderingContext2D, layer: ShapeElementLike) {
     const { shapeType, x, y, width, height, cornerRadius } = layer;
     switch (shapeType) {
       case "rectangle":
@@ -598,10 +625,19 @@ export class CanvasEngine {
 
     const key = s.brushStyle === "eraser" ? "ink" : s.brushStyle;
     const brush = this.registry.get(key);
-    if (!brush) return;
+    if (!brush) {
+      if (isEraser) ctx.globalCompositeOperation = prevComposite;
+      return;
+    }
+
+    // Erasers must paint solidly to punch holes — short eraser strokes get fully consumed by
+    // the default ink taper, leaving no destination-out region. Override taper for erasers.
+    const strokeForRender = isEraser
+      ? { ...s, taperStart: 0, taperEnd: 0, opacity: 1 }
+      : s;
 
     const opts = this.config.getBrushOptions?.(key, s.size);
-    brush.render(ctx, s, opts);
+    brush.render(ctx, strokeForRender, opts);
 
     if (isEraser) {
       ctx.globalCompositeOperation = prevComposite;
@@ -613,8 +649,10 @@ export class CanvasEngine {
     const c = this.ui;
     ctx.clearRect(0, 0, c.width, c.height);
 
-    // Render transform handles if a layer is selected
+    // Selection outlines (every selected element) + transform handles (only when single).
+    this.renderSelectionOutlines(ctx);
     this.renderTransformHandles(ctx);
+    this.renderMarquee(ctx);
 
     // Render cursor overlay (eraser circle)
     if (
@@ -634,22 +672,154 @@ export class CanvasEngine {
     ctx.restore();
   }
 
-  private renderTransformHandles(ctx: CanvasRenderingContext2D) {
-    const selectedLayerId = this.config.getSelectedLayerId?.();
-    if (!selectedLayerId) return;
+  // Visual gap between a shape's stroke and its selection rect, in screen pixels.
+  private static readonly SELECTION_GAP_PX = 8;
 
+  // Padding (in world units) for the selection rect / handles around an element.
+  private selectionPaddingWorld(layer: any, element: any | null) {
+    const gapWorld = CanvasEngine.SELECTION_GAP_PX / this.pz.zoom;
+    if (element) {
+      if (isShapeElement(element)) {
+        return (element.strokeWidth ?? 0) / 2 + gapWorld;
+      }
+      if ((element as any).points) {
+        return ((element as any).size ?? 0) / 2 + gapWorld;
+      }
+    }
+    return gapWorld;
+  }
+
+  private renderSelectionOutlines(ctx: CanvasRenderingContext2D) {
+    const refs = this.config.getSelectedElements?.() ?? [];
+    if (refs.length === 0) return;
+    // Multi-select: union handles already convey the selection — skip per-element outlines.
+    if (refs.length > 1) return;
+    // When an anchor is rendering the bbox (single-stroke), no extra outline needed.
+    if (this.config.getSelectionAnchor?.()) return;
     const layers = this.config.getLayers?.() || [];
-    const selectedLayer = layers.find((l) => l.id === selectedLayerId);
-    if (
-      !selectedLayer ||
-      (selectedLayer.type !== "image" && selectedLayer.type !== "shape")
-    )
-      return;
+    ctx.save();
+    ctx.strokeStyle = "#3b82f6";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    for (const ref of refs) {
+      const layer = layers.find((l) => l.id === ref.layerId);
+      if (!layer) continue;
+      let bbox: { x: number; y: number; width: number; height: number; rotation: number } | null = null;
+      let element: any = null;
+      if (layer.type === "image") {
+        bbox = layer as any;
+      } else if (layer.type === "draw" && ref.elementId) {
+        const el = (layer as any).elements.find((e: any) => e.id === ref.elementId);
+        if (el) {
+          element = el;
+          if (isShapeElement(el)) {
+            bbox = el as any;
+          } else if ((el as any).points && (el as any).points.length > 0) {
+            // Stroke: AABB of its points (no rotation).
+            const pts = (el as any).points;
+            let sxMin = Infinity,
+              syMin = Infinity,
+              sxMax = -Infinity,
+              syMax = -Infinity;
+            for (const p of pts) {
+              if (p.x < sxMin) sxMin = p.x;
+              if (p.y < syMin) syMin = p.y;
+              if (p.x > sxMax) sxMax = p.x;
+              if (p.y > syMax) syMax = p.y;
+            }
+            bbox = {
+              x: sxMin,
+              y: syMin,
+              width: sxMax - sxMin,
+              height: syMax - syMin,
+              rotation: 0,
+            };
+          }
+        }
+      }
+      if (!bbox) continue;
+      const pad = this.selectionPaddingWorld(layer, element);
+      const ix = bbox.x - pad;
+      const iy = bbox.y - pad;
+      const iw = bbox.width + pad * 2;
+      const ih = bbox.height + pad * 2;
+      const screenX = ix * this.pz.zoom + this.pz.panX;
+      const screenY = iy * this.pz.zoom + this.pz.panY;
+      const screenW = iw * this.pz.zoom;
+      const screenH = ih * this.pz.zoom;
+      ctx.save();
+      if (bbox.rotation) {
+        const cx = screenX + screenW / 2;
+        const cy = screenY + screenH / 2;
+        ctx.translate(cx, cy);
+        ctx.rotate((bbox.rotation * Math.PI) / 180);
+        ctx.translate(-cx, -cy);
+      }
+      ctx.strokeRect(screenX, screenY, screenW, screenH);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
 
-    const transformable = selectedLayer as TransformableLayer;
+  private renderMarquee(ctx: CanvasRenderingContext2D) {
+    if (!this.marquee) return;
+    const m = this.marquee;
+    const x = m.x * this.pz.zoom + this.pz.panX;
+    const y = m.y * this.pz.zoom + this.pz.panY;
+    const w = m.width * this.pz.zoom;
+    const h = m.height * this.pz.zoom;
+    ctx.save();
+    ctx.fillStyle = "rgba(59, 130, 246, 0.08)";
+    ctx.strokeStyle = "#3b82f6";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeRect(x, y, w, h);
+    ctx.restore();
+  }
+
+  private renderTransformHandles(ctx: CanvasRenderingContext2D) {
+    const refs = this.config.getSelectedElements?.() ?? [];
+    const layers = this.config.getLayers?.() || [];
     const dpr = window.devicePixelRatio || 1;
 
-    transformController.renderHandles(ctx, transformable, this.pz, dpr);
+    if (refs.length === 0) return;
+
+    if (refs.length === 1) {
+      const ref = refs[0];
+      const layer = layers.find((l) => l.id === ref.layerId);
+      if (!layer) return;
+
+      let element: any = null;
+      if (layer.type === "draw" && ref.elementId) {
+        element = (layer as any).elements.find((e: any) => e.id === ref.elementId);
+      }
+      const pad = this.selectionPaddingWorld(layer, element);
+
+      // For strokes (no own rotation field), the persistent anchor carries the bbox + rotation.
+      const anchor = this.config.getSelectionAnchor?.();
+      if (anchor) {
+        transformController.renderHandles(ctx, anchor, this.pz, dpr, pad);
+        return;
+      }
+
+      // Single shape/image — render handles around the element directly.
+      let transformable: TransformableLayer | null = null;
+      if (layer.type === "image") {
+        transformable = layer as TransformableLayer;
+      } else if (element && isShapeElement(element)) {
+        transformable = element as TransformableLayer;
+      }
+      if (!transformable) return;
+      transformController.renderHandles(ctx, transformable, this.pz, dpr, pad);
+      return;
+    }
+
+    // Multi-select: use the persistent rotated anchor stored on the model.
+    const anchor = this.config.getSelectionAnchor?.();
+    if (!anchor) return;
+    const pad = CanvasEngine.SELECTION_GAP_PX / this.pz.zoom;
+    transformController.renderHandles(ctx, anchor, this.pz, dpr, pad);
   }
 
   // Get or create an offscreen canvas for a layer

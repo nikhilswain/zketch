@@ -1,7 +1,7 @@
 export type BrushStyle = "ink" | "eraser" | "spray" | "texture";
 
-// Layer types
-export type LayerType = "stroke" | "image" | "shape";
+// Layer types — draw layers hold mixed elements (strokes + shapes); image is its own layer.
+export type LayerType = "draw" | "image";
 
 export type ShapeKind = "rectangle" | "circle" | "diamond" | "triangle";
 
@@ -43,13 +43,36 @@ export interface BaseLayerLike {
   opacity: number;
 }
 
-// Stroke layer - contains drawing strokes
-export interface StrokeLayerLike extends BaseLayerLike {
-  type: "stroke";
-  strokes: readonly StrokeLike[];
+// A shape element that lives inside a draw layer.
+export interface ShapeElementLike {
+  id: string;
+  shapeType: ShapeKind;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  strokeColor: string;
+  strokeWidth: number;
+  cornerRadius: number;
+  fillColor: string | null;
+  opacity: number;
 }
 
-// Image layer - contains an imported image (to be implemented in Phase 2)
+// An element inside a draw layer is either a stroke or a shape element.
+export type ElementLike = StrokeLike | ShapeElementLike;
+
+export function isShapeElement(el: ElementLike): el is ShapeElementLike {
+  return (el as any).shapeType !== undefined;
+}
+
+// Draw layer — holds an ordered mix of stroke and shape elements.
+export interface DrawLayerLike extends BaseLayerLike {
+  type: "draw";
+  elements: readonly ElementLike[];
+}
+
+// Image layer
 export interface ImageLayerLike extends BaseLayerLike {
   type: "image";
   blobId: string;
@@ -63,20 +86,6 @@ export interface ImageLayerLike extends BaseLayerLike {
   aspectLocked: boolean;
 }
 
-export interface ShapeLayerLike extends BaseLayerLike {
-  type: "shape";
-  shapeType: ShapeKind;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  rotation: number;
-  strokeColor: string;
-  strokeWidth: number;
-  cornerRadius: number;
-  fillColor: string | null;
-}
-
 // Anything with a transformable bounding box (used by TransformController).
 export interface TransformableLayer {
   x: number;
@@ -87,7 +96,11 @@ export interface TransformableLayer {
 }
 
 // Union type for all layer types
-export type LayerLike = StrokeLayerLike | ImageLayerLike | ShapeLayerLike;
+export type LayerLike = DrawLayerLike | ImageLayerLike;
+
+// Legacy aliases — used by older call sites; kept so they keep type-checking until migrated.
+export type ShapeLayerLike = ShapeElementLike & { type: "shape" };
+export type StrokeLayerLike = DrawLayerLike;
 
 // Legacy interface for backward compatibility (deprecated, use LayerLike)
 export interface LegacyLayerLike {
@@ -125,8 +138,21 @@ export interface EngineConfig {
   getLayers?: () => LayerLike[];
   // Which layer is currently active (for visual indication)
   getActiveLayerId?: () => string;
-  // Which layer is selected for transformation
+  // Single-selection accessors (used for transform handles).
   getSelectedLayerId?: () => string | null;
+  getSelectedElementId?: () => string | null;
+  // Multi-selection accessor — every selected element. Used for outline rendering.
+  getSelectedElements?: () => Array<{ layerId: string; elementId: string | null }>;
+  // Persistent rotated bbox around the multi-selection. Null when fewer than 2 elements selected.
+  getSelectionAnchor?: () => {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    rotation: number;
+  } | null;
+  // Element IDs the eraser is hovering over but hasn't committed yet (rendered faded).
+  getPendingEraserDeletes?: () => Set<string>;
   // Optional: provide per-brush rendering options (size, smoothing, taper, etc.)
   getBrushOptions?: (
     brush: BrushStyle,

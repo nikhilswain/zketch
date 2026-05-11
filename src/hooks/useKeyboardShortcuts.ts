@@ -27,6 +27,16 @@ export const useKeyboardShortcuts = (
     });
 
     KeyBindingManager.registerHandler("deleteSelected", () => {
+      if (!canvasStore.hasSelection) return;
+      // Element-bearing refs go through bulk-delete.
+      const hasElementRefs = canvasStore.selectedElements.some(
+        (s) => s.elementId !== null,
+      );
+      if (hasElementRefs) {
+        canvasStore.removeSelectedElements();
+        return;
+      }
+      // Single image-layer fallback.
       const selected = canvasStore.selectedLayer;
       if (!selected || selected.locked) return;
       const id = selected.id;

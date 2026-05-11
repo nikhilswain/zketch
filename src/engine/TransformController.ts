@@ -144,19 +144,24 @@ export class TransformController {
    */
   getHandlePositions(
     layer: TransformableLayer,
-    viewport: PanZoom
+    viewport: PanZoom,
+    paddingWorld: number = 0,
   ): HandlePosition[] {
-    const { x, y, width, height, rotation } = layer;
+    const { rotation } = layer;
     const angleRad = (rotation * Math.PI) / 180;
 
-    // Layer center in world coords
+    // Inflated bbox — visual only; underlying transform math still uses layer.x/y/w/h.
+    const x = layer.x - paddingWorld;
+    const y = layer.y - paddingWorld;
+    const width = layer.width + paddingWorld * 2;
+    const height = layer.height + paddingWorld * 2;
+
     const centerWorld: WorldPoint = {
       x: x + width / 2,
       y: y + height / 2,
     };
     const centerScreen = this.worldToScreen(centerWorld, viewport);
 
-    // Corner positions in world coords (before rotation)
     const cornersWorld = {
       nw: { x, y },
       ne: { x: x + width, y },
@@ -164,7 +169,6 @@ export class TransformController {
       sw: { x, y: y + height },
     };
 
-    // Rotation handle position (above top center)
     const rotateWorldY = y - this.config.rotateHandleOffset / viewport.zoom;
     const rotateWorld: WorldPoint = { x: x + width / 2, y: rotateWorldY };
 
@@ -210,9 +214,14 @@ export class TransformController {
    */
   getBoundingBoxCorners(
     layer: TransformableLayer,
-    viewport: PanZoom
+    viewport: PanZoom,
+    paddingWorld: number = 0,
   ): { nw: ScreenPoint; ne: ScreenPoint; se: ScreenPoint; sw: ScreenPoint } {
-    const { x, y, width, height, rotation } = layer;
+    const { rotation } = layer;
+    const x = layer.x - paddingWorld;
+    const y = layer.y - paddingWorld;
+    const width = layer.width + paddingWorld * 2;
+    const height = layer.height + paddingWorld * 2;
     const angleRad = (rotation * Math.PI) / 180;
 
     const centerWorld: WorldPoint = { x: x + width / 2, y: y + height / 2 };
@@ -245,12 +254,12 @@ export class TransformController {
   hitTest(
     screenPoint: ScreenPoint,
     layer: TransformableLayer,
-    viewport: PanZoom
+    viewport: PanZoom,
+    paddingWorld: number = 0,
   ): TransformHandleType | null {
-    const handles = this.getHandlePositions(layer, viewport);
+    const handles = this.getHandlePositions(layer, viewport, paddingWorld);
     const hitSize = this.config.handleSize + this.config.hitTestPadding;
 
-    // Check rotation handle first (highest priority)
     const rotateHandle = handles.find((h) => h.type === "rotate");
     if (rotateHandle) {
       const dx = screenPoint.x - rotateHandle.screenX;
@@ -260,7 +269,6 @@ export class TransformController {
       }
     }
 
-    // Check corner handles
     for (const handle of handles) {
       if (handle.type === "rotate") continue;
       const dx = screenPoint.x - handle.screenX;
@@ -270,36 +278,35 @@ export class TransformController {
       }
     }
 
-    // Check if inside bounding box (for move)
-    if (this.isPointInRotatedRect(screenPoint, layer, viewport)) {
+    if (this.isPointInRotatedRect(screenPoint, layer, viewport, paddingWorld)) {
       return "move";
     }
 
     return null;
   }
 
-  /**
-   * Check if a screen point is inside the rotated bounding box
-   */
   private isPointInRotatedRect(
     screenPoint: ScreenPoint,
     layer: TransformableLayer,
-    viewport: PanZoom
+    viewport: PanZoom,
+    paddingWorld: number = 0,
   ): boolean {
-    const { x, y, width, height, rotation } = layer;
+    const { rotation } = layer;
+    const x = layer.x - paddingWorld;
+    const y = layer.y - paddingWorld;
+    const width = layer.width + paddingWorld * 2;
+    const height = layer.height + paddingWorld * 2;
     const angleRad = (rotation * Math.PI) / 180;
 
     const centerWorld: WorldPoint = { x: x + width / 2, y: y + height / 2 };
     const centerScreen = this.worldToScreen(centerWorld, viewport);
 
-    // Unrotate the test point to axis-aligned space
     const unrotated = this.unrotatePoint(screenPoint, centerScreen, angleRad);
 
-    // Get axis-aligned bounds in screen coords
     const topLeft = this.worldToScreen({ x, y }, viewport);
     const bottomRight = this.worldToScreen(
       { x: x + width, y: y + height },
-      viewport
+      viewport,
     );
 
     return (
@@ -521,10 +528,11 @@ export class TransformController {
     ctx: CanvasRenderingContext2D,
     layer: TransformableLayer,
     viewport: PanZoom,
-    _dpr: number = 1
+    _dpr: number = 1,
+    paddingWorld: number = 0,
   ): void {
-    const corners = this.getBoundingBoxCorners(layer, viewport);
-    const handles = this.getHandlePositions(layer, viewport);
+    const corners = this.getBoundingBoxCorners(layer, viewport, paddingWorld);
+    const handles = this.getHandlePositions(layer, viewport, paddingWorld);
     const handleSize = this.config.handleSize;
 
     ctx.save();

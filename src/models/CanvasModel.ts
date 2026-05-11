@@ -12,8 +12,9 @@ import {
   createDefaultLayer,
   createImageLayer,
   type ILayerSnapshot,
+  type IDrawLayer,
 } from "./LayerModel";
-import { createShapeLayer, type ShapeKind } from "./ShapeLayerModel";
+import { createShapeElement, type ShapeKind } from "./ShapeLayerModel";
 // Import shared models and re-export for backward compatibility
 import { Point, Stroke, BrushSettings } from "./SharedModels";
 export { Point, Stroke, BrushSettings } from "./SharedModels";
@@ -68,8 +69,29 @@ export const CanvasModel = types
       types.enumeration("InteractionMode", ["draw", "transform"]),
       "draw",
     ),
-    // Currently selected layer for transformation
-    selectedLayerId: types.optional(types.maybeNull(types.string), null),
+    selectedElements: types.optional(
+      types.array(
+        types.model("SelectedElementRef", {
+          layerId: types.string,
+          elementId: types.maybeNull(types.string),
+        }),
+      ),
+      [],
+    ),
+    // Persistent rotated bbox that wraps the multi-selection. Null when fewer than 2
+    // elements are selected. Carries its own rotation so group rotate visibly persists.
+    selectionAnchor: types.optional(
+      types.maybeNull(
+        types.model("SelectionAnchor", {
+          x: types.number,
+          y: types.number,
+          width: types.number,
+          height: types.number,
+          rotation: types.number,
+        }),
+      ),
+      null,
+    ),
     // Active tool: "pan" navigates, "select" hit-tests, "brush" draws, "shape" creates
     activeTool: types.optional(
       types.enumeration("ActiveTool", ["pan", "select", "brush", "shape"]),
@@ -99,6 +121,8 @@ export const CanvasModel = types
     historyIndex: -1,
     maxHistorySize: 50,
     renderVersion: 0, // force re-renders
+    // Element IDs currently faded for "pending erase". Committed (deleted) on drag-end.
+    pendingEraserDeletes: new Set<string>(),
   }))
   .views((self) => ({
     get canUndo() {
@@ -108,14 +132,11 @@ export const CanvasModel = types
       return self.historyIndex < self.history.length - 1;
     },
     get isEmpty() {
-      // Check both legacy strokes and all layer strokes
       if (self.strokes.length > 0) return false;
       return self.layers.every((layer) => {
-        // Only stroke layers have strokes
-        if (layer.type === "stroke") {
-          return (layer as any).strokes.length === 0;
+        if (layer.type === "draw") {
+          return (layer as any).elements.length === 0;
         }
-        // Image layers are never "empty" in the stroke sense
         return false;
       });
     },
@@ -127,17 +148,17 @@ export const CanvasModel = types
     get sortedLayers() {
       return self.layers.slice();
     },
-    // Get layers formatted for export (includes both stroke and image layers)
+    // Layers formatted for export — draw layers expose their elements array verbatim.
     get exportLayers() {
       return self.layers
         .map((layer) => {
-          if (layer.type === "stroke") {
-            const strokeLayer = layer as any;
+          if (layer.type === "draw") {
+            const drawLayer = layer as any;
             return {
-              type: "stroke" as const,
+              type: "draw" as const,
               visible: layer.visible,
               opacity: layer.opacity,
-              strokes: strokeLayer.strokes.map((s: any) => getSnapshot(s)),
+              elements: drawLayer.elements.map((e: any) => getSnapshot(e)),
             };
           } else if (layer.type === "image") {
             const imageLayer = layer as any;
@@ -154,27 +175,6 @@ export const CanvasModel = types
                 rotation: imageLayer.rotation,
                 opacity: imageLayer.opacity,
                 visible: imageLayer.visible,
-              },
-            };
-          } else if (layer.type === "shape") {
-            const shapeLayer = layer as any;
-            return {
-              type: "shape" as const,
-              visible: layer.visible,
-              opacity: layer.opacity,
-              shapeData: {
-                shapeType: shapeLayer.shapeType,
-                x: shapeLayer.x,
-                y: shapeLayer.y,
-                width: shapeLayer.width,
-                height: shapeLayer.height,
-                rotation: shapeLayer.rotation,
-                strokeColor: shapeLayer.strokeColor,
-                strokeWidth: shapeLayer.strokeWidth,
-                cornerRadius: shapeLayer.cornerRadius,
-                fillColor: shapeLayer.fillColor,
-                opacity: shapeLayer.opacity,
-                visible: shapeLayer.visible,
               },
             };
           }
@@ -207,10 +207,12 @@ export const CanvasModel = types
     get flattenedStrokes() {
       const allStrokes: SnapshotOut<typeof Stroke>[] = [];
       for (const layer of self.layers) {
-        if (layer.visible && layer.type === "stroke") {
-          const strokeLayer = layer as any;
-          for (const stroke of strokeLayer.strokes) {
-            allStrokes.push(getSnapshot(stroke));
+        if (layer.visible && layer.type === "draw") {
+          const drawLayer = layer as any;
+          for (const el of drawLayer.elements) {
+            if (!("shapeType" in el)) {
+              allStrokes.push(getSnapshot(el));
+            }
           }
         }
       }
@@ -237,28 +239,181 @@ export const CanvasModel = types
       }
       return "white"; // White paint for white/grid backgrounds
     },
-    // Get the currently selected layer
+    get selectionCount() {
+      return self.selectedElements.length;
+    },
+    get hasSelection() {
+      return self.selectedElements.length > 0;
+    },
+    get isMultiSelect() {
+      return self.selectedElements.length > 1;
+    },
+    // Single-selection compat: return the single ref, else null.
+    get selectedLayerId() {
+      return self.selectedElements.length === 1
+        ? self.selectedElements[0].layerId
+        : null;
+    },
+    get selectedElementId() {
+      return self.selectedElements.length === 1
+        ? self.selectedElements[0].elementId
+        : null;
+    },
+    isSelected(layerId: string, elementId: string | null) {
+      return self.selectedElements.some(
+        (s) => s.layerId === layerId && s.elementId === elementId,
+      );
+    },
     get selectedLayer() {
-      if (!self.selectedLayerId) return null;
-      return self.layers.find((l) => l.id === self.selectedLayerId) || null;
+      if (self.selectedElements.length !== 1) return null;
+      const ref = self.selectedElements[0];
+      return self.layers.find((l) => l.id === ref.layerId) || null;
     },
-    // Get selected layer if it's an image layer
     get selectedImageLayer() {
-      if (!self.selectedLayerId) return null;
-      const layer = self.layers.find((l) => l.id === self.selectedLayerId);
-      if (layer && layer.type === "image") {
-        return layer;
+      if (self.selectedElements.length !== 1) return null;
+      const ref = self.selectedElements[0];
+      const layer = self.layers.find((l) => l.id === ref.layerId);
+      return layer && layer.type === "image" ? layer : null;
+    },
+    get selectedShapeElement() {
+      if (self.selectedElements.length !== 1) return null;
+      const ref = self.selectedElements[0];
+      if (!ref.elementId) return null;
+      const layer = self.layers.find((l) => l.id === ref.layerId);
+      if (!layer || layer.type !== "draw") return null;
+      const element = (layer as any).findElement(ref.elementId);
+      return element && "shapeType" in element ? element : null;
+    },
+    get selectedTransformableLayer() {
+      if (self.selectedElements.length !== 1) return null;
+      const ref = self.selectedElements[0];
+      const layer = self.layers.find((l) => l.id === ref.layerId);
+      if (!layer) return null;
+      if (layer.type === "image") return layer;
+      if (layer.type === "draw" && ref.elementId) {
+        const element = (layer as any).findElement(ref.elementId);
+        if (element && "shapeType" in element) return element;
       }
       return null;
     },
-    // Get selected layer if it's transformable (image or shape)
-    get selectedTransformableLayer() {
-      if (!self.selectedLayerId) return null;
-      const layer = self.layers.find((l) => l.id === self.selectedLayerId);
-      if (layer && (layer.type === "image" || layer.type === "shape")) {
-        return layer;
+    // All selected shape elements (for bulk color / opacity edits).
+    get selectedShapeElements() {
+      const out: any[] = [];
+      for (const ref of self.selectedElements) {
+        if (!ref.elementId) continue;
+        const layer = self.layers.find((l) => l.id === ref.layerId);
+        if (!layer || layer.type !== "draw") continue;
+        const element = (layer as any).findElement(ref.elementId);
+        if (element && "shapeType" in element) out.push(element);
       }
-      return null;
+      return out;
+    },
+    // All selected stroke elements (skipping eraser strokes — they're invisible).
+    get selectedStrokes() {
+      const out: any[] = [];
+      for (const ref of self.selectedElements) {
+        if (!ref.elementId) continue;
+        const layer = self.layers.find((l) => l.id === ref.layerId);
+        if (!layer || layer.type !== "draw") continue;
+        const element = (layer as any).findElement(ref.elementId);
+        if (element && !("shapeType" in element)) out.push(element);
+      }
+      return out;
+    },
+    // Axis-aligned union of every selected element's visible bbox.
+    // Shapes use their *rotated* AABB; strokes use the AABB of their points + size/2 margin.
+    get selectionUnionBounds() {
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
+      let any = false;
+      for (const ref of self.selectedElements) {
+        const layer = self.layers.find((l) => l.id === ref.layerId);
+        if (!layer) continue;
+        let bx = 0,
+          by = 0,
+          bw = 0,
+          bh = 0;
+        let valid = false;
+        if (layer.type === "image") {
+          const il = layer as any;
+          bx = il.x;
+          by = il.y;
+          bw = il.width;
+          bh = il.height;
+          const rot = il.rotation ?? 0;
+          if (rot) {
+            const cx = bx + bw / 2;
+            const cy = by + bh / 2;
+            const rad = (rot * Math.PI) / 180;
+            const absCos = Math.abs(Math.cos(rad));
+            const absSin = Math.abs(Math.sin(rad));
+            const rw = bw * absCos + bh * absSin;
+            const rh = bw * absSin + bh * absCos;
+            bx = cx - rw / 2;
+            by = cy - rh / 2;
+            bw = rw;
+            bh = rh;
+          }
+          valid = true;
+        } else if (layer.type === "draw" && ref.elementId) {
+          const el = (layer as any).findElement(ref.elementId);
+          if (el) {
+            if ("shapeType" in el) {
+              bx = el.x;
+              by = el.y;
+              bw = el.width;
+              bh = el.height;
+              const rot = el.rotation ?? 0;
+              if (rot) {
+                const cx = bx + bw / 2;
+                const cy = by + bh / 2;
+                const rad = (rot * Math.PI) / 180;
+                const absCos = Math.abs(Math.cos(rad));
+                const absSin = Math.abs(Math.sin(rad));
+                const rw = bw * absCos + bh * absSin;
+                const rh = bw * absSin + bh * absCos;
+                bx = cx - rw / 2;
+                by = cy - rh / 2;
+                bw = rw;
+                bh = rh;
+              }
+              valid = true;
+            } else if (el.points && el.points.length > 0) {
+              let sxMin = Infinity,
+                syMin = Infinity,
+                sxMax = -Infinity,
+                syMax = -Infinity;
+              for (const p of el.points) {
+                if (p.x < sxMin) sxMin = p.x;
+                if (p.y < syMin) syMin = p.y;
+                if (p.x > sxMax) sxMax = p.x;
+                if (p.y > syMax) syMax = p.y;
+              }
+              const half = (el.size ?? 1) / 2;
+              bx = sxMin - half;
+              by = syMin - half;
+              bw = sxMax - sxMin + half * 2;
+              bh = syMax - syMin + half * 2;
+              valid = true;
+            }
+          }
+        }
+        if (!valid) continue;
+        any = true;
+        if (bx < minX) minX = bx;
+        if (by < minY) minY = by;
+        if (bx + bw > maxX) maxX = bx + bw;
+        if (by + bh > maxY) maxY = by + bh;
+      }
+      if (!any) return null;
+      return {
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY,
+      };
     },
     // Check if we're in transform mode
     get isTransformMode() {
@@ -287,7 +442,6 @@ export const CanvasModel = types
           timestamp: stroke.timestamp,
         })),
         layers: self.layers.map((layer) => {
-          // Handle different layer types
           const baseLayerData = {
             id: layer.id,
             name: layer.name,
@@ -297,32 +451,11 @@ export const CanvasModel = types
             opacity: layer.opacity,
           };
 
-          if (layer.type === "stroke") {
-            const strokeLayer = layer as any;
+          if (layer.type === "draw") {
+            const drawLayer = layer as any;
             return {
               ...baseLayerData,
-              strokes: strokeLayer.strokes.map((stroke: any) => ({
-                id: stroke.id,
-                points: stroke.points.map((p: any) => ({
-                  x: p.x,
-                  y: p.y,
-                  pressure: p.pressure,
-                })),
-                color: stroke.color,
-                size: stroke.size,
-                opacity: stroke.opacity ?? 1,
-                brushStyle: stroke.brushStyle,
-                timestamp: stroke.timestamp,
-                // Animation timing
-                startTime: stroke.startTime ?? null,
-                duration: stroke.duration ?? null,
-                // Brush settings
-                thinning: stroke.thinning,
-                smoothing: stroke.smoothing,
-                streamline: stroke.streamline,
-                taperStart: stroke.taperStart,
-                taperEnd: stroke.taperEnd,
-              })),
+              elements: drawLayer.elements.map((el: any) => getSnapshot(el)),
             };
           } else if (layer.type === "image") {
             const imageLayer = layer as any;
@@ -338,21 +471,6 @@ export const CanvasModel = types
               rotation: imageLayer.rotation,
               aspectLocked: imageLayer.aspectLocked,
             };
-          } else if (layer.type === "shape") {
-            const shapeLayer = layer as any;
-            return {
-              ...baseLayerData,
-              shapeType: shapeLayer.shapeType,
-              x: shapeLayer.x,
-              y: shapeLayer.y,
-              width: shapeLayer.width,
-              height: shapeLayer.height,
-              rotation: shapeLayer.rotation,
-              strokeColor: shapeLayer.strokeColor,
-              strokeWidth: shapeLayer.strokeWidth,
-              cornerRadius: shapeLayer.cornerRadius,
-              fillColor: shapeLayer.fillColor,
-            };
           }
           return baseLayerData;
         }),
@@ -361,6 +479,15 @@ export const CanvasModel = types
         zoom: self.zoom,
         panX: self.panX,
         panY: self.panY,
+        selectionAnchor: self.selectionAnchor
+          ? {
+              x: self.selectionAnchor.x,
+              y: self.selectionAnchor.y,
+              width: self.selectionAnchor.width,
+              height: self.selectionAnchor.height,
+              rotation: self.selectionAnchor.rotation,
+            }
+          : null,
       };
 
       // Remove any future history if we're not at the end
@@ -417,6 +544,28 @@ export const CanvasModel = types
       self.panX = state.panX;
       self.panY = state.panY;
 
+      // Restore the selection anchor so the bbox snaps back with elements on undo/redo.
+      const anchor = (state as any).selectionAnchor as
+        | { x: number; y: number; width: number; height: number; rotation: number }
+        | null
+        | undefined;
+      if (anchor === null) {
+        self.selectionAnchor = null;
+      } else if (anchor) {
+        self.selectionAnchor = {
+          x: anchor.x,
+          y: anchor.y,
+          width: anchor.width,
+          height: anchor.height,
+          rotation: anchor.rotation,
+        };
+      }
+      // If the restored snapshot had no anchor but our live selection still expects one
+      // (e.g., the user selected after the snapshot was taken, then dragged), rebuild
+      // from current element positions so the bbox tracks the restored layout.
+      if (!self.selectionAnchor && self.selectedElements.length > 0) {
+        (self as any).recomputeSelectionAnchor();
+      }
     };
 
     const clearHistory = () => {
@@ -463,13 +612,17 @@ export const CanvasModel = types
       },
       setColor(color: string) {
         self.currentColor = color;
-        const selected = self.layers.find((l) => l.id === self.selectedLayerId);
-        if (selected && selected.type === "shape") {
+        const shapes = self.selectedShapeElements as any[];
+        for (const shapeEl of shapes) {
           if (self.colorTarget === "fill") {
-            (selected as any).setFillColor(color);
+            shapeEl.setFillColor(color);
           } else {
-            (selected as any).setStrokeColor(color);
+            shapeEl.setStrokeColor(color);
           }
+        }
+        const strokes = self.selectedStrokes as any[];
+        for (const strokeEl of strokes) {
+          strokeEl.setColor(color);
         }
       },
       setColorTarget(target: "stroke" | "fill") {
@@ -641,9 +794,9 @@ export const CanvasModel = types
 
       setActiveTool(tool: "pan" | "select" | "brush" | "shape") {
         self.activeTool = tool;
-        // Only Select keeps a selection / transform handles visible.
         if (tool !== "select") {
-          self.selectedLayerId = null;
+          self.selectedElements.clear();
+          self.selectionAnchor = null;
           self.interactionMode = "draw";
         }
       },
@@ -663,24 +816,39 @@ export const CanvasModel = types
         self.shapeFillColor = c;
       },
 
-      addShapeLayer(
+      // Add a shape element to the active draw layer.
+      // If active is an image (or none), spin up a draw layer above it and add there.
+      addShape(
         shapeType: ShapeKind,
         x: number,
         y: number,
         width: number,
         height: number,
-      ) {
-        const newLayer = createShapeLayer(shapeType, x, y, width, height, {
+      ): { layerId: string; elementId: string } | null {
+        let activeLayer = self.layers.find((l) => l.id === self.activeLayerId);
+        if (!activeLayer || activeLayer.type !== "draw") {
+          // Create a new draw layer above the current active layer.
+          const newLayerData = createDefaultLayer(
+            `Layer ${self.layers.length + 1}`,
+          );
+          self.layers.push(Layer.create(newLayerData as any));
+          self.activeLayerId = newLayerData.id;
+          activeLayer = self.layers.find((l) => l.id === newLayerData.id)!;
+        }
+        const drawLayer = activeLayer as IDrawLayer;
+        if (drawLayer.locked) return null;
+        const shapeData = createShapeElement(shapeType, x, y, width, height, {
           strokeColor: self.currentColor,
           strokeWidth: self.shapeStrokeWidth,
           cornerRadius: self.shapeCornerRadius,
           opacity: self.shapeOpacity,
           fillColor: self.shapeFillColor,
         });
-        self.layers.push(Layer.create(newLayer as any));
-        self.activeLayerId = newLayer.id;
+        const elementId = drawLayer.addShape(shapeData);
         self.saveToHistory();
-        return newLayer.id;
+        return elementId
+          ? { layerId: drawLayer.id, elementId }
+          : null;
       },
 
       // Add a new image layer
@@ -711,20 +879,28 @@ export const CanvasModel = types
         return newLayer.id;
       },
 
-      // Remove a layer by ID
       removeLayer(layerId: string) {
         const index = self.layers.findIndex((l) => l.id === layerId);
         if (index === -1) return;
-
-        // Don't allow removing the last layer
         if (self.layers.length === 1) return;
 
         self.layers.splice(index, 1);
 
-        // If we removed the active layer, select another one
         if (self.activeLayerId === layerId) {
           self.activeLayerId =
             self.layers[Math.min(index, self.layers.length - 1)]?.id || "";
+        }
+        // Drop any dangling selection refs to the removed layer.
+        for (let i = self.selectedElements.length - 1; i >= 0; i--) {
+          if (self.selectedElements[i].layerId === layerId) {
+            self.selectedElements.splice(i, 1);
+          }
+        }
+        if (self.selectedElements.length === 0) {
+          self.interactionMode = "draw";
+          self.selectionAnchor = null;
+        } else {
+          (self as any).recomputeSelectionAnchor();
         }
 
         self.saveToHistory();
@@ -738,35 +914,244 @@ export const CanvasModel = types
         }
       },
 
-      // Set interaction mode (draw or transform)
+      // Rebuild selectionAnchor. Set whenever rotation needs persistent tracking — i.e. any
+      // multi-selection, OR a single stroke (no own rotation field). Single shape/image use
+      // their own rotation, so anchor stays null for them.
+      recomputeSelectionAnchor() {
+        if (self.selectedElements.length === 0) {
+          self.selectionAnchor = null;
+          return;
+        }
+        if (self.selectedElements.length === 1) {
+          const ref = self.selectedElements[0];
+          if (!ref.elementId) {
+            self.selectionAnchor = null;
+            return;
+          }
+          const layer = self.layers.find((l) => l.id === ref.layerId);
+          if (!layer || layer.type !== "draw") {
+            self.selectionAnchor = null;
+            return;
+          }
+          const el = (layer as any).findElement(ref.elementId);
+          if (!el || "shapeType" in el) {
+            self.selectionAnchor = null;
+            return;
+          }
+          if (!el.points || el.points.length === 0) {
+            self.selectionAnchor = null;
+            return;
+          }
+          // Stroke: AABB of points + size/2 margin.
+          let xMin = Infinity,
+            yMin = Infinity,
+            xMax = -Infinity,
+            yMax = -Infinity;
+          for (const p of el.points) {
+            if (p.x < xMin) xMin = p.x;
+            if (p.y < yMin) yMin = p.y;
+            if (p.x > xMax) xMax = p.x;
+            if (p.y > yMax) yMax = p.y;
+          }
+          const half = (el.size ?? 1) / 2;
+          self.selectionAnchor = {
+            x: xMin - half,
+            y: yMin - half,
+            width: xMax - xMin + half * 2,
+            height: yMax - yMin + half * 2,
+            rotation: 0,
+          };
+          return;
+        }
+        const bounds = self.selectionUnionBounds;
+        if (!bounds) {
+          self.selectionAnchor = null;
+          return;
+        }
+        self.selectionAnchor = {
+          x: bounds.x,
+          y: bounds.y,
+          width: bounds.width,
+          height: bounds.height,
+          rotation: 0,
+        };
+      },
+
+      setSelectionAnchorRotation(rotation: number) {
+        if (self.selectionAnchor) {
+          self.selectionAnchor.rotation = ((rotation % 360) + 360) % 360;
+        }
+      },
+
+      setSelectionAnchorBounds(x: number, y: number, w: number, h: number) {
+        if (self.selectionAnchor) {
+          self.selectionAnchor.x = x;
+          self.selectionAnchor.y = y;
+          self.selectionAnchor.width = w;
+          self.selectionAnchor.height = h;
+        }
+      },
+
       setInteractionMode(mode: "draw" | "transform") {
         self.interactionMode = mode;
-        // If switching to draw mode, clear selection
         if (mode === "draw") {
-          self.selectedLayerId = null;
+          self.selectedElements.clear();
+          self.selectionAnchor = null;
         }
       },
 
-      // Select a layer for transformation
+      // Replace selection with a whole layer (used for image layers).
       selectLayer(layerId: string | null) {
+        self.selectedElements.clear();
+        self.selectionAnchor = null;
         if (layerId === null) {
-          self.selectedLayerId = null;
           self.interactionMode = "draw";
+          return;
+        }
+        const layer = self.layers.find((l) => l.id === layerId);
+        if (!layer) return;
+        self.selectedElements.push({ layerId, elementId: null });
+        self.interactionMode = "transform";
+        self.activeLayerId = layerId;
+      },
+
+      // Replace selection with a single element inside a draw layer.
+      selectElement(layerId: string, elementId: string) {
+        const layer = self.layers.find((l) => l.id === layerId);
+        if (!layer) return;
+        self.selectedElements.clear();
+        self.selectionAnchor = null;
+        self.selectedElements.push({ layerId, elementId });
+        self.interactionMode = "transform";
+        self.activeLayerId = layerId;
+        (self as any).recomputeSelectionAnchor();
+      },
+
+      addToSelection(layerId: string, elementId: string | null) {
+        const exists = self.selectedElements.some(
+          (s) => s.layerId === layerId && s.elementId === elementId,
+        );
+        if (exists) return;
+        self.selectedElements.push({ layerId, elementId });
+        self.interactionMode = "transform";
+        self.activeLayerId = layerId;
+        (self as any).recomputeSelectionAnchor();
+      },
+
+      // Toggle membership — used for shift-click.
+      toggleSelection(layerId: string, elementId: string | null) {
+        const idx = self.selectedElements.findIndex(
+          (s) => s.layerId === layerId && s.elementId === elementId,
+        );
+        if (idx >= 0) {
+          self.selectedElements.splice(idx, 1);
+          if (self.selectedElements.length === 0) {
+            self.interactionMode = "draw";
+          }
         } else {
-          const layer = self.layers.find((l) => l.id === layerId);
-          if (layer) {
-            self.selectedLayerId = layerId;
-            self.interactionMode = "transform";
-            // Also make it the active layer
-            self.activeLayerId = layerId;
+          self.selectedElements.push({ layerId, elementId });
+          self.interactionMode = "transform";
+          self.activeLayerId = layerId;
+        }
+        (self as any).recomputeSelectionAnchor();
+      },
+
+      // Replace selection with everything inside a marquee rect (canvas-space AABB).
+      // If `additive`, merges with existing selection (shift-marquee).
+      selectInBounds(
+        bounds: { x: number; y: number; width: number; height: number },
+        additive: boolean,
+      ) {
+        if (!additive) self.selectedElements.clear();
+        const bx2 = bounds.x + bounds.width;
+        const by2 = bounds.y + bounds.height;
+        const addOnce = (layerId: string, elementId: string | null) => {
+          const exists = self.selectedElements.some(
+            (s) => s.layerId === layerId && s.elementId === elementId,
+          );
+          if (!exists) self.selectedElements.push({ layerId, elementId });
+        };
+        for (const layer of self.layers) {
+          if (!layer.visible || layer.locked) continue;
+          if (layer.type === "image") {
+            const il = layer as any;
+            if (
+              il.x < bx2 &&
+              il.x + il.width > bounds.x &&
+              il.y < by2 &&
+              il.y + il.height > bounds.y
+            ) {
+              addOnce(layer.id, null);
+            }
+          } else if (layer.type === "draw") {
+            for (const el of (layer as any).elements) {
+              if ("shapeType" in el) {
+                if (
+                  el.x < bx2 &&
+                  el.x + el.width > bounds.x &&
+                  el.y < by2 &&
+                  el.y + el.height > bounds.y
+                ) {
+                  addOnce(layer.id, el.id);
+                }
+              } else if (el.brushStyle !== "eraser" && el.points && el.points.length > 0) {
+                let sxMin = Infinity,
+                  syMin = Infinity,
+                  sxMax = -Infinity,
+                  syMax = -Infinity;
+                for (const p of el.points) {
+                  if (p.x < sxMin) sxMin = p.x;
+                  if (p.y < syMin) syMin = p.y;
+                  if (p.x > sxMax) sxMax = p.x;
+                  if (p.y > syMax) syMax = p.y;
+                }
+                const half = (el.size ?? 1) / 2;
+                if (
+                  sxMin - half < bx2 &&
+                  sxMax + half > bounds.x &&
+                  syMin - half < by2 &&
+                  syMax + half > bounds.y
+                ) {
+                  addOnce(layer.id, el.id);
+                }
+              }
+            }
           }
         }
+        if (self.selectedElements.length > 0) {
+          self.interactionMode = "transform";
+        }
+        (self as any).recomputeSelectionAnchor();
       },
 
-      // Deselect current layer and return to draw mode
       deselectLayer() {
-        self.selectedLayerId = null;
+        self.selectedElements.clear();
+        self.selectionAnchor = null;
         self.interactionMode = "draw";
+      },
+
+      // Translate every selected element by (dx, dy). Used for group-drag.
+      moveSelectedBy(dx: number, dy: number) {
+        for (const ref of self.selectedElements) {
+          if (!ref.elementId) {
+            const layer = self.layers.find((l) => l.id === ref.layerId);
+            if (layer && layer.type === "image" && !layer.locked) {
+              (layer as any).move(dx, dy);
+            }
+            continue;
+          }
+          const layer = self.layers.find((l) => l.id === ref.layerId);
+          if (!layer || layer.type !== "draw" || layer.locked) continue;
+          const el = (layer as any).findElement(ref.elementId);
+          if (!el) continue;
+          if ("shapeType" in el) el.move(dx, dy);
+          else if (el.translate) el.translate(dx, dy);
+        }
+        // Keep the rotated anchor in sync with the moved elements.
+        if (self.selectionAnchor) {
+          self.selectionAnchor.x += dx;
+          self.selectionAnchor.y += dy;
+        }
       },
 
       // Move layer to a new position (index)
@@ -866,10 +1251,10 @@ export const CanvasModel = types
         }
       },
 
-      // Clear all strokes from a specific layer (keeps the layer)
+      // Clear all strokes from a specific draw layer (keeps shapes and the layer).
       clearLayer(layerId: string) {
         const layer = self.layers.find((l) => l.id === layerId);
-        if (layer && !layer.locked && layer.type === "stroke") {
+        if (layer && !layer.locked && layer.type === "draw") {
           (layer as any).clearStrokes();
           self.saveToHistory();
         }
@@ -883,27 +1268,32 @@ export const CanvasModel = types
         }
       },
 
-      // Add a stroke to the active layer
+      // Add a stroke to the active layer (auto-creates a draw layer if active is an image).
       addStrokeToActiveLayer(strokeData: SnapshotIn<typeof Stroke>) {
-        const activeLayer = self.layers.find(
+        let activeLayer = self.layers.find(
           (l) => l.id === self.activeLayerId,
         );
-        // Can only add strokes to stroke layers
-        if (
-          activeLayer &&
-          !activeLayer.locked &&
-          activeLayer.type === "stroke"
-        ) {
-          (activeLayer as any).addStroke(strokeData);
-          self.saveToHistory();
-        } else if (!activeLayer && self.layers.length === 0) {
+        if (!activeLayer && self.layers.length === 0) {
           // Fallback to legacy strokes if no layers exist
           self.addStrokeToModel(strokeData);
+          self.saveToHistory();
+          return;
+        }
+        if (!activeLayer || activeLayer.type !== "draw") {
+          const newLayerData = createDefaultLayer(
+            `Layer ${self.layers.length + 1}`,
+          );
+          self.layers.push(Layer.create(newLayerData as any));
+          self.activeLayerId = newLayerData.id;
+          activeLayer = self.layers.find((l) => l.id === newLayerData.id)!;
+        }
+        if (!activeLayer.locked) {
+          (activeLayer as any).addStroke(strokeData);
           self.saveToHistory();
         }
       },
 
-      // Clear strokes from the active layer
+      // Clear strokes from the active layer (preserves shapes).
       clearActiveLayer() {
         const activeLayer = self.layers.find(
           (l) => l.id === self.activeLayerId,
@@ -911,32 +1301,105 @@ export const CanvasModel = types
         if (
           activeLayer &&
           !activeLayer.locked &&
-          activeLayer.type === "stroke"
+          activeLayer.type === "draw"
         ) {
           (activeLayer as any).clearStrokes();
           self.saveToHistory();
         }
       },
 
-      // Duplicate a layer
+      // Mark an element for pending erase (renders faded). Idempotent.
+      markPendingErase(elementId: string) {
+        if (self.pendingEraserDeletes.has(elementId)) return;
+        const next = new Set(self.pendingEraserDeletes);
+        next.add(elementId);
+        self.pendingEraserDeletes = next;
+      },
+      clearPendingErase() {
+        if (self.pendingEraserDeletes.size === 0) return;
+        self.pendingEraserDeletes = new Set();
+      },
+      // Splice every pending element from its layer and clear the set. One history entry.
+      commitPendingErase() {
+        if (self.pendingEraserDeletes.size === 0) return;
+        const ids = self.pendingEraserDeletes;
+        let removed = false;
+        for (const layer of self.layers) {
+          if (layer.type !== "draw" || layer.locked) continue;
+          const draw = layer as any;
+          for (let i = draw.elements.length - 1; i >= 0; i--) {
+            const el = draw.elements[i];
+            if (ids.has(el.id)) {
+              draw.removeElement(el.id);
+              removed = true;
+            }
+          }
+        }
+        for (let i = self.selectedElements.length - 1; i >= 0; i--) {
+          const eid = self.selectedElements[i].elementId;
+          if (eid && ids.has(eid)) self.selectedElements.splice(i, 1);
+        }
+        self.pendingEraserDeletes = new Set();
+        if (removed) {
+          (self as any).recomputeSelectionAnchor();
+          self.saveToHistory();
+        }
+      },
+
+      removeElement(layerId: string, elementId: string) {
+        const layer = self.layers.find((l) => l.id === layerId);
+        if (!layer || layer.type !== "draw" || layer.locked) return;
+        (layer as any).removeElement(elementId);
+        const idx = self.selectedElements.findIndex(
+          (s) => s.layerId === layerId && s.elementId === elementId,
+        );
+        if (idx >= 0) {
+          self.selectedElements.splice(idx, 1);
+          if (self.selectedElements.length === 0) {
+            self.interactionMode = "draw";
+          }
+          (self as any).recomputeSelectionAnchor();
+        }
+        self.saveToHistory();
+      },
+
+      // Bulk-remove every selected element. Skips locked layers and image layers (those need explicit deletion).
+      removeSelectedElements() {
+        const refs = self.selectedElements.slice();
+        let removedAny = false;
+        for (const ref of refs) {
+          if (!ref.elementId) continue;
+          const layer = self.layers.find((l) => l.id === ref.layerId);
+          if (!layer || layer.type !== "draw" || layer.locked) continue;
+          (layer as any).removeElement(ref.elementId);
+          removedAny = true;
+        }
+        self.selectedElements.clear();
+        self.selectionAnchor = null;
+        self.interactionMode = "draw";
+        if (removedAny) self.saveToHistory();
+      },
+
+      // Duplicate a layer (deep-clones elements for draw layers).
       duplicateLayer(layerId: string) {
         const layer = self.layers.find((l) => l.id === layerId);
         if (!layer) return;
 
         const newLayerId = createLayerId();
-
-        // Handle different layer types
         let newLayerData: any;
-        if (layer.type === "stroke") {
-          const strokeLayer = layer as any;
+        if (layer.type === "draw") {
+          const drawLayer = layer as any;
           newLayerData = {
             id: newLayerId,
             name: `${layer.name} Copy`,
-            type: "stroke",
+            type: "draw",
             visible: layer.visible,
             locked: false,
             opacity: layer.opacity,
-            strokes: getSnapshot(strokeLayer.strokes) as any,
+            elements: drawLayer.elements.map((el: any) => {
+              const snap = getSnapshot(el) as any;
+              return { ...snap, id: crypto.randomUUID() };
+            }),
           };
         } else if (layer.type === "image") {
           const imageLayer = layer as any;
@@ -957,26 +1420,6 @@ export const CanvasModel = types
             rotation: imageLayer.rotation,
             aspectLocked: imageLayer.aspectLocked,
           };
-        } else if (layer.type === "shape") {
-          const shapeLayer = layer as any;
-          newLayerData = {
-            id: newLayerId,
-            name: `${layer.name} Copy`,
-            type: "shape",
-            visible: layer.visible,
-            locked: false,
-            opacity: layer.opacity,
-            shapeType: shapeLayer.shapeType,
-            x: shapeLayer.x + 16,
-            y: shapeLayer.y + 16,
-            width: shapeLayer.width,
-            height: shapeLayer.height,
-            rotation: shapeLayer.rotation,
-            strokeColor: shapeLayer.strokeColor,
-            strokeWidth: shapeLayer.strokeWidth,
-            cornerRadius: shapeLayer.cornerRadius,
-            fillColor: shapeLayer.fillColor,
-          };
         } else {
           return;
         }
@@ -990,33 +1433,31 @@ export const CanvasModel = types
         return newLayerId;
       },
 
-      // Merge visible stroke layers into a single layer (image layers are skipped)
+      // Merge visible draw layers into a single layer (image layers are skipped).
       mergeVisibleLayers() {
-        const visibleStrokeLayers = self.layers.filter(
-          (l) => l.visible && l.type === "stroke",
+        const visibleDraw = self.layers.filter(
+          (l) => l.visible && l.type === "draw",
         );
-        if (visibleStrokeLayers.length < 2) return;
+        if (visibleDraw.length < 2) return;
 
-        const allStrokes: SnapshotIn<typeof Stroke>[] = [];
-        for (const layer of visibleStrokeLayers) {
-          const strokeLayer = layer as any;
-          for (const stroke of strokeLayer.strokes) {
-            allStrokes.push(getSnapshot(stroke));
+        const allElements: any[] = [];
+        for (const layer of visibleDraw) {
+          for (const el of (layer as any).elements) {
+            allElements.push(getSnapshot(el));
           }
         }
 
-        // Create a new merged layer
         const mergedLayerId = createLayerId();
         const mergedLayer = Layer.create({
           id: mergedLayerId,
           name: "Merged Layer",
+          type: "draw",
           visible: true,
           locked: false,
           opacity: 1,
-          strokes: allStrokes as any,
+          elements: allElements as any,
         });
 
-        // Remove all visible layers and add the merged one
         const hiddenLayers = self.layers.filter((l) => !l.visible);
         self.layers.replace([
           ...hiddenLayers.map((l) => Layer.create(getSnapshot(l) as any)),
@@ -1028,38 +1469,34 @@ export const CanvasModel = types
         return mergedLayerId;
       },
 
-      // Flatten all stroke layers into one (image layers are kept separate)
+      // Flatten all draw layers into one (image layers are kept separate).
       flattenAllLayers() {
         if (self.layers.length < 1) return;
 
-        const allStrokes: SnapshotIn<typeof Stroke>[] = [];
+        const allElements: any[] = [];
         const imageLayers: any[] = [];
 
         for (const layer of self.layers) {
-          if (layer.visible && layer.type === "stroke") {
-            const strokeLayer = layer as any;
-            for (const stroke of strokeLayer.strokes) {
-              allStrokes.push(getSnapshot(stroke));
+          if (layer.visible && layer.type === "draw") {
+            for (const el of (layer as any).elements) {
+              allElements.push(getSnapshot(el));
             }
           } else if (layer.type === "image") {
-            // Keep image layers
             imageLayers.push(Layer.create(getSnapshot(layer) as any));
           }
         }
 
-        // Create a single flattened stroke layer
         const flattenedLayerId = createLayerId();
         const flattenedLayer = Layer.create({
           id: flattenedLayerId,
           name: "Flattened",
-          type: "stroke",
+          type: "draw",
           visible: true,
           locked: false,
           opacity: 1,
-          strokes: allStrokes as any,
+          elements: allElements as any,
         });
 
-        // Keep image layers and add flattened stroke layer
         self.layers.replace([...imageLayers, flattenedLayer]);
         self.activeLayerId = flattenedLayerId;
 
@@ -1081,7 +1518,8 @@ export const CanvasModel = types
         self.saveToHistory();
       },
 
-      // Load layers from saved drawing data (supports both stroke and image layers)
+      // Load layers from saved drawing data.
+      // Migrates legacy "stroke" and "shape" layer entries into the new draw-layer model.
       loadLayers(
         layersData: Array<{
           id: string;
@@ -1090,9 +1528,11 @@ export const CanvasModel = types
           visible: boolean;
           locked: boolean;
           opacity: number;
-          // Stroke layer properties
+          // New draw layer
+          elements?: any[];
+          // Legacy stroke layer
           strokes?: SnapshotIn<typeof Stroke>[];
-          // Image layer properties
+          // Image layer
           blobId?: string;
           naturalWidth?: number;
           naturalHeight?: number;
@@ -1102,7 +1542,7 @@ export const CanvasModel = types
           height?: number;
           rotation?: number;
           aspectLocked?: boolean;
-          // Shape layer properties
+          // Legacy shape layer
           shapeType?: ShapeKind;
           strokeColor?: string;
           strokeWidth?: number;
@@ -1111,13 +1551,11 @@ export const CanvasModel = types
         }>,
         activeLayerId?: string,
       ) {
-        // Clear existing layers
         self.layers.clear();
         self.focusedLayerId = null;
 
-        // Add each layer from saved data
         layersData.forEach((layerData) => {
-          const layerType = layerData.type || "stroke";
+          const layerType = layerData.type || "draw";
 
           if (layerType === "image") {
             const layer = Layer.create({
@@ -1138,41 +1576,59 @@ export const CanvasModel = types
               aspectLocked: layerData.aspectLocked ?? true,
             });
             self.layers.push(layer);
-          } else if (layerType === "shape") {
+          } else if (layerType === "draw") {
             const layer = Layer.create({
               id: layerData.id,
               name: layerData.name,
-              type: "shape",
+              type: "draw",
               visible: layerData.visible,
               locked: layerData.locked,
               opacity: layerData.opacity,
-              shapeType: layerData.shapeType ?? "rectangle",
-              x: layerData.x ?? 0,
-              y: layerData.y ?? 0,
-              width: layerData.width!,
-              height: layerData.height!,
-              rotation: layerData.rotation ?? 0,
-              strokeColor: layerData.strokeColor ?? "#000000",
-              strokeWidth: layerData.strokeWidth ?? 4,
-              cornerRadius: layerData.cornerRadius ?? 8,
-              fillColor: layerData.fillColor ?? null,
+              elements: (layerData.elements || []) as any,
+            });
+            self.layers.push(layer);
+          } else if (layerType === "shape") {
+            // Legacy shape layer → draw layer with one shape element.
+            const layer = Layer.create({
+              id: layerData.id,
+              name: layerData.name,
+              type: "draw",
+              visible: layerData.visible,
+              locked: layerData.locked,
+              opacity: layerData.opacity,
+              elements: [
+                {
+                  id: `shape_${layerData.id}`,
+                  shapeType: layerData.shapeType ?? "rectangle",
+                  x: layerData.x ?? 0,
+                  y: layerData.y ?? 0,
+                  width: layerData.width!,
+                  height: layerData.height!,
+                  rotation: layerData.rotation ?? 0,
+                  strokeColor: layerData.strokeColor ?? "#000000",
+                  strokeWidth: layerData.strokeWidth ?? 4,
+                  cornerRadius: layerData.cornerRadius ?? 8,
+                  fillColor: layerData.fillColor ?? null,
+                  opacity: 1,
+                },
+              ] as any,
             });
             self.layers.push(layer);
           } else {
+            // Legacy "stroke" layer → draw layer with strokes as elements.
             const layer = Layer.create({
               id: layerData.id,
               name: layerData.name,
-              type: "stroke",
+              type: "draw",
               visible: layerData.visible,
               locked: layerData.locked,
               opacity: layerData.opacity,
-              strokes: (layerData.strokes || []) as any,
+              elements: (layerData.strokes || []) as any,
             });
             self.layers.push(layer);
           }
         });
 
-        // Set active layer
         if (activeLayerId && self.layers.find((l) => l.id === activeLayerId)) {
           self.activeLayerId = activeLayerId;
         } else if (self.layers.length > 0) {

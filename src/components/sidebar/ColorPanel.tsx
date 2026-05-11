@@ -9,9 +9,8 @@ const commonColors = ["#000000", "#FF0000", "#00FF00", "#0000FF", "#FFFF00"];
 const ColorPanel: React.FC = observer(() => {
   const canvasStore = useCanvasStore();
 
-  const selected = canvasStore.selectedLayer;
-  const editingShape =
-    selected && selected.type === "shape" ? (selected as any) : null;
+  const shapes = canvasStore.selectedShapeElements as any[];
+  const previewShape = shapes[0] ?? null;
 
   const handleColorChange = (color: ZColorResult<["hex"]>) => {
     canvasStore.setColor(color.hex);
@@ -19,14 +18,17 @@ const ColorPanel: React.FC = observer(() => {
 
   const setTarget = (t: "stroke" | "fill") => {
     canvasStore.setColorTarget(t);
-    if (t === "fill" && editingShape && editingShape.fillColor === null) {
-      editingShape.setFillColor(canvasStore.currentColor);
+    if (t === "fill" && shapes.length > 0) {
+      // Turn on fill for any selected shape that currently has none.
+      shapes.forEach((s) => {
+        if (s.fillColor === null) s.setFillColor(canvasStore.currentColor);
+      });
     }
   };
 
   return (
     <div className="space-y-3">
-      {editingShape && (
+      {previewShape && (
         <div className="flex items-center gap-1 p-1 bg-gray-100 rounded">
           <button
             onClick={() => setTarget("stroke")}
@@ -38,7 +40,7 @@ const ColorPanel: React.FC = observer(() => {
           >
             <span
               className="w-3 h-3 rounded-full border border-gray-300"
-              style={{ backgroundColor: editingShape.strokeColor }}
+              style={{ backgroundColor: previewShape.strokeColor }}
             />
             Stroke
           </button>
@@ -53,9 +55,9 @@ const ColorPanel: React.FC = observer(() => {
             <span
               className="w-3 h-3 rounded-full border border-gray-300"
               style={{
-                backgroundColor: editingShape.fillColor ?? "transparent",
+                backgroundColor: previewShape.fillColor ?? "transparent",
                 backgroundImage:
-                  editingShape.fillColor === null
+                  previewShape.fillColor === null
                     ? "linear-gradient(45deg, transparent 45%, #ef4444 45%, #ef4444 55%, transparent 55%)"
                     : undefined,
               }}
