@@ -28,4 +28,7 @@ pnpm-debug.log*
 
 # Cloudflare Wrangler config
 wrangler.toml
+
+# session changelog (working notes for resuming work, not for the repo)
+CHANGELOG.md
  
