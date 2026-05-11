@@ -479,6 +479,15 @@ export const CanvasModel = types
         zoom: self.zoom,
         panX: self.panX,
         panY: self.panY,
+        selectionAnchor: self.selectionAnchor
+          ? {
+              x: self.selectionAnchor.x,
+              y: self.selectionAnchor.y,
+              width: self.selectionAnchor.width,
+              height: self.selectionAnchor.height,
+              rotation: self.selectionAnchor.rotation,
+            }
+          : null,
       };
 
       // Remove any future history if we're not at the end
@@ -535,6 +544,28 @@ export const CanvasModel = types
       self.panX = state.panX;
       self.panY = state.panY;
 
+      // Restore the selection anchor so the bbox snaps back with elements on undo/redo.
+      const anchor = (state as any).selectionAnchor as
+        | { x: number; y: number; width: number; height: number; rotation: number }
+        | null
+        | undefined;
+      if (anchor === null) {
+        self.selectionAnchor = null;
+      } else if (anchor) {
+        self.selectionAnchor = {
+          x: anchor.x,
+          y: anchor.y,
+          width: anchor.width,
+          height: anchor.height,
+          rotation: anchor.rotation,
+        };
+      }
+      // If the restored snapshot had no anchor but our live selection still expects one
+      // (e.g., the user selected after the snapshot was taken, then dragged), rebuild
+      // from current element positions so the bbox tracks the restored layout.
+      if (!self.selectionAnchor && self.selectedElements.length > 0) {
+        (self as any).recomputeSelectionAnchor();
+      }
     };
 
     const clearHistory = () => {
