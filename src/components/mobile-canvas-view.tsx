@@ -261,9 +261,14 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
           layersToSave as any,
           canvasStore.activeLayerId,
         );
-        // Update currentDrawingId so subsequent saves update instead of creating new
         if (newDrawing) {
           setCurrentDrawingId(newDrawing.id);
+          if (
+            typeof window !== "undefined" &&
+            window.location.pathname === "/draw"
+          ) {
+            window.history.replaceState({}, "", `/draw/${newDrawing.id}`);
+          }
         }
       }
 
