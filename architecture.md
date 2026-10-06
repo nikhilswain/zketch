@@ -386,7 +386,10 @@ Persistence layers:
   - SVG only handles **strokes** (no shapes/images, no eraser) — known gap.
   - `downloadFile(dataUrl, filename)` triggers the browser download.
 - **`ThumbnailService`** — `generateThumbnailAsync(layers, background, w, h)`
-  renders visible layers (strokes + shapes + images) to a data URL.
+  renders visible layers (strokes + shapes + images) to a data URL. Draw layers
+  are baked to an offscreen per layer (eraser isolation) using the shared
+  `renderStroke`/`renderShape` renderers; grid uses `GridRenderer` (20px) for
+  parity with the canvas/export.
 - **`ImportService`** — file / URL / clipboard / dataURL → validated + processed
   blob via `ImageProcessingUtils` (`maxWidth/Height 4096`, 10MB compress
   threshold, SVG sanitization).

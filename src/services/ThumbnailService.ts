@@ -1,7 +1,10 @@
 import type { IStroke } from "../models/CanvasModel";
 import type { ILayerSnapshot } from "../models/LayerModel";
-import { getStroke } from "perfect-freehand";
 import { BlobStorageService } from "./BlobStorageService";
+import { GridRenderer } from "@/engine/GridRenderer";
+import { brushRegistry } from "@/engine/render/BrushRegistry";
+import { renderStroke } from "@/engine/render/renderStroke";
+import { renderShape } from "@/engine/render/renderShape";
 
 interface ImageLayerData {
   type: "image";
@@ -103,26 +106,31 @@ export class ThumbnailService {
         Array.isArray((layer as any).elements)
       ) {
         const elements = (layer as any).elements;
-        // Strokes first (raster), then shapes on top (vector).
-        const strokeEls = elements.filter(
-          (e: any) => !("shapeType" in e),
-        ) as IStroke[];
-        if (strokeEls.length > 0) {
-          this.renderStrokes(
-            ctx,
-            strokeEls,
-            minX,
-            minY,
-            scale,
-            offsetX,
-            offsetY,
-          );
-        }
-        for (const el of elements) {
-          if ("shapeType" in el) {
-            this.renderShape(ctx, el as any, minX, minY, scale, offsetX, offsetY);
+
+        const off = document.createElement("canvas");
+        off.width = canvas.width;
+        off.height = canvas.height;
+        const offCtx = off.getContext("2d");
+        if (offCtx) {
+          offCtx.save();
+          offCtx.translate(offsetX, offsetY);
+          offCtx.scale(scale, scale);
+          for (const el of elements) {
+            if (!("shapeType" in el) && (el as any).points?.length >= 2) {
+              renderStroke(offCtx, el as any, brushRegistry);
+            }
           }
+          offCtx.restore();
+          ctx.drawImage(off, 0, 0);
         }
+
+        ctx.save();
+        ctx.translate(offsetX, offsetY);
+        ctx.scale(scale, scale);
+        for (const el of elements) {
+          if ("shapeType" in el) renderShape(ctx, el as any);
+        }
+        ctx.restore();
       }
 
       ctx.globalAlpha = prevAlpha;
@@ -187,7 +195,15 @@ export class ThumbnailService {
     const offsetX = (width - (maxX - minX) * scale) / 2;
     const offsetY = (height - (maxY - minY) * scale) / 2;
 
-    this.renderStrokes(ctx, strokes, minX, minY, scale, offsetX, offsetY);
+    ctx.save();
+    ctx.translate(offsetX, offsetY);
+    ctx.scale(scale, scale);
+    for (const stroke of strokes) {
+      if (stroke.points.length >= 2) {
+        renderStroke(ctx, stroke as any, brushRegistry);
+      }
+    }
+    ctx.restore();
 
     return canvas.toDataURL();
   }
@@ -204,7 +220,7 @@ export class ThumbnailService {
     } else if (background === "grid") {
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, width, height);
-      this.drawGrid(ctx, width, height);
+      new GridRenderer(20).draw(ctx, ctx.canvas, { panX: 0, panY: 0, zoom: 1 });
     } else {
       // Transparent background - add a subtle border
       ctx.strokeStyle = "#e5e7eb";
@@ -305,185 +321,4 @@ export class ThumbnailService {
     });
   }
 
-  private static renderStrokes(
-    ctx: CanvasRenderingContext2D,
-    strokes: IStroke[],
-    minX: number,
-    minY: number,
-    scale: number,
-    offsetX: number,
-    offsetY: number,
-  ) {
-    strokes.forEach((stroke) => {
-      if (stroke.points.length < 2) return;
-      const prevComposite = ctx.globalCompositeOperation;
-      ctx.globalCompositeOperation = (
-        stroke.brushStyle === "eraser" ? "destination-out" : "source-over"
-      ) as GlobalCompositeOperation;
-
-      // For thumbnails, keep it lightweight: draw a filled path for ink/texture and dots for spray
-      if (stroke.brushStyle === "spray") {
-        const prevAlpha = ctx.globalAlpha;
-        ctx.fillStyle = stroke.color;
-        ctx.globalAlpha = (stroke as any).opacity ?? 1 * prevAlpha;
-        const size = stroke.size * scale;
-        for (let i = 0; i < stroke.points.length; i++) {
-          const { x, y, pressure = 0.5 } = stroke.points[i];
-          const current = size * pressure;
-          const density = Math.max(2, current * 0.25);
-          for (let j = 0; j < density; j++) {
-            const sx =
-              (x - minX) * scale +
-              offsetX +
-              (Math.random() - 0.5) * current * 0.8;
-            const sy =
-              (y - minY) * scale +
-              offsetY +
-              (Math.random() - 0.5) * current * 0.8;
-            const r = Math.random() * 2 + 0.5;
-            ctx.beginPath();
-            ctx.arc(sx, sy, r, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-        ctx.globalAlpha = prevAlpha;
-      } else {
-        // Use perfect-freehand for accurate rendering with stroke's brush settings
-        const scaledPoints = stroke.points.map((p) => [
-          (p.x - minX) * scale + offsetX,
-          (p.y - minY) * scale + offsetY,
-          p.pressure ?? 0.5,
-        ]);
-
-        const outline = getStroke(scaledPoints, {
-          size: Math.max(1, stroke.size * scale),
-          thinning: (stroke as any).thinning ?? 0.5,
-          smoothing: (stroke as any).smoothing ?? 0.5,
-          streamline: (stroke as any).streamline ?? 0.5,
-          start: { taper: (stroke as any).taperStart ?? 0 },
-          end: { taper: (stroke as any).taperEnd ?? 0 },
-          last: true,
-        });
-
-        if (outline.length < 3) {
-          ctx.globalCompositeOperation = prevComposite;
-          return;
-        }
-
-        // Convert outline to path
-        ctx.beginPath();
-        ctx.fillStyle = stroke.color;
-        ctx.globalAlpha = (stroke as any).opacity ?? 1;
-
-        const [first, ...rest] = outline;
-        ctx.moveTo(first[0], first[1]);
-        for (const [x, y] of rest) {
-          ctx.lineTo(x, y);
-        }
-        ctx.closePath();
-        ctx.fill();
-      }
-
-      ctx.globalCompositeOperation = prevComposite;
-    });
-  }
-
-  private static renderShape(
-    ctx: CanvasRenderingContext2D,
-    layer: any,
-    minX: number,
-    minY: number,
-    scale: number,
-    offsetX: number,
-    offsetY: number,
-  ) {
-    const x = (layer.x - minX) * scale + offsetX;
-    const y = (layer.y - minY) * scale + offsetY;
-    const w = layer.width * scale;
-    const h = layer.height * scale;
-    const r = (layer.cornerRadius ?? 0) * scale;
-    ctx.save();
-    if (layer.rotation) {
-      const cx = x + w / 2;
-      const cy = y + h / 2;
-      ctx.translate(cx, cy);
-      ctx.rotate((layer.rotation * Math.PI) / 180);
-      ctx.translate(-cx, -cy);
-    }
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    if (layer.shapeType === "circle") {
-      ctx.ellipse(
-        x + w / 2,
-        y + h / 2,
-        Math.max(0.5, w / 2),
-        Math.max(0.5, h / 2),
-        0,
-        0,
-        Math.PI * 2,
-      );
-    } else if (layer.shapeType === "rectangle") {
-      const rr = Math.max(0, Math.min(r, w / 2, h / 2));
-      ctx.moveTo(x + rr, y);
-      ctx.lineTo(x + w - rr, y);
-      ctx.arcTo(x + w, y, x + w, y + rr, rr);
-      ctx.lineTo(x + w, y + h - rr);
-      ctx.arcTo(x + w, y + h, x + w - rr, y + h, rr);
-      ctx.lineTo(x + rr, y + h);
-      ctx.arcTo(x, y + h, x, y + h - rr, rr);
-      ctx.lineTo(x, y + rr);
-      ctx.arcTo(x, y, x + rr, y, rr);
-      ctx.closePath();
-    } else {
-      const pts =
-        layer.shapeType === "diamond"
-          ? [
-              { x: x + w / 2, y: y },
-              { x: x + w, y: y + h / 2 },
-              { x: x + w / 2, y: y + h },
-              { x: x, y: y + h / 2 },
-            ]
-          : [
-              { x: x + w / 2, y: y },
-              { x: x + w, y: y + h },
-              { x: x, y: y + h },
-            ];
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-      ctx.closePath();
-    }
-    if (layer.fillColor) {
-      ctx.fillStyle = layer.fillColor;
-      ctx.fill();
-    }
-    ctx.strokeStyle = layer.strokeColor ?? "#000000";
-    ctx.lineWidth = Math.max(0.5, (layer.strokeWidth ?? 2) * scale);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  private static drawGrid(
-    ctx: CanvasRenderingContext2D,
-    width: number,
-    height: number,
-  ) {
-    const gridSize = 10;
-    ctx.strokeStyle = "#f0f0f0";
-    ctx.lineWidth = 0.5;
-
-    for (let x = 0; x < width; x += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
-      ctx.stroke();
-    }
-
-    for (let y = 0; y < height; y += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-      ctx.stroke();
-    }
-  }
 }
