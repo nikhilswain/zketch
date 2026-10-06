@@ -114,6 +114,8 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
                   taperStart: stroke.taperStart,
                   taperEnd: stroke.taperEnd,
                   easing: stroke.easing,
+                  angle: stroke.angle,
+                  softness: stroke.softness,
                 })),
               };
             });
@@ -198,6 +200,8 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
               taperStart: el.taperStart,
               taperEnd: el.taperEnd,
               easing: el.easing,
+              angle: el.angle,
+              softness: el.softness,
             };
           });
 

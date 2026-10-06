@@ -36,6 +36,10 @@ export const Stroke = types
       "eraser",
       "spray",
       "texture",
+      "marker",
+      "highlighter",
+      "airbrush",
+      "calligraphy",
     ]),
     timestamp: types.number,
     startTime: types.optional(types.maybeNull(types.number), null),
@@ -46,6 +50,8 @@ export const Stroke = types
     taperStart: types.optional(types.number, 30),
     taperEnd: types.optional(types.number, 30),
     easing: types.optional(types.string, "linear"),
+    angle: types.optional(types.number, 45),
+    softness: types.optional(types.number, 0.5),
   })
   .actions((self) => ({
     setColor(c: string) {
@@ -71,10 +77,20 @@ export const BrushSettings = types.model("BrushSettings", {
   taperEnd: types.optional(types.number, 30),
   easing: types.optional(types.string, "linear"),
   opacity: types.optional(types.number, 1),
+  angle: types.optional(types.number, 45),
+  softness: types.optional(types.number, 0.5),
 });
 
 // Export type aliases
-export type BrushStyle = "ink" | "eraser" | "spray" | "texture";
+export type BrushStyle =
+  | "ink"
+  | "eraser"
+  | "spray"
+  | "texture"
+  | "marker"
+  | "highlighter"
+  | "airbrush"
+  | "calligraphy";
 export type BackgroundType = "white" | "transparent" | "grid";
 
 export interface IStroke extends Instance<typeof Stroke> {}

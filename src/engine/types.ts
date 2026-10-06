@@ -1,4 +1,12 @@
-export type BrushStyle = "ink" | "eraser" | "spray" | "texture";
+export type BrushStyle =
+  | "ink"
+  | "eraser"
+  | "spray"
+  | "texture"
+  | "marker"
+  | "highlighter"
+  | "airbrush"
+  | "calligraphy";
 
 // Layer types — draw layers hold mixed elements (strokes + shapes); image is its own layer.
 export type LayerType = "draw" | "image";
@@ -32,6 +40,8 @@ export interface StrokeLike {
   taperStart?: number;
   taperEnd?: number;
   easing?: string;
+  angle?: number;
+  softness?: number;
 }
 
 // Base layer interface (shared properties)
@@ -125,12 +135,24 @@ export interface BrushOptions {
   scatter?: number;
   dotMin?: number;
   dotRange?: number;
+  angle?: number;
+  softness?: number;
+}
+
+export interface BrushPreset {
+  id: string;
+  label: string;
+  size?: number;
+  opacity?: number;
+  angle?: number;
+  softness?: number;
 }
 
 export interface Brush {
   key: string;
   label?: string;
   defaults?: Partial<BrushOptions>;
+  presets?: BrushPreset[];
   render(
     ctx: CanvasRenderingContext2D,
     stroke: StrokeLike,

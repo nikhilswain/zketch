@@ -1,6 +1,10 @@
 import { FreehandBrush } from "../brushes/FreehandBrush";
 import { SprayBrush } from "../brushes/SprayBrush";
 import { TextureBrush } from "../brushes/TextureBrush";
+import { MarkerBrush } from "../brushes/MarkerBrush";
+import { HighlighterBrush } from "../brushes/HighlighterBrush";
+import { AirbrushBrush } from "../brushes/AirbrushBrush";
+import { CalligraphyBrush } from "../brushes/CalligraphyBrush";
 import type { Brush } from "../types";
 
 export class BrushRegistry {
@@ -35,6 +39,10 @@ export const brushRegistry = new BrushRegistry();
 
 export function registerDefaultBrushes() {
   brushRegistry.register(new FreehandBrush());
+  brushRegistry.register(new MarkerBrush());
+  brushRegistry.register(new HighlighterBrush());
+  brushRegistry.register(new AirbrushBrush());
+  brushRegistry.register(new CalligraphyBrush());
   brushRegistry.register(new SprayBrush());
   brushRegistry.register(new TextureBrush());
 }

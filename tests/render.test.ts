@@ -142,6 +142,49 @@ describe("shapes", () => {
   });
 });
 
+describe("new brushes", () => {
+  it("marker, highlighter, airbrush and calligraphy produce pixels", () => {
+    for (const brushStyle of [
+      "marker",
+      "highlighter",
+      "airbrush",
+      "calligraphy",
+    ] as const) {
+      expect(
+        alphaCount(renderStrokePixels(makeStroke({ brushStyle }))),
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  it("airbrush is deterministic", () => {
+    const a = Buffer.from(
+      renderStrokePixels(makeStroke({ brushStyle: "airbrush" })),
+    );
+    const b = Buffer.from(
+      renderStrokePixels(makeStroke({ brushStyle: "airbrush" })),
+    );
+    expect(a.equals(b)).toBe(true);
+  });
+
+  it("marker and highlighter restore the composite operation", () => {
+    for (const brushStyle of ["marker", "highlighter"] as const) {
+      const { ctx } = newCtx();
+      renderStroke(ctx as never, makeStroke({ brushStyle }), brushRegistry);
+      expect(ctx.globalCompositeOperation).toBe("source-over");
+    }
+  });
+
+  it("calligraphy nib angle changes the mark", () => {
+    const a = Buffer.from(
+      renderStrokePixels(makeStroke({ brushStyle: "calligraphy", angle: 0 })),
+    );
+    const b = Buffer.from(
+      renderStrokePixels(makeStroke({ brushStyle: "calligraphy", angle: 90 })),
+    );
+    expect(a.equals(b)).toBe(false);
+  });
+});
+
 describe("seededRandom", () => {
   it("is deterministic and stays in [0, 1)", () => {
     for (let i = 0; i < 100; i++) {

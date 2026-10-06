@@ -29,6 +29,8 @@ export interface StrokeData {
   taperStart?: number;
   taperEnd?: number;
   easing?: string;
+  angle?: number;
+  softness?: number;
 }
 
 /**
