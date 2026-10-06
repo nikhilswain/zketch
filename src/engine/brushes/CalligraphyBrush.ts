@@ -1,5 +1,7 @@
 import type { Brush, BrushOptions, BrushPreset, StrokeLike } from "../types";
 
+const MAX_STAMPS = 4000;
+
 export class CalligraphyBrush implements Brush {
   key = "calligraphy" as const;
   label = "Calligraphy";
@@ -21,39 +23,43 @@ export class CalligraphyBrush implements Brush {
     const nx = Math.cos(angle);
     const ny = Math.sin(angle);
     const half = stroke.size / 2;
+    const thickness = Math.max(1, stroke.size * 0.12);
+    const step = Math.max(0.5, thickness * 0.5);
+
+    const nibHalf = (pressure: number) => half * (0.35 + 0.65 * pressure);
 
     const prevAlpha = ctx.globalAlpha;
-    ctx.fillStyle = stroke.color;
-    ctx.strokeStyle = stroke.color;
     ctx.globalAlpha = (stroke.opacity ?? 1) * prevAlpha;
+    ctx.strokeStyle = stroke.color;
+    ctx.lineCap = "round";
+    ctx.lineWidth = thickness;
 
-    if (pts.length === 1) {
-      const p = pts[0];
-      ctx.lineCap = "round";
-      ctx.lineWidth = Math.max(1, stroke.size * 0.15);
-      ctx.beginPath();
-      ctx.moveTo(p.x - nx * half, p.y - ny * half);
-      ctx.lineTo(p.x + nx * half, p.y + ny * half);
-      ctx.stroke();
-    } else {
-      const top: Array<{ x: number; y: number }> = [];
-      const bottom: Array<{ x: number; y: number }> = [];
-      for (let i = 0; i < pts.length; i++) {
-        const p = pts[i];
-        const pressure = p.pressure ?? 1;
-        const h = half * (0.35 + 0.65 * pressure);
-        top.push({ x: p.x + nx * h, y: p.y + ny * h });
-        bottom.push({ x: p.x - nx * h, y: p.y - ny * h });
+    ctx.beginPath();
+    let stamps = 0;
+    const stamp = (x: number, y: number, h: number) => {
+      if (stamps >= MAX_STAMPS) return;
+      stamps++;
+      ctx.moveTo(x - nx * h, y - ny * h);
+      ctx.lineTo(x + nx * h, y + ny * h);
+    };
+
+    const p0 = pts[0];
+    stamp(p0.x, p0.y, nibHalf(p0.pressure ?? 1));
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i];
+      const b = pts[i + 1];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const dist = Math.hypot(dx, dy);
+      const n = Math.max(1, Math.ceil(dist / step));
+      for (let s = 1; s <= n; s++) {
+        const t = s / n;
+        const pressure =
+          (a.pressure ?? 1) * (1 - t) + (b.pressure ?? 1) * t;
+        stamp(a.x + dx * t, a.y + dy * t, nibHalf(pressure));
       }
-      ctx.beginPath();
-      ctx.moveTo(top[0].x, top[0].y);
-      for (let i = 1; i < top.length; i++) ctx.lineTo(top[i].x, top[i].y);
-      for (let i = bottom.length - 1; i >= 0; i--) {
-        ctx.lineTo(bottom[i].x, bottom[i].y);
-      }
-      ctx.closePath();
-      ctx.fill();
     }
+    ctx.stroke();
     ctx.globalAlpha = prevAlpha;
   }
 }

@@ -183,6 +183,34 @@ describe("new brushes", () => {
     );
     expect(a.equals(b)).toBe(false);
   });
+
+  it("calligraphy has no gaps along a looping path", () => {
+    const points: Array<{ x: number; y: number; pressure: number }> = [];
+    for (let i = 0; i <= 160; i++) {
+      const t = i / 160;
+      const ang = t * Math.PI * 4;
+      points.push({
+        x: 100 + Math.cos(ang) * 60,
+        y: 60 + Math.sin(ang) * 40,
+        pressure: 0.8,
+      });
+    }
+    const { ctx } = newCtx();
+    renderStroke(
+      ctx as never,
+      makeStroke({ brushStyle: "calligraphy", points }),
+      brushRegistry,
+    );
+    const data = ctx.getImageData(0, 0, W, H).data;
+    let gaps = 0;
+    for (const p of points) {
+      const xi = Math.round(p.x);
+      const yi = Math.round(p.y);
+      if (xi < 0 || xi >= W || yi < 0 || yi >= H) continue;
+      if (data[(yi * W + xi) * 4 + 3] === 0) gaps++;
+    }
+    expect(gaps).toBe(0);
+  });
 });
 
 describe("seededRandom", () => {
