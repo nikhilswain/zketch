@@ -278,7 +278,8 @@ State highlights:
 Important views: `isEmpty`, `activeLayer`, `visibleLayers`,
 `flattenedStrokes`, `exportLayers`, `selectedTransformableLayer`,
 `selectedShapeElements`, `selectedStrokes`, `selectionUnionBounds`,
-`selectionCount`, `canUndo/canRedo`.
+`selectionCount`, `canUndo/canRedo`. `flattenedStrokes`/`exportLayers` honor
+`focusedLayerId` and per-layer visibility, so exports match what the canvas shows.
 
 Important actions (grouped):
 - **History**: `saveToHistory` (snapshot of strokes + layers + camera +
@@ -397,8 +398,12 @@ Persistence layers:
     per-draw-layer two-pass logic as the engine (strokes baked offscreen so
     eraser `destination-out` works, shapes vector on top). Stroke and shape
     rendering is delegated to the shared `engine/render` renderers +
-    `brushRegistry`, so brushes and shape opacity now match the canvas.
-  - SVG only handles **strokes** (no shapes/images, no eraser) — known gap.
+    `brushRegistry`, so brushes and shape opacity now match the canvas. Export
+    bounds include stroke `size`/shape `strokeWidth` and the offscreen bake is
+    offset to the content bounds (handles negative coordinates). `imageCache` is
+    cleared after each export.
+  - SVG export is **hidden in the UI** (still strokes-only in the service) until
+    shapes/images/eraser are supported.
   - `downloadFile(dataUrl, filename)` triggers the browser download.
 - **`ThumbnailService`** — `generateThumbnailAsync(layers, background, w, h)`
   renders visible layers (strokes + shapes + images) to a data URL. Draw layers
