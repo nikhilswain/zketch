@@ -71,8 +71,8 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
         const dataUrl = await ExportService.exportToPNG(
           strokes,
           background,
-          400, // Small preview size
-          300,
+          1280,
+          720,
           { ...settingsStore.exportSettings, scale: 1 },
           layers,
         );

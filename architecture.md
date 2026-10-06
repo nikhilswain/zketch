@@ -358,9 +358,9 @@ Persistence layers:
   Spray(4), Shapes(5) + shape picker popover (rectangle/circle/diamond/triangle),
   zoom out / % / zoom in / fit.
 - **`layers-panel.tsx`** — per-layer row with generated thumbnail (via shared
-  `renderStroke`/`renderShape`), visibility, lock, focus/solo, rename, duplicate,
-  reorder, opacity, delete, clear strokes, and expandable animation controls.
-  Layer list is reversed (top = last).
+  `renderStroke`/`renderShape`, rendered at 3× then downscaled), visibility, lock,
+  focus/solo, rename, duplicate, reorder, opacity, delete, clear strokes, and
+  expandable animation controls. Layer list is reversed (top = last).
 - **`sidebar/`** — `index.tsx` (IconBar: Tool/Shape/Color/Background/TouchMode/
   Import/Export) + draggable `FloatingPanel` + panels:
   `ToolSettingsPanel` (brush vs eraser reactive), `ShapeSettingsPanel`
@@ -390,7 +390,8 @@ Persistence layers:
   renders visible layers (strokes + shapes + images) to a data URL. Draw layers
   are baked to an offscreen per layer (eraser isolation) using the shared
   `renderStroke`/`renderShape` renderers; grid uses `GridRenderer` (20px) for
-  parity with the canvas/export.
+  parity with the canvas/export. Renders at **3× then downscales** (supersampling)
+  so thin strokes don't alias into dashes at thumbnail size.
 - **`ImportService`** — file / URL / clipboard / dataURL → validated + processed
   blob via `ImageProcessingUtils` (`maxWidth/Height 4096`, 10MB compress
   threshold, SVG sanitization).

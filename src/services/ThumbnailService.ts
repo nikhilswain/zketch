@@ -37,13 +37,39 @@ export class ThumbnailService {
     width = 200,
     height = 150,
   ): Promise<string> {
+    const SS = 3;
+    const work = document.createElement("canvas");
+    work.width = width * SS;
+    work.height = height * SS;
+    const workCtx = work.getContext("2d");
+    if (!workCtx) return "";
+
+    await this.renderThumbnail(
+      workCtx,
+      work,
+      layers,
+      background,
+      width * SS,
+      height * SS,
+    );
+
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext("2d");
+    if (!ctx) return work.toDataURL();
+    ctx.drawImage(work, 0, 0, width, height);
+    return canvas.toDataURL();
+  }
 
-    if (!ctx) return "";
-
+  private static async renderThumbnail(
+    ctx: CanvasRenderingContext2D,
+    canvas: HTMLCanvasElement,
+    layers: ILayerSnapshot[],
+    background: string,
+    width: number,
+    height: number,
+  ): Promise<void> {
     // Set background
     this.drawBackground(ctx, background, width, height);
 
@@ -54,11 +80,14 @@ export class ThumbnailService {
     const bounds = this.calculateBoundsForLayers(visibleLayers);
 
     if (!bounds) {
-      return canvas.toDataURL();
+      return;
     }
 
-    const { minX, minY, maxX, maxY, scale, offsetX, offsetY } =
-      this.calculateTransform(bounds, width, height);
+    const { minX, minY, scale, offsetX, offsetY } = this.calculateTransform(
+      bounds,
+      width,
+      height,
+    );
 
     // Load all images first
     const imageCache = new Map<string, HTMLImageElement>();
@@ -135,8 +164,6 @@ export class ThumbnailService {
 
       ctx.globalAlpha = prevAlpha;
     }
-
-    return canvas.toDataURL();
   }
 
   /**
