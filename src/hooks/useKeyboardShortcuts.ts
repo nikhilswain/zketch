@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useCanvasStore } from "../hooks/useStores";
 import { KeyBindingManager, KEY_BINDINGS } from "../utils/keyBindings";
+import { applyBrushPreset } from "../utils/applyBrushPreset";
 
 export const useKeyboardShortcuts = (
   onSave?: () => void,
@@ -63,6 +64,18 @@ export const useKeyboardShortcuts = (
       canvasStore.setActiveTool("brush");
       canvasStore.setBrushStyle("spray");
     });
+    KeyBindingManager.registerHandler("selectMarker", () =>
+      applyBrushPreset(canvasStore, "marker"),
+    );
+    KeyBindingManager.registerHandler("selectHighlighter", () =>
+      applyBrushPreset(canvasStore, "highlighter"),
+    );
+    KeyBindingManager.registerHandler("selectAirbrush", () =>
+      applyBrushPreset(canvasStore, "airbrush"),
+    );
+    KeyBindingManager.registerHandler("selectCalligraphy", () =>
+      applyBrushPreset(canvasStore, "calligraphy"),
+    );
 
     // Zoom controls
     KeyBindingManager.registerHandler("zoomIn", () => {

@@ -38,8 +38,12 @@ const MobileSidebar: React.FC<MobileSidebarProps> = observer(
 
     const brushStyles: { value: BrushStyle; label: string }[] = [
       { value: "ink", label: "Pen" },
-      { value: "eraser", label: "Eraser" },
+      { value: "marker", label: "Marker" },
+      { value: "highlighter", label: "Highlighter" },
+      { value: "airbrush", label: "Airbrush" },
+      { value: "calligraphy", label: "Calligraphy" },
       { value: "spray", label: "Spray" },
+      { value: "eraser", label: "Eraser" },
     ];
 
     const backgroundOptions: {

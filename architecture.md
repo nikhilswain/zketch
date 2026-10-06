@@ -130,6 +130,7 @@ src/
 ├── utils/
 │   ├── StrokeOptimizer.ts     # RDP simplification before save
 │   ├── ImageProcessingUtils.ts# validate/resize/compress/sanitize images
+│   ├── applyBrushPreset.ts    # Select a brush + apply its first preset
 │   └── keyBindings.ts         # KEY_BINDINGS table + KeyBindingManager
 │
 ├── hooks/            # useStores, useKeyboardShortcuts, useMobile, useCanvasResize
@@ -383,16 +384,22 @@ Persistence layers:
   status, undo/redo/clear), `IconBar` + floating sidebar panels, `LayersPanel`,
   `FloatingDock`, export/import dialogs, autosave, animation playback state,
   canvas lock while animating.
-- **`floating-dock.tsx`** — bottom dock: Pan, Select(1), Pen(2), Eraser(3),
-  Spray(4), Shapes(5) + shape picker popover (rectangle/circle/diamond/triangle),
-  zoom out / % / zoom in / fit.
+- **`floating-dock.tsx`** — bottom dock: Pan, Select(1), a **Brush picker**
+  (popover listing Pen/Marker/Highlighter/Airbrush/Calligraphy/Spray, shortcut
+  numbers shown), Eraser(3), Shapes(5) + shape picker popover
+  (rectangle/circle/diamond/triangle), zoom out / % / zoom in / fit. Selecting a
+  brush applies its first `preset` (size/opacity/angle/softness) via
+  `utils/applyBrushPreset`.
 - **`layers-panel.tsx`** — per-layer row with generated thumbnail (via shared
   `renderStroke`/`renderShape`, rendered at 3× then downscaled), visibility, lock,
   focus/solo, rename, duplicate, reorder, opacity, delete, clear strokes, and
   expandable animation controls. Layer list is reversed (top = last).
 - **`sidebar/`** — `index.tsx` (IconBar: Tool/Shape/Color/Background/TouchMode/
   Import/Export) + draggable `FloatingPanel` + panels:
-  `ToolSettingsPanel` (brush vs eraser reactive), `ShapeSettingsPanel`
+  `ToolSettingsPanel` (live brush **preview** canvas + **Variants** chips from
+  `Brush.presets` + per-brush controls: size/opacity, calligraphy nib angle,
+  airbrush softness, pen thinning/smoothing/streamline/taper; eraser mode reactive),
+  `ShapeSettingsPanel`
   (stroke width/opacity/corner radius/fill), `ColorPanel` (stroke/fill target),
   `BackgroundPanel`, `TouchModePanel`.
 - **`valut-view.tsx`** — vault gallery (grid/list, search, sort, rename, delete,
@@ -446,6 +453,7 @@ Persistence layers:
 
 **Shortcuts summary**: Ctrl+Z/Y undo/redo · Ctrl+Backspace clear · Delete/Backspace
 delete selection · V/1 select · 2 pen · 3 eraser · 4 spray · 5 shapes ·
+6 marker · 7 highlighter · 8 airbrush · 9 calligraphy ·
 (shape mode) 1–4 shape kinds · Space pan · Ctrl +/-/0 zoom · Ctrl+F fit ·
 Ctrl+S save · Ctrl+E export · Ctrl+N new · Ctrl+V vault · B/W/R colors ·
 [/] brush size.

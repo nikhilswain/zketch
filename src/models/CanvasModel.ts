@@ -630,7 +630,7 @@ export const CanvasModel = types
         self.currentBrushStyle = style;
       },
       setPenSize(size: number) {
-        self.currentSize = Math.max(1, Math.min(50, size));
+        self.currentSize = Math.max(1, Math.min(100, size));
       },
       setEraserSize(size: number) {
         self.eraserSize = Math.max(1, Math.min(100, size));
