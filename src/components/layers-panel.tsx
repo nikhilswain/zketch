@@ -36,6 +36,9 @@ import { getSnapshot } from "mobx-state-tree";
 import { BlobStorageService } from "@/services/BlobStorageService";
 import LayerAnimationControls from "@/components/layer-animation-controls";
 import type { StrokeLike } from "@/engine";
+import { brushRegistry } from "@/engine/render/BrushRegistry";
+import { renderStroke } from "@/engine/render/renderStroke";
+import { renderShape } from "@/engine/render/renderShape";
 import type { PlaybackState } from "@/engine/AnimationPlaybackEngine";
 
 // Generate a small thumbnail preview of a draw layer (strokes + shapes).
@@ -90,69 +93,29 @@ function generateDrawLayerThumbnail(
   const ox = padding + (width - padding * 2 - cw * scale) / 2 - minX * scale;
   const oy = padding + (height - padding * 2 - ch * scale) / 2 - minY * scale;
 
+  const off = document.createElement("canvas");
+  off.width = width;
+  off.height = height;
+  const offCtx = off.getContext("2d");
+  if (offCtx) {
+    offCtx.save();
+    offCtx.translate(ox, oy);
+    offCtx.scale(scale, scale);
+    for (const el of elements) {
+      if (!el.shapeType && el.points && el.points.length >= 2) {
+        renderStroke(offCtx, el as any, brushRegistry);
+      }
+    }
+    offCtx.restore();
+    ctx.drawImage(off, 0, 0);
+  }
+
   ctx.save();
   ctx.translate(ox, oy);
   ctx.scale(scale, scale);
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-
-  // Strokes first (skip eraser).
-  const strokeMax = Math.min(elements.length, 30);
-  for (let i = 0; i < strokeMax; i++) {
-    const el = elements[i];
-    if (el.shapeType || !el.points || el.points.length < 2) continue;
-    if (el.brushStyle === "eraser") continue;
-    ctx.beginPath();
-    ctx.strokeStyle = el.color;
-    ctx.lineWidth = Math.max(1, el.size * 0.5);
-    ctx.globalAlpha = el.opacity ?? 1;
-    const pts = el.points;
-    ctx.moveTo(pts[0].x, pts[0].y);
-    const step = pts.length > 100 ? Math.floor(pts.length / 50) : 1;
-    for (let j = step; j < pts.length; j += step) {
-      ctx.lineTo(pts[j].x, pts[j].y);
-    }
-    ctx.stroke();
-  }
-
-  // Shapes on top (outline only — keep tiny thumbnails legible).
-  ctx.globalAlpha = 1;
   for (const el of elements) {
-    if (!el.shapeType) continue;
-    ctx.strokeStyle = el.strokeColor ?? "#000";
-    ctx.lineWidth = Math.max(0.5, (el.strokeWidth ?? 2) * 0.4);
-    ctx.beginPath();
-    if (el.shapeType === "rectangle") {
-      ctx.rect(el.x, el.y, el.width, el.height);
-    } else if (el.shapeType === "circle") {
-      ctx.ellipse(
-        el.x + el.width / 2,
-        el.y + el.height / 2,
-        el.width / 2,
-        el.height / 2,
-        0,
-        0,
-        Math.PI * 2,
-      );
-    } else if (el.shapeType === "diamond") {
-      ctx.moveTo(el.x + el.width / 2, el.y);
-      ctx.lineTo(el.x + el.width, el.y + el.height / 2);
-      ctx.lineTo(el.x + el.width / 2, el.y + el.height);
-      ctx.lineTo(el.x, el.y + el.height / 2);
-      ctx.closePath();
-    } else if (el.shapeType === "triangle") {
-      ctx.moveTo(el.x + el.width / 2, el.y);
-      ctx.lineTo(el.x + el.width, el.y + el.height);
-      ctx.lineTo(el.x, el.y + el.height);
-      ctx.closePath();
-    }
-    if (el.fillColor) {
-      ctx.fillStyle = el.fillColor;
-      ctx.fill();
-    }
-    ctx.stroke();
+    if (el.shapeType) renderShape(ctx, el as any);
   }
-
   ctx.restore();
   return canvas.toDataURL();
 }

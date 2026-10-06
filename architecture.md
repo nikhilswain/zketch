@@ -357,9 +357,10 @@ Persistence layers:
 - **`floating-dock.tsx`** — bottom dock: Pan, Select(1), Pen(2), Eraser(3),
   Spray(4), Shapes(5) + shape picker popover (rectangle/circle/diamond/triangle),
   zoom out / % / zoom in / fit.
-- **`layers-panel.tsx`** — per-layer row with generated thumbnail, visibility,
-  lock, focus/solo, rename, duplicate, reorder, opacity, delete, clear strokes,
-  and expandable animation controls. Layer list is reversed (top = last).
+- **`layers-panel.tsx`** — per-layer row with generated thumbnail (via shared
+  `renderStroke`/`renderShape`), visibility, lock, focus/solo, rename, duplicate,
+  reorder, opacity, delete, clear strokes, and expandable animation controls.
+  Layer list is reversed (top = last).
 - **`sidebar/`** — `index.tsx` (IconBar: Tool/Shape/Color/Background/TouchMode/
   Import/Export) + draggable `FloatingPanel` + panels:
   `ToolSettingsPanel` (brush vs eraser reactive), `ShapeSettingsPanel`
