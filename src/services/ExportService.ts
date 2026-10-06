@@ -5,6 +5,7 @@ import { BlobStorageService } from "./BlobStorageService";
 import { brushRegistry } from "@/engine/render/BrushRegistry";
 import { renderStroke } from "@/engine/render/renderStroke";
 import { renderShape } from "@/engine/render/renderShape";
+import { easingFn } from "@/engine/easing";
 
 // Image layer data needed for export
 export interface IExportImageLayer {
@@ -501,7 +502,7 @@ export class ExportService {
       thinning: 0.5,
       smoothing: 0.5,
       streamline: 0.5,
-      easing: (t) => t,
+      easing: easingFn(stroke.easing ?? "linear"),
       start: {
         taper: 0,
         easing: (t) => t,

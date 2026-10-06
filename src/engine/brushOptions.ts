@@ -1,4 +1,5 @@
 import type { BrushOptions, BrushStyle } from "./types";
+import { easingFn } from "./easing";
 
 export interface BrushSettingsLike {
   thinning: number;
@@ -9,20 +10,6 @@ export interface BrushSettingsLike {
   easing: string;
   opacity?: number;
 }
-
-const easingFn = (name: string) => {
-  switch (name) {
-    case "easeIn":
-      return (t: number) => t * t;
-    case "easeOut":
-      return (t: number) => 1 - Math.pow(1 - t, 2);
-    case "easeInOut":
-      return (t: number) =>
-        t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-    default:
-      return (t: number) => t;
-  }
-};
 
 export function createGetBrushOptions(brushSettings: BrushSettingsLike) {
   return function getBrushOptions(

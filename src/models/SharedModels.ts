@@ -45,6 +45,7 @@ export const Stroke = types
     streamline: types.optional(types.number, 0.5),
     taperStart: types.optional(types.number, 30),
     taperEnd: types.optional(types.number, 30),
+    easing: types.optional(types.string, "linear"),
   })
   .actions((self) => ({
     setColor(c: string) {

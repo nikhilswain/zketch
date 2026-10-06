@@ -28,6 +28,7 @@ export interface StrokeData {
   streamline?: number;
   taperStart?: number;
   taperEnd?: number;
+  easing?: string;
 }
 
 /**

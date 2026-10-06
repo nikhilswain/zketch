@@ -22,6 +22,7 @@ export interface IStrokeData {
   streamline?: number;
   taperStart?: number;
   taperEnd?: number;
+  easing?: string;
 }
 
 // Legacy stroke-only layer (pre-refactor).

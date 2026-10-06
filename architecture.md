@@ -69,6 +69,7 @@ src/
 │   ├── InputManager.ts        # Pointer/touch/stylus intent + gestures (pinch/pan)
 │   ├── AnimationPlaybackEngine.ts # Timelapse playback + gap compression
 │   ├── brushOptions.ts        # Builds per-brush BrushOptions from settings
+│   ├── easing.ts             # Easing-name → fn resolver (shared by brushes + options)
 │   ├── types.ts              # All engine contracts (StrokeLike, LayerLike, Brush…)
 │   ├── index.ts              # Barrel exports
 │   ├── render/               # Shared renderers + brush registry (canvas/export/thumb)
@@ -184,11 +185,15 @@ shared singleton (`brushRegistry`) populated by `registerDefaultBrushes()`.
 Registered: `FreehandBrush("ink")`, `SprayBrush("spray")`, `TextureBrush("texture")`.
 Eraser resolves to `"ink"`. `renderStroke` (`engine/render/renderStroke.ts`) owns
 the eraser→`destination-out` special-casing; `CanvasEngine` calls it for live
-rendering, and export/thumbnails will call the same function (Phase 2). **To add
-a brush**: implement `Brush { key; render(ctx, stroke, options?) }` in
-`src/engine/brushes/`, register it in `registerDefaultBrushes()`, add its key to
-the `BrushStyle` union in `engine/types.ts`, `SharedModels.ts`, `CanvasModel.ts`,
-`VaultModel.ts`, and `ExportService` (for parity), then wire UI controls.
+rendering, and export/thumbnails call the same function. Strokes carry their full
+render params (`thinning/smoothing/streamline/taperStart/taperEnd/easing`), so
+committed strokes and exports are **deterministic** — changing current brush
+settings never alters already-drawn strokes. `engine/easing.ts` resolves the
+stored easing name to a function. **To add a brush**: implement
+`Brush { key; render(ctx, stroke, options?) }` in `src/engine/brushes/`, register
+it in `registerDefaultBrushes()`, add its key to the `BrushStyle` union in
+`engine/types.ts`, `SharedModels.ts`, `CanvasModel.ts`, `VaultModel.ts`, and
+`ExportService` (for parity), then wire UI controls.
 
 `brushOptions.ts::createGetBrushOptions(settings)` converts the per-draw brush
 settings (`thinning/smoothing/streamline/taper/easing`) into `BrushOptions`,
