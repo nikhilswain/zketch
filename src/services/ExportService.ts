@@ -145,7 +145,9 @@ export class ExportService {
       ctx.drawImage(strokeCanvas, 0, 0, width, height);
     }
 
-    return canvas.toDataURL("image/png");
+    const pngUrl = canvas.toDataURL("image/png");
+    this.imageCache.clear();
+    return pngUrl;
   }
 
   static async exportToJPG(
@@ -194,7 +196,9 @@ export class ExportService {
       ctx.drawImage(strokeCanvas, 0, 0, width, height);
     }
 
-    return canvas.toDataURL("image/jpeg", settings.quality);
+    const jpgUrl = canvas.toDataURL("image/jpeg", settings.quality);
+    this.imageCache.clear();
+    return jpgUrl;
   }
 
   static async exportToSVG(
@@ -277,18 +281,21 @@ export class ExportService {
         for (const el of layer.elements) {
           if ((el as any).shapeType) {
             const s = el as IExportShapeLayer;
-            minX = Math.min(minX, s.x);
-            minY = Math.min(minY, s.y);
-            maxX = Math.max(maxX, s.x + s.width);
-            maxY = Math.max(maxY, s.y + s.height);
+            const hw = (s.strokeWidth ?? 0) / 2;
+            minX = Math.min(minX, s.x - hw);
+            minY = Math.min(minY, s.y - hw);
+            maxX = Math.max(maxX, s.x + s.width + hw);
+            maxY = Math.max(maxY, s.y + s.height + hw);
             hasContent = true;
           } else {
             const stroke = el as IStroke;
+            if (stroke.brushStyle === "eraser") continue;
+            const half = (stroke.size ?? 0) / 2;
             for (const point of stroke.points) {
-              minX = Math.min(minX, point.x);
-              minY = Math.min(minY, point.y);
-              maxX = Math.max(maxX, point.x);
-              maxY = Math.max(maxY, point.y);
+              minX = Math.min(minX, point.x - half);
+              minY = Math.min(minY, point.y - half);
+              maxX = Math.max(maxX, point.x + half);
+              maxY = Math.max(maxY, point.y + half);
               hasContent = true;
             }
           }
@@ -360,21 +367,28 @@ export class ExportService {
         ) as IStroke[];
 
         if (strokeOnly.length > 0) {
+          const b = bounds ?? {
+            minX: 0,
+            minY: 0,
+            maxX: width,
+            maxY: height,
+            width,
+            height,
+          };
+          const pad = 8;
+          const worldX = b.minX - pad;
+          const worldY = b.minY - pad;
+          const offW = Math.max(1, Math.ceil(b.width + pad * 2));
+          const offH = Math.max(1, Math.ceil(b.height + pad * 2));
           const strokeCanvas = document.createElement("canvas");
-          const canvasSize =
-            Math.max(
-              bounds?.maxX || width,
-              bounds?.maxY || height,
-              width,
-              height,
-            ) + 100;
-          strokeCanvas.width = canvasSize;
-          strokeCanvas.height = canvasSize;
+          strokeCanvas.width = offW;
+          strokeCanvas.height = offH;
           const strokeCtx = strokeCanvas.getContext("2d");
 
           if (strokeCtx) {
+            strokeCtx.translate(-worldX, -worldY);
             this.renderStrokesToCanvas(strokeCtx, strokeOnly);
-            ctx.drawImage(strokeCanvas, 0, 0);
+            ctx.drawImage(strokeCanvas, worldX, worldY);
           }
         }
 

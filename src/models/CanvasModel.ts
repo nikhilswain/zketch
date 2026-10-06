@@ -150,7 +150,10 @@ export const CanvasModel = types
     },
     // Layers formatted for export — draw layers expose their elements array verbatim.
     get exportLayers() {
-      return self.layers
+      const sourceLayers = self.focusedLayerId
+        ? self.layers.filter((l) => l.id === self.focusedLayerId)
+        : self.layers.filter((l) => l.visible);
+      return sourceLayers
         .map((layer) => {
           if (layer.type === "draw") {
             const drawLayer = layer as any;
@@ -206,7 +209,10 @@ export const CanvasModel = types
     // Get flattened strokes from all visible layers (for export/preview)
     get flattenedStrokes() {
       const allStrokes: SnapshotOut<typeof Stroke>[] = [];
-      for (const layer of self.layers) {
+      const sourceLayers = self.focusedLayerId
+        ? self.layers.filter((l) => l.id === self.focusedLayerId)
+        : self.layers.filter((l) => l.visible);
+      for (const layer of sourceLayers) {
         if (layer.visible && layer.type === "draw") {
           const drawLayer = layer as any;
           for (const el of drawLayer.elements) {
