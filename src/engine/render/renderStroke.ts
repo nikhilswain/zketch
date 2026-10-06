@@ -20,7 +20,7 @@ export function renderStroke(
   const key = isEraser ? "ink" : stroke.brushStyle;
   const brush = registry.get(key);
   if (!brush) {
-    if (isEraser) ctx.globalCompositeOperation = prevComposite;
+    ctx.globalCompositeOperation = prevComposite;
     return;
   }
 
@@ -31,7 +31,5 @@ export function renderStroke(
   const opts = getBrushOptions?.(key, stroke.size);
   brush.render(ctx, strokeForRender, opts);
 
-  if (isEraser) {
-    ctx.globalCompositeOperation = prevComposite;
-  }
+  ctx.globalCompositeOperation = prevComposite;
 }
