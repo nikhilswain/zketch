@@ -22,6 +22,10 @@ import {
   Pencil,
   Eraser,
   Sparkles,
+  Brush,
+  Highlighter,
+  SprayCan,
+  Feather,
 } from "lucide-react";
 
 const NumberBadge: React.FC<{ value: string; active?: boolean }> = ({
@@ -39,6 +43,7 @@ const NumberBadge: React.FC<{ value: string; active?: boolean }> = ({
 import type { BrushStyle } from "@/models/CanvasModel";
 import type { ShapeKind } from "@/models/ShapeLayerModel";
 import { brushRegistry } from "@/engine/render/BrushRegistry";
+import { applyBrushPreset } from "@/utils/applyBrushPreset";
 
 interface FloatingDockProps {
   className?: string;
@@ -52,6 +57,7 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
     const [isHovered, setIsHovered] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
     const [shapesPickerOpen, setShapesPickerOpen] = useState(false);
+    const [brushPickerOpen, setBrushPickerOpen] = useState(false);
     const hideTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
     const dockRef = useRef<HTMLDivElement>(null);
 
@@ -68,13 +74,27 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
       setShapesPickerOpen(canvasStore.activeTool === "shape");
     }, [canvasStore.activeTool]);
 
-    const brushIcons: Record<BrushStyle, React.ReactNode> = {
+    const brushIcons: Record<string, React.ReactNode> = {
       ink: <Pencil className="w-4 h-4" />,
-      eraser: <Eraser className="w-4 h-4" />,
+      marker: <Brush className="w-4 h-4" />,
+      highlighter: <Highlighter className="w-4 h-4" />,
+      airbrush: <SprayCan className="w-4 h-4" />,
+      calligraphy: <Feather className="w-4 h-4" />,
       spray: <Sparkles className="w-4 h-4" />,
-    } as any;
+    };
 
-    const brushStyles: BrushStyle[] = ["ink", "eraser", "spray"];
+    const brushShortcuts: Record<string, string> = {
+      ink: "2",
+      spray: "4",
+      marker: "6",
+      highlighter: "7",
+      airbrush: "8",
+      calligraphy: "9",
+    };
+
+    const pickerBrushes = brushRegistry
+      .all()
+      .filter((b) => b.key !== "texture");
 
     // Auto-hide functionality
     useEffect(() => {
@@ -144,9 +164,8 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
       canvasStore.setPan(0, 0);
     };
 
-    const handleBrushChange = (brush: BrushStyle) => {
-      canvasStore.setBrushStyle(brush);
-      canvasStore.setActiveTool("brush");
+    const selectBrush = (brush: BrushStyle) => {
+      applyBrushPreset(canvasStore, brush);
     };
 
     const handleSelectTool = () => {
@@ -226,29 +245,88 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
                 )}
               </Button>
 
-              {brushStyles.map((brush, idx) => {
-                const isActive =
+              <div className="relative">
+                <Button
+                  variant={
+                    canvasStore.activeTool === "brush" ? "default" : "ghost"
+                  }
+                  size="sm"
+                  onClick={() => setBrushPickerOpen((v) => !v)}
+                  className="relative h-9 w-9 p-0 transition-all hover:scale-105"
+                  title="Brush (2)"
+                >
+                  {brushIcons[canvasStore.currentBrushStyle] ?? (
+                    <Pencil className="w-4 h-4" />
+                  )}
+                  {canvasStore.activeTool !== "shape" && (
+                    <NumberBadge
+                      value={brushShortcuts[canvasStore.currentBrushStyle] ?? ""}
+                      active={canvasStore.activeTool === "brush"}
+                    />
+                  )}
+                </Button>
+
+                {brushPickerOpen && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-white border border-gray-200 rounded-xl shadow-lg p-1.5 flex flex-col gap-0.5 min-w-[168px]">
+                    {pickerBrushes.map((b) => {
+                      const isActive =
+                        canvasStore.activeTool === "brush" &&
+                        canvasStore.currentBrushStyle === b.key;
+                      return (
+                        <button
+                          key={b.key}
+                          onClick={() => {
+                            selectBrush(b.key as BrushStyle);
+                            setBrushPickerOpen(false);
+                          }}
+                          className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm transition-colors ${
+                            isActive
+                              ? "bg-blue-50 text-blue-700"
+                              : "text-gray-700 hover:bg-gray-100"
+                          }`}
+                        >
+                          <span className="w-4 h-4 flex items-center justify-center">
+                            {brushIcons[b.key]}
+                          </span>
+                          <span className="flex-1 text-left">
+                            {b.label ?? b.key}
+                          </span>
+                          <span className="text-[10px] text-gray-400">
+                            {brushShortcuts[b.key] ?? ""}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <Button
+                variant={
                   canvasStore.activeTool === "brush" &&
-                  canvasStore.currentBrushStyle === brush;
-                return (
-                  <Button
-                    key={brush}
-                    variant={isActive ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => handleBrushChange(brush)}
-                    className="relative h-9 w-9 p-0 transition-all hover:scale-105"
-                    title={`${
-                      brushRegistry.get(brush)?.label ??
-                      (brush === "eraser" ? "Eraser" : brush)
-                    } brush (${idx + 2})`}
-                  >
-                    {brushIcons[brush]}
-                    {canvasStore.activeTool !== "shape" && (
-                      <NumberBadge value={String(idx + 2)} active={isActive} />
-                    )}
-                  </Button>
-                );
-              })}
+                  canvasStore.currentBrushStyle === "eraser"
+                    ? "default"
+                    : "ghost"
+                }
+                size="sm"
+                onClick={() => {
+                  canvasStore.setBrushStyle("eraser");
+                  canvasStore.setActiveTool("brush");
+                }}
+                className="relative h-9 w-9 p-0 transition-all hover:scale-105"
+                title="Eraser brush (3)"
+              >
+                <Eraser className="w-4 h-4" />
+                {canvasStore.activeTool !== "shape" && (
+                  <NumberBadge
+                    value="3"
+                    active={
+                      canvasStore.activeTool === "brush" &&
+                      canvasStore.currentBrushStyle === "eraser"
+                    }
+                  />
+                )}
+              </Button>
 
               <div className="relative">
                 <Button
