@@ -31,6 +31,7 @@ export interface StrokeLike {
   streamline?: number;
   taperStart?: number;
   taperEnd?: number;
+  easing?: string;
 }
 
 // Base layer interface (shared properties)

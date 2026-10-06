@@ -188,6 +188,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
                   streamline: stroke.streamline,
                   taperStart: stroke.taperStart,
                   taperEnd: stroke.taperEnd,
+                  easing: stroke.easing,
                 })),
               };
             });
@@ -256,6 +257,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
                 streamline: el.streamline,
                 taperStart: el.taperStart,
                 taperEnd: el.taperEnd,
+                easing: el.easing,
               };
             });
 

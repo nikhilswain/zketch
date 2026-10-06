@@ -441,6 +441,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             streamline: canvasStore.brushSettings.streamline,
             taperStart: canvasStore.brushSettings.taperStart,
             taperEnd: canvasStore.brushSettings.taperEnd,
+            easing: canvasStore.brushSettings.easing,
           };
           engineRef.current.setPreviewStroke(temp);
         } else {
@@ -1146,6 +1147,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             streamline: canvasStore.brushSettings.streamline,
             taperStart: canvasStore.brushSettings.taperStart,
             taperEnd: canvasStore.brushSettings.taperEnd,
+            easing: canvasStore.brushSettings.easing,
           };
 
           if (canvasStore.hasLayers) {

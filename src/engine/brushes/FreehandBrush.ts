@@ -1,4 +1,5 @@
 import { getStroke } from "perfect-freehand";
+import { easingFn } from "../easing";
 import type { Brush, BrushOptions, StrokeLike } from "../types";
 
 export class FreehandBrush implements Brush {
@@ -16,7 +17,7 @@ export class FreehandBrush implements Brush {
       thinning: stroke.thinning ?? options?.thinning ?? 0.5,
       smoothing: stroke.smoothing ?? options?.smoothing ?? 0.5,
       streamline: stroke.streamline ?? options?.streamline ?? 0.5,
-      easing: options?.easing ?? ((t: number) => t),
+      easing: easingFn(stroke.easing ?? "linear"),
       start: { taper: stroke.taperStart ?? options?.start?.taper ?? 0 },
       end: { taper: stroke.taperEnd ?? options?.end?.taper ?? 0 },
       last: true,
