@@ -2,6 +2,9 @@ import { getStroke } from "perfect-freehand";
 import type { IStroke, BackgroundType } from "../models/CanvasModel";
 import type { IExportSettings } from "../models/SettingsModel";
 import { BlobStorageService } from "./BlobStorageService";
+import { brushRegistry } from "@/engine/render/BrushRegistry";
+import { renderStroke } from "@/engine/render/renderStroke";
+import { renderShape } from "@/engine/render/renderShape";
 
 // Image layer data needed for export
 export interface IExportImageLayer {
@@ -369,12 +372,7 @@ export class ExportService {
           const strokeCtx = strokeCanvas.getContext("2d");
 
           if (strokeCtx) {
-            this.renderStrokesToCanvas(
-              strokeCtx,
-              strokeOnly,
-              canvasSize,
-              canvasSize,
-            );
+            this.renderStrokesToCanvas(strokeCtx, strokeOnly);
             ctx.drawImage(strokeCanvas, 0, 0);
           }
         }
@@ -382,7 +380,7 @@ export class ExportService {
         // Shapes render as vectors on top, in element order.
         for (const el of layer.elements) {
           if ((el as any).shapeType) {
-            this.renderShape(ctx, el as IExportShapeLayer);
+            renderShape(ctx, el as any);
           }
         }
       } else if (layer.type === "image" && layer.imageData) {
@@ -393,104 +391,6 @@ export class ExportService {
     }
 
     ctx.restore();
-  }
-
-  private static renderShape(
-    ctx: CanvasRenderingContext2D,
-    s: IExportShapeLayer,
-  ) {
-    ctx.save();
-    if (s.rotation !== 0) {
-      const cx = s.x + s.width / 2;
-      const cy = s.y + s.height / 2;
-      ctx.translate(cx, cy);
-      ctx.rotate((s.rotation * Math.PI) / 180);
-      ctx.translate(-cx, -cy);
-    }
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    this.traceShape(ctx, s);
-    if (s.fillColor) {
-      ctx.fillStyle = s.fillColor;
-      ctx.fill();
-    }
-    ctx.strokeStyle = s.strokeColor;
-    ctx.lineWidth = s.strokeWidth;
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  private static traceShape(
-    ctx: CanvasRenderingContext2D,
-    s: IExportShapeLayer,
-  ) {
-    const { shapeType, x, y, width, height, cornerRadius } = s;
-    if (shapeType === "rectangle") {
-      const r = Math.max(0, Math.min(cornerRadius, width / 2, height / 2));
-      ctx.moveTo(x + r, y);
-      ctx.lineTo(x + width - r, y);
-      ctx.arcTo(x + width, y, x + width, y + r, r);
-      ctx.lineTo(x + width, y + height - r);
-      ctx.arcTo(x + width, y + height, x + width - r, y + height, r);
-      ctx.lineTo(x + r, y + height);
-      ctx.arcTo(x, y + height, x, y + height - r, r);
-      ctx.lineTo(x, y + r);
-      ctx.arcTo(x, y, x + r, y, r);
-      ctx.closePath();
-    } else if (shapeType === "circle") {
-      ctx.ellipse(
-        x + width / 2,
-        y + height / 2,
-        Math.max(1, width / 2),
-        Math.max(1, height / 2),
-        0,
-        0,
-        Math.PI * 2,
-      );
-    } else {
-      const pts =
-        shapeType === "diamond"
-          ? [
-              { x: x + width / 2, y: y },
-              { x: x + width, y: y + height / 2 },
-              { x: x + width / 2, y: y + height },
-              { x: x, y: y + height / 2 },
-            ]
-          : [
-              { x: x + width / 2, y: y },
-              { x: x + width, y: y + height },
-              { x: x, y: y + height },
-            ];
-      const r = Math.min(cornerRadius, Math.min(width, height) / 4);
-      if (r <= 0) {
-        ctx.moveTo(pts[0].x, pts[0].y);
-        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-        ctx.closePath();
-      } else {
-        for (let i = 0; i < pts.length; i++) {
-          const cur = pts[i];
-          const next = pts[(i + 1) % pts.length];
-          const prev = pts[(i + pts.length - 1) % pts.length];
-          const dxN = next.x - cur.x;
-          const dyN = next.y - cur.y;
-          const dxP = prev.x - cur.x;
-          const dyP = prev.y - cur.y;
-          const lN = Math.hypot(dxN, dyN);
-          const lP = Math.hypot(dxP, dyP);
-          const tN = Math.min(0.5, r / Math.max(1, lN));
-          const tP = Math.min(0.5, r / Math.max(1, lP));
-          const sx = cur.x + dxP * tP;
-          const sy = cur.y + dyP * tP;
-          const ex = cur.x + dxN * tN;
-          const ey = cur.y + dyN * tN;
-          if (i === 0) ctx.moveTo(sx, sy);
-          else ctx.lineTo(sx, sy);
-          ctx.quadraticCurveTo(cur.x, cur.y, ex, ey);
-        }
-        ctx.closePath();
-      }
-    }
   }
 
   /**
@@ -569,7 +469,7 @@ export class ExportService {
     }
 
     // Render all strokes - erasers will work correctly here
-    this.renderStrokesToCanvas(strokeCtx, strokes, width, height);
+    this.renderStrokesToCanvas(strokeCtx, strokes);
 
     return strokeCanvas;
   }
@@ -577,80 +477,11 @@ export class ExportService {
   private static renderStrokesToCanvas(
     ctx: CanvasRenderingContext2D,
     strokes: IStroke[],
-    width: number,
-    height: number,
   ) {
     strokes.forEach((stroke) => {
       if (stroke.points.length < 2) return;
-      const prevComposite = ctx.globalCompositeOperation;
-      ctx.globalCompositeOperation = (
-        stroke.brushStyle === "eraser" ? "destination-out" : "source-over"
-      ) as GlobalCompositeOperation;
-
-      switch (stroke.brushStyle) {
-        case "spray":
-          this.renderSpray(ctx, stroke);
-          break;
-        case "texture":
-          this.renderTexture(ctx, stroke);
-          break;
-        default: {
-          const path = this.getStrokePath(stroke, width, height);
-          if (!path) break;
-          const prevAlpha = ctx.globalAlpha;
-          ctx.fillStyle = stroke.color;
-          ctx.globalAlpha = (stroke.opacity ?? 1) * prevAlpha;
-          const path2D = new Path2D(path);
-          ctx.fill(path2D);
-          ctx.globalAlpha = prevAlpha;
-          break;
-        }
-      }
-
-      ctx.globalCompositeOperation = prevComposite;
+      renderStroke(ctx, stroke as any, brushRegistry);
     });
-  }
-
-  private static getStrokePath(
-    stroke: IStroke,
-    canvasWidth: number,
-    canvasHeight: number,
-  ): string {
-    const screenPoints = stroke.points.map((p) => [
-      p.x,
-      p.y,
-      p.pressure || 0.5,
-    ]);
-
-    const strokePath = getStroke(screenPoints, {
-      size: stroke.size,
-      thinning: 0.5,
-      smoothing: 0.5,
-      streamline: 0.5,
-      easing: (t) => t,
-      start: {
-        taper: 0,
-        easing: (t) => t,
-      },
-      end: {
-        taper: 0,
-        easing: (t) => t,
-      },
-    });
-
-    if (!strokePath.length) return "";
-
-    const d = strokePath.reduce(
-      (acc, [x0, y0], i, arr) => {
-        const [x1, y1] = arr[(i + 1) % arr.length];
-        acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
-        return acc;
-      },
-      ["M", ...strokePath[0], "Q"],
-    );
-
-    d.push("Z");
-    return d.join(" ");
   }
 
   private static generateSVGPath(
@@ -694,85 +525,6 @@ export class ExportService {
 
     d.push("Z");
     return d.join(" ");
-  }
-
-  // --- Brush renderers for export parity ---
-  private static seededRandom(seed: number) {
-    const x = Math.sin(seed) * 10000;
-    return x - Math.floor(x);
-  }
-
-  private static renderSpray(ctx: CanvasRenderingContext2D, stroke: IStroke) {
-    const size = stroke.size;
-    const prevAlpha = ctx.globalAlpha;
-    ctx.fillStyle = stroke.color;
-    ctx.globalAlpha = (stroke.opacity ?? 1) * prevAlpha;
-    for (let i = 0; i < stroke.points.length; i++) {
-      const { x, y, pressure = 0.5 } = stroke.points[i];
-      const currentSize = size * pressure;
-      const density = Math.max(3, currentSize * 0.3);
-      for (let j = 0; j < density; j++) {
-        const s1 = x * 1000 + y * 100 + j * 10 + i;
-        const s2 = x * 100 + y * 1000 + j * 5 + i * 2;
-        const s3 = x * 10 + y * 10 + j + i * 3;
-        const angle = this.seededRandom(s1) * Math.PI * 2;
-        const distance = this.seededRandom(s2) * currentSize * 0.8;
-        const sx = x + Math.cos(angle) * distance;
-        const sy = y + Math.sin(angle) * distance;
-        const dot = this.seededRandom(s3) * 2 + 0.5;
-        ctx.beginPath();
-        ctx.arc(sx, sy, dot, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-    ctx.globalAlpha = prevAlpha;
-  }
-
-  private static renderTexture(ctx: CanvasRenderingContext2D, stroke: IStroke) {
-    const baseAlpha = ctx.globalAlpha;
-    const pts = stroke.points.map((p) => [p.x, p.y, p.pressure ?? 0.5]);
-    for (let layer = 0; layer < 3; layer++) {
-      const layerOpacity = 0.3 - layer * 0.1;
-      const offset = layer * 2;
-      const offsetPts = pts.map(([x, y, pr], idx) => {
-        const s1 = x * 1000 + y * 100 + layer * 50 + idx;
-        const s2 = x * 100 + y * 1000 + layer * 25 + idx * 2;
-        return [
-          x + (this.seededRandom(s1) - 0.5) * offset,
-          y + (this.seededRandom(s2) - 0.5) * offset,
-          pr,
-        ];
-      });
-      const outline = getStroke(
-        offsetPts as any,
-        {
-          size: stroke.size * (0.8 + layer * 0.1),
-          thinning: 0.7,
-          smoothing: 0.5,
-          streamline: 0.5,
-          start: { cap: false, taper: 10 },
-          end: { cap: false, taper: 10 },
-          last: true,
-        } as any,
-      );
-      if (outline.length < 3) continue;
-      ctx.globalAlpha = (stroke.opacity ?? 1) * layerOpacity * baseAlpha;
-      const path2 = new Path2D(
-        outline
-          .reduce(
-            (acc: any[], [x0, y0]: number[], i: number, arr: number[][]) => {
-              const [x1, y1] = arr[(i + 1) % arr.length];
-              acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
-              return acc;
-            },
-            ["M", ...outline[0], "Q"] as any,
-          )
-          .join(" ") + " Z",
-      );
-      ctx.fillStyle = stroke.color;
-      ctx.fill(path2);
-    }
-    ctx.globalAlpha = baseAlpha;
   }
 
   private static drawGrid(
