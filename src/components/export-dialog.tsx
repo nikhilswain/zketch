@@ -45,10 +45,16 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
     const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
     const [isSharing, setIsSharing] = useState(false);
 
-    // Check if we have any content (strokes or image layers)
+    // Check if we have any content (strokes, shapes, or image layers)
     const hasContent =
       strokes.length > 0 ||
-      (layers && layers.some((l) => l.type === "image" && l.visible));
+      (layers &&
+        layers.some(
+          (l) =>
+            l.visible &&
+            (l.type === "image" ||
+              (l.type === "draw" && (l.elements?.length ?? 0) > 0)),
+        ));
 
     // Generate preview whenever dialog opens or settings change
     useEffect(() => {
