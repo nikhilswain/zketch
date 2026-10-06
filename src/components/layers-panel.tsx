@@ -47,17 +47,30 @@ function generateDrawLayerThumbnail(
   width: number = 48,
   height: number = 36,
 ): string {
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
+  const SS = 3;
+  const rw = width * SS;
+  const rh = height * SS;
+  const work = document.createElement("canvas");
+  work.width = rw;
+  work.height = rh;
+  const ctx = work.getContext("2d");
   if (!ctx) return "";
 
+  const finish = () => {
+    const out = document.createElement("canvas");
+    out.width = width;
+    out.height = height;
+    const outCtx = out.getContext("2d");
+    if (!outCtx) return work.toDataURL();
+    outCtx.drawImage(work, 0, 0, width, height);
+    return out.toDataURL();
+  };
+
   ctx.fillStyle = "#f5f5f5";
-  ctx.fillRect(0, 0, width, height);
+  ctx.fillRect(0, 0, rw, rh);
 
   const elements = layerSnapshot.elements;
-  if (!elements || elements.length === 0) return canvas.toDataURL();
+  if (!elements || elements.length === 0) return finish();
 
   // Compute bounds across all elements (sample-capped for perf).
   let minX = Infinity,
@@ -81,21 +94,21 @@ function generateDrawLayerThumbnail(
       }
     }
   }
-  if (!isFinite(minX)) return canvas.toDataURL();
+  if (!isFinite(minX)) return finish();
 
-  const padding = 4;
+  const padding = 4 * SS;
   const cw = maxX - minX || 1;
   const ch = maxY - minY || 1;
   const scale = Math.min(
-    (width - padding * 2) / cw,
-    (height - padding * 2) / ch,
+    (rw - padding * 2) / cw,
+    (rh - padding * 2) / ch,
   );
-  const ox = padding + (width - padding * 2 - cw * scale) / 2 - minX * scale;
-  const oy = padding + (height - padding * 2 - ch * scale) / 2 - minY * scale;
+  const ox = padding + (rw - padding * 2 - cw * scale) / 2 - minX * scale;
+  const oy = padding + (rh - padding * 2 - ch * scale) / 2 - minY * scale;
 
   const off = document.createElement("canvas");
-  off.width = width;
-  off.height = height;
+  off.width = rw;
+  off.height = rh;
   const offCtx = off.getContext("2d");
   if (offCtx) {
     offCtx.save();
@@ -117,7 +130,7 @@ function generateDrawLayerThumbnail(
     if (el.shapeType) renderShape(ctx, el as any);
   }
   ctx.restore();
-  return canvas.toDataURL();
+  return finish();
 }
 
 interface LayerItemProps {
