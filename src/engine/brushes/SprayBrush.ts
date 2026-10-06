@@ -1,12 +1,16 @@
-import type { Brush, StrokeLike } from "../types";
-
-const seededRandom = (seed: number) => {
-  const x = Math.sin(seed) * 10000;
-  return x - Math.floor(x);
-};
+import type { Brush, BrushOptions, StrokeLike } from "../types";
+import { seededRandom } from "../render/seededRandom";
 
 export class SprayBrush implements Brush {
   key = "spray" as const;
+  label = "Spray";
+  defaults: Partial<BrushOptions> = {
+    thinning: 0.8,
+    smoothing: 0.3,
+    streamline: 0.3,
+    start: { cap: false, taper: 0, easing: (t: number) => t },
+    end: { cap: false, taper: 0, easing: (t: number) => t },
+  };
   render(ctx: CanvasRenderingContext2D, stroke: StrokeLike) {
     const size = stroke.size;
     const prevAlpha = ctx.globalAlpha;

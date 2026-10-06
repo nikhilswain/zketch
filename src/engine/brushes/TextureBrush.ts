@@ -1,13 +1,17 @@
 import { getStroke } from "perfect-freehand";
 import type { Brush, BrushOptions, StrokeLike } from "../types";
-
-const seededRandom = (seed: number) => {
-  const x = Math.sin(seed) * 10000;
-  return x - Math.floor(x);
-};
+import { seededRandom } from "../render/seededRandom";
 
 export class TextureBrush implements Brush {
   key = "texture" as const;
+  label = "Texture";
+  defaults: Partial<BrushOptions> = {
+    thinning: 0.7,
+    smoothing: 0.5,
+    streamline: 0.5,
+    start: { cap: false, taper: 10, easing: (t: number) => t },
+    end: { cap: false, taper: 10, easing: (t: number) => t },
+  };
   render(
     ctx: CanvasRenderingContext2D,
     stroke: StrokeLike,

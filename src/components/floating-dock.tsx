@@ -38,6 +38,7 @@ const NumberBadge: React.FC<{ value: string; active?: boolean }> = ({
 );
 import type { BrushStyle } from "@/models/CanvasModel";
 import type { ShapeKind } from "@/models/ShapeLayerModel";
+import { brushRegistry } from "@/engine/render/BrushRegistry";
 
 interface FloatingDockProps {
   className?: string;
@@ -237,9 +238,8 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
                     onClick={() => handleBrushChange(brush)}
                     className="relative h-9 w-9 p-0 transition-all hover:scale-105"
                     title={`${
-                      brush === "ink"
-                        ? "Pen"
-                        : brush.charAt(0).toUpperCase() + brush.slice(1)
+                      brushRegistry.get(brush)?.label ??
+                      (brush === "eraser" ? "Eraser" : brush)
                     } brush (${idx + 2})`}
                   >
                     {brushIcons[brush]}
