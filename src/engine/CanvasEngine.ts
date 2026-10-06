@@ -1,31 +1,20 @@
-import { FreehandBrush } from "./brushes/FreehandBrush";
-import { SprayBrush } from "./brushes/SprayBrush";
-import { TextureBrush } from "./brushes/TextureBrush";
 import { GridRenderer } from "./GridRenderer";
 import { BlobStorageService } from "@/services/BlobStorageService";
 import { transformController } from "./TransformController";
+import { brushRegistry, registerDefaultBrushes } from "./render/BrushRegistry";
+import { renderStroke } from "./render/renderStroke";
+import { renderShape } from "./render/renderShape";
+import { drawImageLayer } from "./render/renderImage";
 import type {
   EngineConfig,
   PanZoom,
   StrokeLike,
-  BrushOptions,
   LayerLike,
-  Brush,
   ImageLayerLike,
   ShapeElementLike,
   TransformableLayer,
 } from "./types";
 import { isShapeElement } from "./types";
-
-class BrushRegistry {
-  private brushes = new Map<string, Brush>();
-  register(b: Brush) {
-    this.brushes.set(b.key, b);
-  }
-  get(k: string) {
-    return this.brushes.get(k);
-  }
-}
 
 export class CanvasEngine {
   // Main display canvases
@@ -50,7 +39,6 @@ export class CanvasEngine {
   private loadingImages: Set<string> = new Set();
 
   private pz: PanZoom = { panX: 0, panY: 0, zoom: 1 };
-  private registry = new BrushRegistry();
   private grid = new GridRenderer();
   private rafId: number | null = null;
   private invalid = true;
@@ -101,9 +89,7 @@ export class CanvasEngine {
     this.background = config.background;
 
     // Register brushes
-    this.registry.register(new FreehandBrush());
-    this.registry.register(new SprayBrush());
-    this.registry.register(new TextureBrush());
+    registerDefaultBrushes();
     this.resize();
     window.addEventListener("resize", this.resize);
     this.loop();
@@ -266,7 +252,12 @@ export class CanvasEngine {
       this.displayCtx.scale(this.pz.zoom, this.pz.zoom);
 
       for (const stroke of strokes) {
-        this.renderStroke(this.displayCtx, stroke, 1);
+        renderStroke(
+          this.displayCtx,
+          stroke,
+          brushRegistry,
+          this.config.getBrushOptions,
+        );
       }
       this.displayCtx.restore();
       return;
@@ -293,7 +284,12 @@ export class CanvasEngine {
       if (this.animatingLayerId === layer.id && this.animationStrokes) {
         // Render animation strokes instead of normal layer strokes
         for (const stroke of this.animationStrokes) {
-          this.renderStroke(layerCtx, stroke, 1);
+          renderStroke(
+            layerCtx,
+            stroke,
+            brushRegistry,
+            this.config.getBrushOptions,
+          );
         }
       } else {
         // Render normal layer content
@@ -314,7 +310,12 @@ export class CanvasEngine {
       this.displayCtx.save();
       this.displayCtx.translate(this.pz.panX, this.pz.panY);
       this.displayCtx.scale(this.pz.zoom, this.pz.zoom);
-      this.renderStroke(this.displayCtx, this.preview, 1);
+      renderStroke(
+        this.displayCtx,
+        this.preview,
+        brushRegistry,
+        this.config.getBrushOptions,
+      );
       this.displayCtx.restore();
     }
 
@@ -322,7 +323,7 @@ export class CanvasEngine {
       this.displayCtx.save();
       this.displayCtx.translate(this.pz.panX, this.pz.panY);
       this.displayCtx.scale(this.pz.zoom, this.pz.zoom);
-      this.renderShapeLayer(this.displayCtx, this.previewShape);
+      renderShape(this.displayCtx, this.previewShape);
       this.displayCtx.restore();
     }
   }
@@ -340,7 +341,12 @@ export class CanvasEngine {
         if (!isShapeElement(el)) {
           const faded = pending?.has((el as any).id);
           if (faded) ctx.save(), (ctx.globalAlpha *= 0.25);
-          this.renderStroke(ctx, el as StrokeLike, 1);
+          renderStroke(
+            ctx,
+            el as StrokeLike,
+            brushRegistry,
+            this.config.getBrushOptions,
+          );
           if (faded) ctx.restore();
         }
       }
@@ -348,208 +354,24 @@ export class CanvasEngine {
         if (isShapeElement(el)) {
           const faded = pending?.has((el as any).id);
           if (faded) ctx.save(), (ctx.globalAlpha *= 0.25);
-          this.renderShapeLayer(ctx, el as ShapeElementLike);
+          renderShape(ctx, el as ShapeElementLike);
           if (faded) ctx.restore();
         }
       }
     }
   }
 
-  private renderShapeLayer(
-    ctx: CanvasRenderingContext2D,
-    layer: ShapeElementLike,
-  ) {
-    const {
-      x,
-      y,
-      width,
-      height,
-      rotation,
-      strokeColor,
-      strokeWidth,
-      fillColor,
-      opacity,
-    } = layer;
-
-    ctx.save();
-    // Per-element opacity stacks on top of whatever the caller set.
-    if (opacity !== undefined && opacity !== 1) {
-      ctx.globalAlpha = ctx.globalAlpha * opacity;
-    }
-    if (rotation !== 0) {
-      const cx = x + width / 2;
-      const cy = y + height / 2;
-      ctx.translate(cx, cy);
-      ctx.rotate((rotation * Math.PI) / 180);
-      ctx.translate(-cx, -cy);
-    }
-
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-
-    ctx.beginPath();
-    this.tracePath(ctx, layer);
-
-    if (fillColor) {
-      ctx.fillStyle = fillColor;
-      ctx.fill();
-    }
-
-    ctx.strokeStyle = strokeColor;
-    ctx.lineWidth = strokeWidth;
-    ctx.stroke();
-
-    ctx.restore();
-  }
-
-  private tracePath(ctx: CanvasRenderingContext2D, layer: ShapeElementLike) {
-    const { shapeType, x, y, width, height, cornerRadius } = layer;
-    switch (shapeType) {
-      case "rectangle":
-        this.pathRoundedRect(ctx, x, y, width, height, cornerRadius);
-        break;
-      case "circle":
-        ctx.ellipse(
-          x + width / 2,
-          y + height / 2,
-          Math.max(1, width / 2),
-          Math.max(1, height / 2),
-          0,
-          0,
-          Math.PI * 2,
-        );
-        break;
-      case "diamond":
-        this.pathDiamond(ctx, x, y, width, height, cornerRadius);
-        break;
-      case "triangle":
-        this.pathTriangle(ctx, x, y, width, height, cornerRadius);
-        break;
-    }
-  }
-
-  private pathRoundedRect(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    r: number,
-  ) {
-    const radius = Math.max(0, Math.min(r, w / 2, h / 2));
-    ctx.moveTo(x + radius, y);
-    ctx.lineTo(x + w - radius, y);
-    ctx.arcTo(x + w, y, x + w, y + radius, radius);
-    ctx.lineTo(x + w, y + h - radius);
-    ctx.arcTo(x + w, y + h, x + w - radius, y + h, radius);
-    ctx.lineTo(x + radius, y + h);
-    ctx.arcTo(x, y + h, x, y + h - radius, radius);
-    ctx.lineTo(x, y + radius);
-    ctx.arcTo(x, y, x + radius, y, radius);
-    ctx.closePath();
-  }
-
-  private pathDiamond(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    r: number,
-  ) {
-    const cx = x + w / 2;
-    const cy = y + h / 2;
-    const pts = [
-      { x: cx, y: y },
-      { x: x + w, y: cy },
-      { x: cx, y: y + h },
-      { x: x, y: cy },
-    ];
-    if (r <= 0) {
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (let i = 1; i < 4; i++) ctx.lineTo(pts[i].x, pts[i].y);
-      ctx.closePath();
-      return;
-    }
-    const radius = Math.min(r, Math.min(w, h) / 4);
-    for (let i = 0; i < 4; i++) {
-      const cur = pts[i];
-      const next = pts[(i + 1) % 4];
-      const prev = pts[(i + 3) % 4];
-      const dxNext = next.x - cur.x;
-      const dyNext = next.y - cur.y;
-      const lenNext = Math.hypot(dxNext, dyNext);
-      const dxPrev = prev.x - cur.x;
-      const dyPrev = prev.y - cur.y;
-      const lenPrev = Math.hypot(dxPrev, dyPrev);
-      const tNext = Math.min(0.5, radius / Math.max(1, lenNext));
-      const tPrev = Math.min(0.5, radius / Math.max(1, lenPrev));
-      const startX = cur.x + dxPrev * tPrev;
-      const startY = cur.y + dyPrev * tPrev;
-      const endX = cur.x + dxNext * tNext;
-      const endY = cur.y + dyNext * tNext;
-      if (i === 0) ctx.moveTo(startX, startY);
-      else ctx.lineTo(startX, startY);
-      ctx.quadraticCurveTo(cur.x, cur.y, endX, endY);
-    }
-    ctx.closePath();
-  }
-
-  private pathTriangle(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    r: number,
-  ) {
-    const pts = [
-      { x: x + w / 2, y: y },
-      { x: x + w, y: y + h },
-      { x: x, y: y + h },
-    ];
-    if (r <= 0) {
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (let i = 1; i < 3; i++) ctx.lineTo(pts[i].x, pts[i].y);
-      ctx.closePath();
-      return;
-    }
-    const radius = Math.min(r, Math.min(w, h) / 4);
-    for (let i = 0; i < 3; i++) {
-      const cur = pts[i];
-      const next = pts[(i + 1) % 3];
-      const prev = pts[(i + 2) % 3];
-      const dxNext = next.x - cur.x;
-      const dyNext = next.y - cur.y;
-      const lenNext = Math.hypot(dxNext, dyNext);
-      const dxPrev = prev.x - cur.x;
-      const dyPrev = prev.y - cur.y;
-      const lenPrev = Math.hypot(dxPrev, dyPrev);
-      const tNext = Math.min(0.5, radius / Math.max(1, lenNext));
-      const tPrev = Math.min(0.5, radius / Math.max(1, lenPrev));
-      const startX = cur.x + dxPrev * tPrev;
-      const startY = cur.y + dyPrev * tPrev;
-      const endX = cur.x + dxNext * tNext;
-      const endY = cur.y + dyNext * tNext;
-      if (i === 0) ctx.moveTo(startX, startY);
-      else ctx.lineTo(startX, startY);
-      ctx.quadraticCurveTo(cur.x, cur.y, endX, endY);
-    }
-    ctx.closePath();
-  }
-
   private renderImageLayer(
     ctx: CanvasRenderingContext2D,
     layer: ImageLayerLike,
   ) {
-    const { blobId, x, y, width, height, rotation } = layer;
+    const { blobId } = layer;
 
     // Check if image is already cached
     const cachedImage = this.imageCache.get(blobId);
 
     if (cachedImage) {
-      // Draw the cached image
-      this.drawImage(ctx, cachedImage, x, y, width, height, rotation);
+      drawImageLayer(ctx, cachedImage, layer);
     } else if (!this.loadingImages.has(blobId)) {
       // Start loading the image
       this.loadingImages.add(blobId);
@@ -582,65 +404,6 @@ export class CanvasEngine {
     } catch (error) {
       console.error(`Error loading image for blobId: ${blobId}`, error);
       this.loadingImages.delete(blobId);
-    }
-  }
-
-  private drawImage(
-    ctx: CanvasRenderingContext2D,
-    img: HTMLImageElement,
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    rotation: number,
-  ) {
-    ctx.save();
-
-    if (rotation !== 0) {
-      // Rotate around the center of the image
-      const centerX = x + width / 2;
-      const centerY = y + height / 2;
-      ctx.translate(centerX, centerY);
-      ctx.rotate((rotation * Math.PI) / 180);
-      ctx.drawImage(img, -width / 2, -height / 2, width, height);
-    } else {
-      ctx.drawImage(img, x, y, width, height);
-    }
-
-    ctx.restore();
-  }
-
-  private renderStroke(
-    ctx: CanvasRenderingContext2D,
-    s: StrokeLike,
-    layerOpacity: number,
-  ) {
-    // For eraser strokes, use destination-out composite
-    const isEraser = s.brushStyle === "eraser";
-    const prevComposite = ctx.globalCompositeOperation;
-
-    if (isEraser) {
-      ctx.globalCompositeOperation = "destination-out";
-    }
-
-    const key = s.brushStyle === "eraser" ? "ink" : s.brushStyle;
-    const brush = this.registry.get(key);
-    if (!brush) {
-      if (isEraser) ctx.globalCompositeOperation = prevComposite;
-      return;
-    }
-
-    // Erasers must paint solidly to punch holes — short eraser strokes get fully consumed by
-    // the default ink taper, leaving no destination-out region. Override taper for erasers.
-    const strokeForRender = isEraser
-      ? { ...s, taperStart: 0, taperEnd: 0, opacity: 1 }
-      : s;
-
-    const opts = this.config.getBrushOptions?.(key, s.size);
-    brush.render(ctx, strokeForRender, opts);
-
-    if (isEraser) {
-      ctx.globalCompositeOperation = prevComposite;
     }
   }
 
