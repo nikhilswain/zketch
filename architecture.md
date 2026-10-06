@@ -50,11 +50,14 @@ npm install
 npm run dev        # astro dev
 npm run build      # astro build  → dist/
 npm run preview
+npm test           # vitest run (engine/render tests)
 # deploy: wrangler pages deploy dist --project-name zketch
 ```
 
-There is **no test runner, linter, or formatter configured**. Type-check with
-`npx tsc --noEmit` if needed. Path alias `@/*` → `src/*` (see `tsconfig.json`).
+No linter/formatter is configured. Type-check with `npx tsc --noEmit`.
+`npm test` runs Vitest (Node) against `src/engine/render` using `@napi-rs/canvas`
+as the canvas backend (`tests/`). Path alias `@/*` → `src/*` (see `tsconfig.json`
+and `vitest.config.ts`).
 
 ---
 
@@ -129,6 +132,9 @@ src/
 ├── page-components/  # React page shells mounted by Astro
 ├── layouts/Layout.astro
 └── styles/global.css # Tailwind v4 theme + touch/zoom guards
+
+tests/                # Vitest suites (Node + @napi-rs/canvas)
+vitest.config.ts      # Test config (alias @ → src)
 ```
 
 > The dead `src/page-components/draw-pages.tsx/` duplicate folder was removed
