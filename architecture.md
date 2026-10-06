@@ -380,8 +380,9 @@ Persistence layers:
 - **`ExportService`** — `exportToPNG/JPG/SVG`.
   - PNG/JPG take `layers: IExportLayer[]` and render in z-order with the same
     per-draw-layer two-pass logic as the engine (strokes baked offscreen so
-    eraser `destination-out` works, shapes vector on top). Also duplicates
-    spray/texture renderers for parity.
+    eraser `destination-out` works, shapes vector on top). Stroke and shape
+    rendering is delegated to the shared `engine/render` renderers +
+    `brushRegistry`, so brushes and shape opacity now match the canvas.
   - SVG only handles **strokes** (no shapes/images, no eraser) — known gap.
   - `downloadFile(dataUrl, filename)` triggers the browser download.
 - **`ThumbnailService`** — `generateThumbnailAsync(layers, background, w, h)`
