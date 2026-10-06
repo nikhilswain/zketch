@@ -82,9 +82,15 @@ src/
 │   │   ├── shapePaths.ts      # ONE copy of rect/circle/diamond/triangle paths
 │   │   ├── renderImage.ts     # Image layer draw with rotation
 │   │   ├── seededRandom.ts    # Deterministic RNG shared by brushes
+│   │   ├── pathData.ts        # perfect-freehand outline → SVG path string
+│   │   ├── color.ts           # hex → rgba helper (airbrush gradients)
 │   │   └── index.ts
 │   └── brushes/
 │       ├── FreehandBrush.ts   # key "ink" — perfect-freehand outline
+│       ├── MarkerBrush.ts     # key "marker" — flat, multiply build-up
+│       ├── HighlighterBrush.ts# key "highlighter" — wide translucent multiply
+│       ├── AirbrushBrush.ts   # key "airbrush" — soft radial-gradient build-up
+│       ├── CalligraphyBrush.ts# key "calligraphy" — angle-dependent nib ribbon
 │       ├── SprayBrush.ts      # key "spray" — seeded dot scatter
 │       └── TextureBrush.ts    # key "texture" — layered noisy outline (hidden)
 │
@@ -187,7 +193,13 @@ caches the `HTMLImageElement`, and draws with rotation around center.
 
 `BrushRegistry` (`engine/render/BrushRegistry.ts`) maps `key → Brush` and is a
 shared singleton (`brushRegistry`) populated by `registerDefaultBrushes()`.
-Registered: `FreehandBrush("ink")`, `SprayBrush("spray")`, `TextureBrush("texture")`.
+Registered: `FreehandBrush("ink")`, `MarkerBrush("marker")`,
+`HighlighterBrush("highlighter")`, `AirbrushBrush("airbrush")`,
+`CalligraphyBrush("calligraphy")`, `SprayBrush("spray")`, `TextureBrush("texture")`
+(legacy, hidden). Geometric brushes are procedural (no image assets): ink/marker
+use `perfect-freehand` outlines, calligraphy builds an angle-dependent ribbon,
+highlighter is a thick `multiply` polyline, airbrush stamps soft radial gradients.
+`Brush.presets` (metadata) drives the UI variant picker.
 Eraser resolves to `"ink"`. `renderStroke` (`engine/render/renderStroke.ts`) owns
 the eraser→`destination-out` special-casing; `CanvasEngine` calls it for live
 rendering, and export/thumbnails call the same function. Strokes carry their full

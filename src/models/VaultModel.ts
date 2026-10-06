@@ -23,6 +23,8 @@ export interface IStrokeData {
   taperStart?: number;
   taperEnd?: number;
   easing?: string;
+  angle?: number;
+  softness?: number;
 }
 
 // Legacy stroke-only layer (pre-refactor).

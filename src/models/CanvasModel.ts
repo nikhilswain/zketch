@@ -51,7 +51,16 @@ export const CanvasModel = types
     currentSize: types.optional(types.number, 4),
     eraserSize: types.optional(types.number, 20),
     currentBrushStyle: types.optional(
-      types.enumeration("BrushStyle", ["ink", "eraser", "spray", "texture"]),
+      types.enumeration("BrushStyle", [
+        "ink",
+        "eraser",
+        "spray",
+        "texture",
+        "marker",
+        "highlighter",
+        "airbrush",
+        "calligraphy",
+      ]),
       "ink",
     ),
     background: types.optional(
@@ -607,7 +616,17 @@ export const CanvasModel = types
         });
         self.saveToHistory();
       },
-      setBrushStyle(style: "ink" | "eraser" | "spray" | "texture") {
+      setBrushStyle(
+        style:
+          | "ink"
+          | "eraser"
+          | "spray"
+          | "texture"
+          | "marker"
+          | "highlighter"
+          | "airbrush"
+          | "calligraphy",
+      ) {
         self.currentBrushStyle = style;
       },
       setPenSize(size: number) {
@@ -653,6 +672,8 @@ export const CanvasModel = types
           taperEnd: number;
           easing: string;
           opacity: number;
+          angle: number;
+          softness: number;
         }>,
       ) {
         if (settings.thinning !== undefined)
@@ -671,6 +692,12 @@ export const CanvasModel = types
           self.brushSettings.opacity = Math.max(
             0,
             Math.min(1, settings.opacity),
+          );
+        if (settings.angle !== undefined) self.brushSettings.angle = settings.angle;
+        if (settings.softness !== undefined)
+          self.brushSettings.softness = Math.max(
+            0,
+            Math.min(1, settings.softness),
           );
       },
       clear() {
@@ -1647,7 +1674,15 @@ export const CanvasModel = types
   });
 
 // Export type aliases for backward compatibility
-export type BrushStyle = "ink" | "eraser" | "spray" | "texture";
+export type BrushStyle =
+  | "ink"
+  | "eraser"
+  | "spray"
+  | "texture"
+  | "marker"
+  | "highlighter"
+  | "airbrush"
+  | "calligraphy";
 export type BackgroundType = "white" | "transparent" | "grid";
 
 export interface ICanvasModel extends Instance<typeof CanvasModel> {}

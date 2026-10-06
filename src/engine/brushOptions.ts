@@ -10,6 +10,8 @@ export interface BrushSettingsLike {
   taperEnd: number;
   easing: string;
   opacity?: number;
+  angle: number;
+  softness: number;
 }
 
 export function createGetBrushOptions(brushSettings: BrushSettingsLike) {
@@ -24,6 +26,8 @@ export function createGetBrushOptions(brushSettings: BrushSettingsLike) {
       thinning: brushSettings.thinning,
       smoothing: brushSettings.smoothing,
       streamline: brushSettings.streamline,
+      angle: brushSettings.angle,
+      softness: brushSettings.softness,
     };
 
     if (brushStyle === "ink") {
