@@ -9,7 +9,7 @@ import { Button } from "./ui/button";
 import { Label } from "./ui/label";
 import { Slider } from "./ui/slider";
 import { Checkbox } from "./ui/checkbox";
-import { Download, Share2, Copy, FileImage, File, Loader2 } from "lucide-react";
+import { Download, Share2, Copy, FileImage, Loader2 } from "lucide-react";
 import type { ExportFormat } from "@/models/SettingsModel";
 import type { IStroke, BackgroundType } from "@/models/CanvasModel";
 import { ExportService, type IExportLayer } from "@/services/ExportService";
@@ -266,20 +266,6 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
                     </div>
                     <span className="text-xs opacity-90">
                       Smaller file size • No transparency
-                    </span>
-                  </Button>
-
-                  {/* SVG Button */}
-                  <Button
-                    onClick={() => handleExport("svg")}
-                    className="w-full h-16 bg-green-600 hover:bg-green-700 text-white flex flex-col items-center justify-center gap-1"
-                  >
-                    <div className="flex items-center gap-2">
-                      <File className="w-5 h-5" />
-                      <span className="font-semibold">SVG</span>
-                    </div>
-                    <span className="text-xs opacity-90">
-                      Vector format • Infinitely scalable
                     </span>
                   </Button>
                 </div>
