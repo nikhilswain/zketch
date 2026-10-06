@@ -200,7 +200,9 @@ and `defaults?: Partial<BrushOptions>` (per-brush fallback options consumed by
 `src/engine/brushes/`, register it in `registerDefaultBrushes()`, add its key to
 the `BrushStyle` union (`engine/types.ts`, `SharedModels.ts`, `CanvasModel.ts`,
 `VaultModel.ts`), and add a dock icon/list entry. PNG/JPG/thumbnail parity is
-automatic via the shared `renderStroke`.
+automatic via the shared `renderStroke`. Spray exposes tunables
+(`density/scatter/dotMin/dotRange`) through `BrushOptions` (defaults live on the
+brush) and caps dots per stroke for bounded cost.
 
 `brushOptions.ts::createGetBrushOptions(settings)` converts the per-draw brush
 settings (`thinning/smoothing/streamline/taper/easing`) into `BrushOptions`,
