@@ -22,7 +22,7 @@ import {
   Palette,
   HardDrive,
 } from "lucide-react";
-import { IndexedDBService } from "@/services/IndexedDBService";
+import { DexieService } from "@/services/DexieService";
 import { BlobStorageService } from "@/services/BlobStorageService";
 import type { ISavedDrawing } from "@/models/VaultModel";
 import { toast } from "sonner";
@@ -227,7 +227,7 @@ const VaultView: React.FC<VaultViewProps> = observer(
                   <div className="flex items-center gap-1">
                     <HardDrive className="w-4 h-4" />
                     <span>
-                      {IndexedDBService.formatBytes(
+                      {DexieService.formatBytes(
                         vaultStore.storageInfo.used,
                       )}{" "}
                       used

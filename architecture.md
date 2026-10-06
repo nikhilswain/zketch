@@ -113,8 +113,7 @@ src/
 ├── services/         # Storage + IO
 │   ├── DexieService.ts        # "DrawingVault" DB (drawings table)
 │   ├── BlobStorageService.ts  # "ImageBlobs" DB (rasters + thumbnails)
-│   ├── IndexedDBService.ts    # Legacy raw-IndexedDB reader (still used by vault-view)
-│   ├── ExportService.ts       # PNG/JPG/SVG renderers
+│   ├── ExportService.ts       # PNG/JPG renderers (SVG method retained, UI hidden)
 │   ├── ThumbnailService.ts    # Vault/layer thumbnail generator
 │   ├── ImportService.ts       # File / URL / clipboard → blob
 │   └── ShareService.ts        # Client for /api/share/*
@@ -132,10 +131,9 @@ src/
 └── styles/global.css # Tailwind v4 theme + touch/zoom guards
 ```
 
-> **Dead duplicate:** `src/page-components/draw-pages.tsx/` is a leftover folder
-> whose name ends in `.tsx` (a Vite dynamic-import gotcha). Astro imports the
-> correctly-named `src/page-components/draw-pages/` folder. Do not edit the
-> `.tsx` folder.
+> The dead `src/page-components/draw-pages.tsx/` duplicate folder was removed
+> (Vite dynamic-import gotcha). Astro imports the correctly-named
+> `src/page-components/draw-pages/` folder.
 
 ---
 
@@ -351,8 +349,6 @@ Persistence layers:
 - **Drawings metadata + frozen layers** → Dexie DB `DrawingVault` (`DexieService`).
 - **Image blobs + thumbnails** → Dexie DB `ImageBlobs` (`BlobStorageService`,
   IDs prefixed `blob_` / `thumb_`; URLs cached + revocable).
-- `IndexedDBService` is a legacy duplicate still imported by `valut-view.tsx`
-  for `formatBytes`. Prefer `DexieService`.
 
 ---
 
@@ -416,7 +412,7 @@ Persistence layers:
   threshold, SVG sanitization).
 - **`ShareService`** — `storeSharedDrawing` (POST `/api/share/store`) and
   `retrieveSharedDrawing` (GET `/api/share/:id`), plus size checks (20MB).
-- **`DexieService` / `BlobStorageService` / `IndexedDBService`** — storage (see §6).
+- **`DexieService` / `BlobStorageService`** — storage (see §6).
 
 ---
 
@@ -528,8 +524,8 @@ While animating, `canvasLocked` blocks all drawing/import.
    compatibility.
 6. **`texture` brush** was removed from all UI but remains in the enum +
    registry so old saved drawings still render.
-7. **`valut-view.tsx`** (typo) and **`draw-pages.tsx/`** (dead duplicate folder)
-   are historical; do not "fix" the names without checking every import.
+7. **`valut-view.tsx`** (typo) is historical; do not "fix" the name without
+   checking every import.
 8. **MST detachment** — when reading layers inside engine callbacks / effects,
    use `getSnapshot(layer)` (as `drawing-canvas.getLayers` does) to avoid
    detached-node errors during reorder/merge.
@@ -594,7 +590,6 @@ animation, sidebar floating panels.
 - Selection avatar for shape config is partially duplicated between
   `CanvasModel` shape-tool state and `ShapeSettingsPanel`.
 - `mobile-canvas-view` exists but the vault page blocks mobile; inconsistent.
-- `IndexedDBService` is a legacy parallel implementation to `DexieService`.
 - No automated tests; performance relies on full per-layer redraws.
 - Layer `dirtyLayers` tracking is scaffolded but unused.
 

@@ -42,6 +42,8 @@ interface CanvasViewProps {
   onBackToVault: () => void;
 }
 
+const AUTOSAVE_DEBOUNCE_MS = 500;
+
 const CanvasView: React.FC<CanvasViewProps> = observer(
   ({ editingDrawingId, onBackToVault }) => {
     const canvasStore = useCanvasStore();
@@ -439,7 +441,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             } else {
               setSaveStatus("idle");
             }
-          }, 500);
+          }, AUTOSAVE_DEBOUNCE_MS);
         },
       );
 
@@ -459,6 +461,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
       const handleBeforeUnload = (e: BeforeUnloadEvent) => {
         if (isDirtyRef.current) {
           e.preventDefault();
+          e.returnValue = "";
         }
       };
 
