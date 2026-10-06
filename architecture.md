@@ -78,6 +78,7 @@ src/
 │   │   ├── renderShape.ts     # Shape renderer (applies element opacity/rotation)
 │   │   ├── shapePaths.ts      # ONE copy of rect/circle/diamond/triangle paths
 │   │   ├── renderImage.ts     # Image layer draw with rotation
+│   │   ├── seededRandom.ts    # Deterministic RNG shared by brushes
 │   │   └── index.ts
 │   └── brushes/
 │       ├── FreehandBrush.ts   # key "ink" — perfect-freehand outline
@@ -189,11 +190,17 @@ rendering, and export/thumbnails call the same function. Strokes carry their ful
 render params (`thinning/smoothing/streamline/taperStart/taperEnd/easing`), so
 committed strokes and exports are **deterministic** — changing current brush
 settings never alters already-drawn strokes. `engine/easing.ts` resolves the
-stored easing name to a function. **To add a brush**: implement
-`Brush { key; render(ctx, stroke, options?) }` in `src/engine/brushes/`, register
-it in `registerDefaultBrushes()`, add its key to the `BrushStyle` union in
-`engine/types.ts`, `SharedModels.ts`, `CanvasModel.ts`, `VaultModel.ts`, and
-`ExportService` (for parity), then wire UI controls.
+stored easing name to a function. `Brush` metadata is optional: `label?` (UI text)
+and `defaults?: Partial<BrushOptions>` (per-brush fallback options consumed by
+`createGetBrushOptions`, so a new brush usually doesn't need to touch
+`brushOptions.ts`). Shared helpers: `easingFn` (`engine/easing.ts`) and
+`seededRandom` (`engine/render/seededRandom.ts`). The registry exposes
+`register/unregister/get/has/keys/all` and is re-exported from `engine/index.ts`.
+**To add a brush**: implement `Brush { key; label?; defaults?; render(...) }` in
+`src/engine/brushes/`, register it in `registerDefaultBrushes()`, add its key to
+the `BrushStyle` union (`engine/types.ts`, `SharedModels.ts`, `CanvasModel.ts`,
+`VaultModel.ts`), and add a dock icon/list entry. PNG/JPG/thumbnail parity is
+automatic via the shared `renderStroke`.
 
 `brushOptions.ts::createGetBrushOptions(settings)` converts the per-draw brush
 settings (`thinning/smoothing/streamline/taper/easing`) into `BrushOptions`,
@@ -534,7 +541,7 @@ While animating, `canvasLocked` blocks all drawing/import.
 
 | Task | Touch |
 |---|---|
-| Add a brush | `engine/brushes/*`, register in `CanvasEngine`, `engine/types.ts`, `SharedModels.ts`, `CanvasModel.ts`, `VaultModel.ts`, `ExportService`, then UI (dock + ToolSettingsPanel) |
+| Add a brush | implement in `engine/brushes/*`, register in `BrushRegistry.registerDefaultBrushes()`, add the key to the `BrushStyle` union (`engine/types.ts` + the MST enums), add a dock icon/list entry. Export/thumbnail parity is automatic. |
 | Add a shape kind | `ShapeLayerModel.ts` enum + factory, `CanvasModel` state, `CanvasEngine.tracePath`, `ExportService.traceShape`, `ThumbnailService.renderShape`, `layers-panel` thumbnail, dock picker |
 | Change selection/transform behavior | `drawing-canvas.tsx` (group refs + handlers) + `CanvasModel` selection actions + `TransformController` |
 | Change eraser behavior | `drawing-canvas.tsx` (pending scan), `CanvasEngine.renderStroke`, `CanvasModel.commitPendingErase`, `SettingsModel.eraserWholeStroke` |

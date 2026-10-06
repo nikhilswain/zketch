@@ -10,8 +10,24 @@ export class BrushRegistry {
     this.brushes.set(b.key, b);
   }
 
+  unregister(key: string) {
+    this.brushes.delete(key);
+  }
+
   get(k: string) {
     return this.brushes.get(k);
+  }
+
+  has(key: string) {
+    return this.brushes.has(key);
+  }
+
+  keys() {
+    return [...this.brushes.keys()];
+  }
+
+  all() {
+    return [...this.brushes.values()];
   }
 }
 

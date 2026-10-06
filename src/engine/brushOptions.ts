@@ -1,5 +1,6 @@
 import type { BrushOptions, BrushStyle } from "./types";
 import { easingFn } from "./easing";
+import { brushRegistry } from "./render/BrushRegistry";
 
 export interface BrushSettingsLike {
   thinning: number;
@@ -12,10 +13,12 @@ export interface BrushSettingsLike {
 }
 
 export function createGetBrushOptions(brushSettings: BrushSettingsLike) {
+  const ease = easingFn(brushSettings.easing);
   return function getBrushOptions(
     brushStyle: BrushStyle,
-    size: number
+    size: number,
   ): BrushOptions {
+    const defaults = brushRegistry.get(brushStyle)?.defaults ?? {};
     const baseOptions: BrushOptions = {
       size,
       thinning: brushSettings.thinning,
@@ -23,49 +26,19 @@ export function createGetBrushOptions(brushSettings: BrushSettingsLike) {
       streamline: brushSettings.streamline,
     };
 
-    switch (brushStyle) {
-      case "ink":
-        return {
-          ...baseOptions,
-          easing: easingFn(brushSettings.easing),
-          start: {
-            taper: brushSettings.taperStart,
-            easing: easingFn(brushSettings.easing),
-          },
-          end: {
-            taper: brushSettings.taperEnd,
-            easing: easingFn(brushSettings.easing),
-          },
-        };
-      case "eraser":
-        return {
-          ...baseOptions,
-          thinning: 0.3,
-          smoothing: 0.6,
-          streamline: 0.6,
-          start: { cap: true, taper: 0, easing: (t: number) => t },
-          end: { cap: true, taper: 0, easing: (t: number) => t },
-        };
-      case "spray":
-        return {
-          ...baseOptions,
-          thinning: 0.8,
-          smoothing: 0.3,
-          streamline: 0.3,
-          start: { cap: false, taper: 0, easing: (t: number) => t },
-          end: { cap: false, taper: 0, easing: (t: number) => t },
-        };
-      case "texture":
-        return {
-          ...baseOptions,
-          thinning: 0.7,
-          smoothing: 0.5,
-          streamline: 0.5,
-          start: { cap: false, taper: 10, easing: (t: number) => t },
-          end: { cap: false, taper: 10, easing: (t: number) => t },
-        };
-      default:
-        return baseOptions;
+    if (brushStyle === "ink") {
+      return {
+        ...baseOptions,
+        easing: ease,
+        start: { taper: brushSettings.taperStart, easing: ease },
+        end: { taper: brushSettings.taperEnd, easing: ease },
+        ...defaults,
+      };
     }
+
+    return {
+      ...baseOptions,
+      ...defaults,
+    };
   };
 }

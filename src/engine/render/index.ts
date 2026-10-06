@@ -3,3 +3,4 @@ export * from "./renderStroke";
 export * from "./renderShape";
 export * from "./renderImage";
 export * from "./shapePaths";
+export * from "./seededRandom";

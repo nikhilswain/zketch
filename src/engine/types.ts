@@ -125,6 +125,8 @@ export interface BrushOptions {
 
 export interface Brush {
   key: string;
+  label?: string;
+  defaults?: Partial<BrushOptions>;
   render(
     ctx: CanvasRenderingContext2D,
     stroke: StrokeLike,
