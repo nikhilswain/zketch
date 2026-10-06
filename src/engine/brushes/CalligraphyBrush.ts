@@ -1,6 +1,6 @@
 import type { Brush, BrushOptions, BrushPreset, StrokeLike } from "../types";
 
-const MAX_STAMPS = 4000;
+const MAX_STAMPS = 6000;
 
 export class CalligraphyBrush implements Brush {
   key = "calligraphy" as const;
@@ -22,25 +22,35 @@ export class CalligraphyBrush implements Brush {
     const angle = ((stroke.angle ?? options?.angle ?? 45) * Math.PI) / 180;
     const nx = Math.cos(angle);
     const ny = Math.sin(angle);
+    const px = -ny;
+    const py = nx;
     const half = stroke.size / 2;
-    const thickness = Math.max(1, stroke.size * 0.12);
-    const step = Math.max(0.5, thickness * 0.5);
+    const nibThickness = Math.max(0.75, stroke.size * 0.1);
+    const halfT = nibThickness / 2;
+    const step = Math.max(0.4, nibThickness * 0.4);
 
     const nibHalf = (pressure: number) => half * (0.35 + 0.65 * pressure);
 
     const prevAlpha = ctx.globalAlpha;
     ctx.globalAlpha = (stroke.opacity ?? 1) * prevAlpha;
-    ctx.strokeStyle = stroke.color;
-    ctx.lineCap = "round";
-    ctx.lineWidth = thickness;
+    ctx.fillStyle = stroke.color;
 
     ctx.beginPath();
     let stamps = 0;
     const stamp = (x: number, y: number, h: number) => {
       if (stamps >= MAX_STAMPS) return;
       stamps++;
-      ctx.moveTo(x - nx * h, y - ny * h);
-      ctx.lineTo(x + nx * h, y + ny * h);
+      const ax = x - nx * h;
+      const ay = y - ny * h;
+      const bx = x + nx * h;
+      const by = y + ny * h;
+      const ox = px * halfT;
+      const oy = py * halfT;
+      ctx.moveTo(ax - ox, ay - oy);
+      ctx.lineTo(bx - ox, by - oy);
+      ctx.lineTo(bx + ox, by + oy);
+      ctx.lineTo(ax + ox, ay + oy);
+      ctx.closePath();
     };
 
     const p0 = pts[0];
@@ -54,12 +64,11 @@ export class CalligraphyBrush implements Brush {
       const n = Math.max(1, Math.ceil(dist / step));
       for (let s = 1; s <= n; s++) {
         const t = s / n;
-        const pressure =
-          (a.pressure ?? 1) * (1 - t) + (b.pressure ?? 1) * t;
+        const pressure = (a.pressure ?? 1) * (1 - t) + (b.pressure ?? 1) * t;
         stamp(a.x + dx * t, a.y + dy * t, nibHalf(pressure));
       }
     }
-    ctx.stroke();
+    ctx.fill();
     ctx.globalAlpha = prevAlpha;
   }
 }
