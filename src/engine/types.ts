@@ -121,6 +121,10 @@ export interface BrushOptions {
   easing?: (t: number) => number;
   start?: Record<string, unknown>;
   end?: Record<string, unknown>;
+  density?: number;
+  scatter?: number;
+  dotMin?: number;
+  dotRange?: number;
 }
 
 export interface Brush {
