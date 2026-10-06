@@ -71,6 +71,13 @@ src/
 │   ├── brushOptions.ts        # Builds per-brush BrushOptions from settings
 │   ├── types.ts              # All engine contracts (StrokeLike, LayerLike, Brush…)
 │   ├── index.ts              # Barrel exports
+│   ├── render/               # Shared renderers + brush registry (canvas/export/thumb)
+│   │   ├── BrushRegistry.ts   # Brush map + shared singleton + registerDefaultBrushes()
+│   │   ├── renderStroke.ts    # Eraser-aware stroke renderer (composite-safe)
+│   │   ├── renderShape.ts     # Shape renderer (applies element opacity/rotation)
+│   │   ├── shapePaths.ts      # ONE copy of rect/circle/diamond/triangle paths
+│   │   ├── renderImage.ts     # Image layer draw with rotation
+│   │   └── index.ts
 │   └── brushes/
 │       ├── FreehandBrush.ts   # key "ink" — perfect-freehand outline
 │       ├── SprayBrush.ts      # key "spray" — seeded dot scatter
@@ -159,8 +166,8 @@ Per frame (`render()`):
 1. All **strokes** first (raster). Eraser strokes switch the context to
    `globalCompositeOperation = "destination-out"` so they punch holes in that
    layer only.
-2. All **shape elements** afterwards as vectors (`renderShapeLayer` + `tracePath`
-   supporting rounded rect / ellipse / diamond / triangle).
+2. All **shape elements** afterwards as vectors (`renderShape` + `traceShape` from
+   `engine/render/`, supporting rounded rect / ellipse / diamond / triangle).
 
 > **Key rule:** erasers are just strokes with `brushStyle: "eraser"`. The engine
 > renders them with the `ink` brush but forces `taperStart/End = 0` and
@@ -172,13 +179,16 @@ caches the `HTMLImageElement`, and draws with rotation around center.
 
 ### 4.2 Brush registry
 
-`BrushRegistry` (inside `CanvasEngine`) maps `key → Brush`. Registered:
-`FreehandBrush("ink")`, `SprayBrush("spray")`, `TextureBrush("texture")`.
-Eraser resolves to `"ink"`. **To add a brush**: implement
-`Brush { key; render(ctx, stroke, options?) }` in `src/engine/brushes/`, register
-it in the constructor, add its key to the `BrushStyle` union in
-`engine/types.ts`, `SharedModels.ts`, `CanvasModel.ts`, `VaultModel.ts`, and
-`ExportService` (for parity), then wire UI controls.
+`BrushRegistry` (`engine/render/BrushRegistry.ts`) maps `key → Brush` and is a
+shared singleton (`brushRegistry`) populated by `registerDefaultBrushes()`.
+Registered: `FreehandBrush("ink")`, `SprayBrush("spray")`, `TextureBrush("texture")`.
+Eraser resolves to `"ink"`. `renderStroke` (`engine/render/renderStroke.ts`) owns
+the eraser→`destination-out` special-casing; `CanvasEngine` calls it for live
+rendering, and export/thumbnails will call the same function (Phase 2). **To add
+a brush**: implement `Brush { key; render(ctx, stroke, options?) }` in
+`src/engine/brushes/`, register it in `registerDefaultBrushes()`, add its key to
+the `BrushStyle` union in `engine/types.ts`, `SharedModels.ts`, `CanvasModel.ts`,
+`VaultModel.ts`, and `ExportService` (for parity), then wire UI controls.
 
 `brushOptions.ts::createGetBrushOptions(settings)` converts the per-draw brush
 settings (`thinning/smoothing/streamline/taper/easing`) into `BrushOptions`,
