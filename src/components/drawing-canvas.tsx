@@ -1,6 +1,7 @@
 import type React from "react";
 import { useRef, useEffect, useState, useCallback } from "react";
 import { observer } from "mobx-react-lite";
+import { reaction } from "mobx";
 import { getSnapshot } from "mobx-state-tree";
 import { useCanvasStore, useSettingsStore } from "../hooks/useStores";
 // Plain point shape for raw coordinate tuples — distinct from MST PointLike instance type.
@@ -200,23 +201,33 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       engineRef.current?.invalidate();
     }, [canvasStore.background]);
 
-    // Sync pan/zoom with engine
-    useEffect(() => {
-      engineRef.current?.setPanZoom({
-        panX: canvasStore.panX,
-        panY: canvasStore.panY,
-        zoom: canvasStore.zoom,
-      });
-    }, [canvasStore.panX, canvasStore.panY, canvasStore.zoom]);
+    useEffect(
+      () =>
+        reaction(
+          () => ({
+            panX: canvasStore.panX,
+            panY: canvasStore.panY,
+            zoom: canvasStore.zoom,
+          }),
+          (pz) => engineRef.current?.setPanZoom(pz),
+          { fireImmediately: true },
+        ),
+      [canvasStore],
+    );
 
-    // Force repaint on history/state changes (undo/redo/clear, etc.)
-    useEffect(() => {
-      const engine = engineRef.current;
-      if (!engine) return;
-      // Clear any preview in case undo/redo occurred mid-stroke
-      engine.setPreviewStroke(null);
-      engine.invalidate();
-    }, [canvasStore.renderVersion]);
+    useEffect(
+      () =>
+        reaction(
+          () => canvasStore.renderVersion,
+          () => {
+            const engine = engineRef.current;
+            if (!engine) return;
+            engine.setPreviewStroke(null);
+            engine.invalidate();
+          },
+        ),
+      [canvasStore],
+    );
 
     // Sync animation state with engine
     useEffect(() => {
@@ -241,7 +252,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         const y = (localY - canvasStore.panY) / canvasStore.zoom;
         return { x, y, pressure: 0.5 };
       },
-      [canvasStore.panX, canvasStore.panY, canvasStore.zoom],
+      [canvasStore],
     );
 
     // Hit test selectable things — returns the topmost image layer OR shape element under the point.
@@ -340,7 +351,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         }
         return null;
       },
-      [canvasStore.visibleLayers, canvasStore.zoom],
+      [canvasStore.visibleLayers],
     );
 
     const hitTestTransformHandles = useCallback(
@@ -402,9 +413,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         canvasStore.selectionAnchor,
         canvasStore.selectionUnionBounds,
         canvasStore.selectionCount,
-        canvasStore.zoom,
-        canvasStore.panX,
-        canvasStore.panY,
       ],
     );
 
@@ -1559,7 +1567,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           visible: true,
           x: mousePosition.x - rect.left,
           y: mousePosition.y - rect.top,
-          r: (canvasStore.eraserSize * canvasStore.zoom) / 2,
+          worldRadius: canvasStore.eraserSize / 2,
         });
       } else {
         engine.setCursor({ visible: false });
@@ -1570,7 +1578,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       canvasStore.activeTool,
       canvasStore.currentBrushStyle,
       canvasStore.eraserSize,
-      canvasStore.zoom,
       spacePressed,
       canvasLocked,
     ]);
