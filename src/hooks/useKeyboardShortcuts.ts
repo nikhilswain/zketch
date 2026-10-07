@@ -60,10 +60,6 @@ export const useKeyboardShortcuts = (
       canvasStore.setActiveTool("brush");
       canvasStore.setBrushStyle("eraser");
     });
-    KeyBindingManager.registerHandler("selectSpray", () => {
-      canvasStore.setActiveTool("brush");
-      canvasStore.setBrushStyle("spray");
-    });
     KeyBindingManager.registerHandler("selectMarker", () =>
       applyBrushPreset(canvasStore, "marker"),
     );

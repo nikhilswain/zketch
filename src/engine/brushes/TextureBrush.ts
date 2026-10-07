@@ -6,6 +6,7 @@ import { toPathData } from "../render/pathData";
 export class TextureBrush implements Brush {
   key = "texture" as const;
   label = "Texture";
+  legacy = true;
   defaults: Partial<BrushOptions> = {
     thinning: 0.7,
     smoothing: 0.5,

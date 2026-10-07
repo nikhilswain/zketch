@@ -42,7 +42,6 @@ const MobileSidebar: React.FC<MobileSidebarProps> = observer(
       { value: "highlighter", label: "Highlighter" },
       { value: "airbrush", label: "Airbrush" },
       { value: "calligraphy", label: "Calligraphy" },
-      { value: "spray", label: "Spray" },
       { value: "eraser", label: "Eraser" },
     ];
 

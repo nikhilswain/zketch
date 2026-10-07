@@ -15,8 +15,9 @@ raster snapshot to a short share link via Cloudflare KV.
 Core capabilities:
 
 - Freehand drawing with pressure sensitivity (Perfect Freehand).
-- Brushes: **Pen/Ink**, **Eraser**, **Spray** (a hidden legacy `texture` still
-  exists in the model/registry for old saves).
+- Brushes: **Pen/Ink**, **Marker**, **Highlighter**, **Airbrush**,
+  **Calligraphy**, **Eraser**. `spray` and `texture` are **legacy** (`Brush.legacy`):
+  still registered so old saves render, but hidden from the picker/shortcuts.
 - Shape tools: rectangle, circle, diamond, triangle (drag-to-create; Shift =
   square aspect).
 - Multi-layer canvas (draw layers mix strokes + shapes; image layers hold
@@ -236,9 +237,8 @@ and `defaults?: Partial<BrushOptions>` (per-brush fallback options consumed by
 `src/engine/brushes/`, register it in `registerDefaultBrushes()`, add its key to
 the `BrushStyle` union (`engine/types.ts`, `SharedModels.ts`, `CanvasModel.ts`,
 `VaultModel.ts`), and add a dock icon/list entry. PNG/JPG/thumbnail parity is
-automatic via the shared `renderStroke`. Spray exposes tunables
-(`density/scatter/dotMin/dotRange`) through `BrushOptions` (defaults live on the
-brush) and caps dots per stroke for bounded cost.
+automatic via the shared `renderStroke`. Set `legacy = true` to keep a brush
+render-only (excluded from the dock picker).
 
 `brushOptions.ts::createGetBrushOptions(settings)` converts the per-draw brush
 settings (`thinning/smoothing/streamline/taper/easing`) into `BrushOptions`,
@@ -410,7 +410,7 @@ Persistence layers:
   `FloatingDock`, export/import dialogs, autosave, animation playback state,
   canvas lock while animating.
 - **`floating-dock.tsx`** — bottom dock: Pan, Select(1), a **Brush picker**
-  (popover listing Pen/Marker/Highlighter/Airbrush/Calligraphy/Spray, shortcut
+  (popover listing non-legacy brushes: Pen/Marker/Highlighter/Airbrush/Calligraphy, shortcut
   numbers shown), Eraser(3), Shapes(5) + shape picker popover
   (rectangle/circle/diamond/triangle), zoom out / % / zoom in / fit. Selecting a
   brush applies its first `preset` (size/opacity/angle/softness) via
@@ -482,7 +482,7 @@ Persistence layers:
   (register/handle). `useKeyboardShortcuts` wires these to store actions.
 
 **Shortcuts summary**: Ctrl+Z/Y undo/redo · Ctrl+Backspace clear · Delete/Backspace
-delete selection · V/1 select · 2 pen · 3 eraser · 4 spray · 5 shapes ·
+delete selection · V/1 select · 2 pen · 3 eraser · 5 shapes ·
 6 marker · 7 highlighter · 8 airbrush · 9 calligraphy ·
 (shape mode) 1–4 shape kinds · Space pan · Ctrl +/-/0 zoom · Ctrl+F fit ·
 Ctrl+S save · Ctrl+E export · Ctrl+N new · Ctrl+V vault · B/W/R colors ·

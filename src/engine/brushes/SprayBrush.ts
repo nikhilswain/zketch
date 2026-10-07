@@ -6,6 +6,7 @@ const MAX_DOTS = 8000;
 export class SprayBrush implements Brush {
   key = "spray" as const;
   label = "Spray";
+  legacy = true;
   defaults: Partial<BrushOptions> = {
     thinning: 0.8,
     smoothing: 0.3,
