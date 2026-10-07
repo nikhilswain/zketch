@@ -130,6 +130,7 @@ export const CanvasModel = types
     historyIndex: -1,
     maxHistorySize: 50,
     renderVersion: 0, // force re-renders
+    contentVersion: 0,
     // Element IDs currently faded for "pending erase". Committed (deleted) on drag-end.
     pendingEraserDeletes: new Set<string>(),
   }))
@@ -602,8 +603,9 @@ export const CanvasModel = types
       afterCreate() {
         self.saveToHistory();
       },
-      bumpRenderVersion() {
+      bumpRenderVersion(content = true) {
         self.renderVersion++;
+        if (content) self.contentVersion++;
       },
       addStroke(strokeData: SnapshotIn<typeof Stroke>) {
         self.addStrokeToModel(strokeData);
@@ -1347,10 +1349,12 @@ export const CanvasModel = types
         const next = new Set(self.pendingEraserDeletes);
         next.add(elementId);
         self.pendingEraserDeletes = next;
+        self.contentVersion++;
       },
       clearPendingErase() {
         if (self.pendingEraserDeletes.size === 0) return;
         self.pendingEraserDeletes = new Set();
+        self.contentVersion++;
       },
       // Splice every pending element from its layer and clear the set. One history entry.
       commitPendingErase() {
@@ -1373,6 +1377,7 @@ export const CanvasModel = types
           if (eid && ids.has(eid)) self.selectedElements.splice(i, 1);
         }
         self.pendingEraserDeletes = new Set();
+        self.contentVersion++;
         if (removed) {
           (self as any).recomputeSelectionAnchor();
           self.saveToHistory();
