@@ -23,31 +23,7 @@ export const rootStore = RootStore.create({});
 // Auto-increment renderVersion on any visual state change.
 // Uses microtask batching so a single user action (e.g., undo which restores
 // strokes + background + zoom) only bumps renderVersion once.
-const NON_CONTENT_PATHS = [
-  "/panX",
-  "/panY",
-  "/zoom",
-  "/currentColor",
-  "/currentSize",
-  "/eraserSize",
-  "/currentBrushStyle",
-  "/activeTool",
-  "/currentShapeType",
-  "/shapeStrokeWidth",
-  "/shapeCornerRadius",
-  "/shapeOpacity",
-  "/shapeFillColor",
-  "/colorTarget",
-  "/interactionMode",
-  "/selectedElements",
-  "/selectionAnchor",
-];
-
-const isContentPath = (path: string) =>
-  !NON_CONTENT_PATHS.some((p) => path === p || path.startsWith(p + "/"));
-
 let renderDirty = false;
-let contentDirty = false;
 onPatch(rootStore.canvasModel, (patch) => {
   // Skip patches to renderVersion itself (avoid infinite loop)
   if (patch.path.startsWith("/renderVersion")) return;
@@ -55,13 +31,11 @@ onPatch(rootStore.canvasModel, (patch) => {
   if (patch.path.startsWith("/history")) return;
   if (patch.path.startsWith("/historyIndex")) return;
 
-  if (isContentPath(patch.path)) contentDirty = true;
   if (!renderDirty) {
     renderDirty = true;
     queueMicrotask(() => {
-      rootStore.canvasModel.bumpRenderVersion(contentDirty);
+      rootStore.canvasModel.bumpRenderVersion();
       renderDirty = false;
-      contentDirty = false;
     });
   }
 });
