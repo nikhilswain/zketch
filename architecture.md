@@ -170,6 +170,10 @@ Per frame (`render()`):
    - Else, for each **visible** layer: render it into its own **offscreen
      canvas** (`getLayerContext`), then composite onto `display` with
      `globalAlpha = layer.opacity`.
+   - Layers are **cached**: a layer is re-baked only when its content
+     (`config.getRenderVersion()`) or the view transform (pan/zoom) changes;
+     otherwise the cached canvas is composited. So live preview frames do not
+     re-bake committed strokes.
    - Preview stroke (`setPreviewStroke`) and preview shape (`setPreviewShape`)
      are drawn last, on top.
 3. `renderOverlay()` — selection outlines, transform handles, marquee, and the
@@ -198,7 +202,8 @@ Registered: `FreehandBrush("ink")`, `MarkerBrush("marker")`,
 `HighlighterBrush("highlighter")`, `AirbrushBrush("airbrush")`,
 `CalligraphyBrush("calligraphy")`, `SprayBrush("spray")`, `TextureBrush("texture")`
 (legacy, hidden). Geometric brushes are procedural (no image assets): ink/marker
-use `perfect-freehand` outlines, calligraphy builds an angle-dependent ribbon,
+use `perfect-freehand` outlines, calligraphy draws per-segment variable-width
+round-capped strokes (angle-dependent width; cheap),
 highlighter is a thick `multiply` polyline, airbrush stamps soft radial gradients.
 `Brush.presets` (metadata) drives the UI variant picker.
 Eraser resolves to `"ink"`. `renderStroke` (`engine/render/renderStroke.ts`) owns
