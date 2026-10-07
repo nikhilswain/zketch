@@ -15,8 +15,9 @@ raster snapshot to a short share link via Cloudflare KV.
 Core capabilities:
 
 - Freehand drawing with pressure sensitivity (Perfect Freehand).
-- Brushes: **Pen/Ink**, **Pencil** (stamp engine), **Marker**, **Highlighter**,
-  **Airbrush**, **Calligraphy**, **Eraser**. `spray` and `texture` are **legacy** (`Brush.legacy`):
+- Brushes: **Pen/Ink**, **Marker**, **Highlighter**, **Airbrush**,
+  **Calligraphy**, **Eraser**, plus stamp-engine media: **Pencil**, **Charcoal**,
+  **Pastel**, **Gouache**, **Dry Brush**, **Sponge**, **Splatter**. `spray` and `texture` are **legacy** (`Brush.legacy`):
   still registered so old saves render, but hidden from the picker/shortcuts.
 - Shape tools: rectangle, circle, diamond, triangle (drag-to-create; Shift =
   square aspect).
@@ -269,6 +270,19 @@ scatter, size/flow jitter and pressure response, angle mode
   buffer (integer-offset blit onto the overscanned layer) instead of re-stamping.
 - Offscreen canvases come from `render/canvasFactory.ts` (`setCanvasFactory` lets
   Node tests inject `@napi-rs/canvas`).
+- **Assets**: a tip/grain id is a path under `public/brushes/` without `.png`
+  (e.g. `revoy-2025-01/charcoal-2`). On first use of an unknown id, `tips.ts` /
+  `grain.ts` call the loader installed by `stamp/assets.ts`
+  (`installBrushAssetLoader`, called from the `CanvasEngine` constructor), which
+  fetches and decodes the PNG and registers it; until then a procedural soft
+  tip / paper noise is used. `onBrushAssetsChanged` makes the engine drop its
+  layer caches and re-bake. Only assets of brushes actually used are fetched.
+- **Asset pipeline**: `npm run brushes` (`tools/convert-brushes.ts`) downloads
+  CC0 source archives (sha256-verified, cached in `.brush-cache/`), parses
+  GIMP `.gbr/.gih` via `engine/brush-formats/gimp.ts`, writes white-on-alpha
+  tip masks and grayscale grain tiles, per-source `LICENSE.txt`/`README.md`,
+  and `public/brushes/manifest.json`. Credits: `THIRD_PARTY_ASSETS.md`. Only
+  bundle CC0/permissive sources (see the brush-asset research in `.work`).
 
 `brushOptions.ts::createGetBrushOptions(settings)` converts the per-draw brush
 settings (`thinning/smoothing/streamline/taper/easing`) into `BrushOptions`,

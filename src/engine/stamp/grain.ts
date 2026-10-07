@@ -6,6 +6,11 @@ const NOISE_SIZE = 256;
 const sources = new Map<string, Float32Array>();
 const sourceSizes = new Map<string, number>();
 const masks = new Map<string, HTMLCanvasElement>();
+let loader: ((id: string) => void) | null = null;
+
+export function setGrainLoader(next: ((id: string) => void) | null) {
+  loader = next;
+}
 
 function proceduralPaper(size: number): Float32Array {
   const out = new Float32Array(size * size);
@@ -60,6 +65,7 @@ export function registerGrain(id: string, values: Float32Array, size: number) {
 function grainSource(id: string) {
   const values = sources.get(id);
   if (values) return { values, size: sourceSizes.get(id) ?? NOISE_SIZE };
+  if (id !== "paper-noise") loader?.(id);
   let noise = sources.get("paper-noise");
   if (!noise) {
     noise = proceduralPaper(NOISE_SIZE);
