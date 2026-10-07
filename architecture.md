@@ -170,10 +170,18 @@ Per frame (`render()`):
    - Else, for each **visible** layer: render it into its own **offscreen
      canvas** (`getLayerContext`), then composite onto `display` with
      `globalAlpha = layer.opacity`.
-   - Layers are **cached**: a layer is re-baked only when its content
-     (`config.getRenderVersion()`) or the view transform (pan/zoom) changes;
-     otherwise the cached canvas is composited. So live preview frames do not
-     re-bake committed strokes.
+   - Layer canvases are device-pixel sized plus a 256 CSS-px **overscan**
+     margin on every side. Bakes use an explicit
+     `setTransform(dpr*zoom, dpr*(pan+margin))`; compositing is done 1:1 in
+     device pixels (identity transform, then the view delta).
+   - Layers are **cached** per layer (`layerBakes`: content version + the
+     view it was baked at). A layer re-bakes when its content
+     (`config.getContentVersion()`) changes or it is animating. When only the
+     view changes, the cached bitmap is composited with the view delta while
+     a gesture is in progress (view changed < 150 ms ago) and the bitmap still
+     covers the viewport (scale delta 0.5–3×); a crisp re-bake runs once the
+     gesture settles (`settleTimer`) or coverage runs out. Live preview frames
+     never re-bake committed strokes.
    - Preview stroke (`setPreviewStroke`) and preview shape (`setPreviewShape`)
      are drawn last, on top.
 3. `renderOverlay()` — selection outlines, transform handles, marquee, and the
@@ -295,7 +303,11 @@ State highlights:
 - Selection: `selectedElements: {layerId, elementId|null}[]`,
   `selectionAnchor: {x,y,width,height,rotation}|null`, `interactionMode`.
 - Volatile: `history` / `historyIndex` (max 50), `renderVersion`,
-  `pendingEraserDeletes: Set<string>`.
+  `contentVersion`, `pendingEraserDeletes: Set<string>`.
+- `contentVersion` bumps only for patches that change rendered layer content
+  (not pan/zoom, tool, color, size, or selection paths — see
+  `NON_CONTENT_PATHS` in `root-store.ts`) and on pending-erase changes. The
+  engine's layer cache keys on it.
 
 Important views: `isEmpty`, `activeLayer`, `visibleLayers`,
 `flattenedStrokes`, `exportLayers`, `selectedTransformableLayer`,
@@ -349,11 +361,12 @@ UI prefs (autoHideDock/delay/showGrid/snapToGrid), `touchMode`,
 ```
 root-store.ts
   ├─ canvasModel, vaultModel, settingsModel
-  └─ onPatch(canvasModel) ──(microtask-batched, ignores /renderVersion|/history)──> bumpRenderVersion()
+  └─ onPatch(canvasModel) ──(microtask-batched, ignores /renderVersion|/history)──> bumpRenderVersion(contentChanged)
 
 drawing-canvas.tsx
-  ├─ useEffect[renderVersion] → engine.invalidate()
-  ├─ useEffect[background|pan/zoom] → engine.setBackground/setPanZoom
+  ├─ reaction(renderVersion) → engine.invalidate()
+  ├─ reaction(pan/zoom) → engine.setPanZoom
+  ├─ useEffect[background] → engine.setBackground
   └─ useEffect[animatingLayerId] → engine.setAnimationState
 
 canvas-view.tsx
@@ -548,6 +561,9 @@ While animating, `canvasLocked` blocks all drawing/import.
    browser (chrome-devtools tools are allow-listed in `.claude/settings.local.json`).
 3. **`renderVersion` is auto-managed** — never `self.renderVersion++` manually;
    call `bumpRenderVersion` only if you must.
+   Don't read `panX`/`panY`/`zoom`/`renderVersion` during `DrawingCanvas`
+   render (including hook dependency arrays): it is an `observer`, so every
+   pan frame would re-render it. Read them inside callbacks or MobX reactions.
 4. **`saveToHistory()` is manual** — every mutating action must call it, or
    undo will skip the change.
 5. **Erasers are strokes**, not geometry operations. The old geometry eraser
