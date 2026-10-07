@@ -186,11 +186,6 @@ export class CanvasEngine {
     this.displayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.uiCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // Also scale layer contexts
-    for (const ctx of this.layerContexts.values()) {
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
-
     this.invalid = true;
   };
 
@@ -271,6 +266,7 @@ export class CanvasEngine {
     this.cleanupLayerCanvases(activeLayerIds);
 
     const rv = this.config.getRenderVersion?.() ?? 0;
+    const dpr = window.devicePixelRatio || 1;
 
     // Render each layer to its own offscreen canvas, then composite. Layers are
     // cached and only re-baked when content (renderVersion) or the view transform
@@ -290,10 +286,18 @@ export class CanvasEngine {
         isAnimating || this.layerSignatures.get(layer.id) !== sig;
 
       if (needsRender) {
-        layerCtx.clearRect(0, 0, layerCanvas.width, layerCanvas.height);
         layerCtx.save();
-        layerCtx.translate(this.pz.panX, this.pz.panY);
-        layerCtx.scale(this.pz.zoom, this.pz.zoom);
+        layerCtx.setTransform(1, 0, 0, 1, 0, 0);
+        layerCtx.clearRect(0, 0, layerCanvas.width, layerCanvas.height);
+        const scale = dpr * this.pz.zoom;
+        layerCtx.setTransform(
+          scale,
+          0,
+          0,
+          scale,
+          dpr * this.pz.panX,
+          dpr * this.pz.panY,
+        );
 
         if (isAnimating) {
           for (const stroke of this.animationStrokes!) {
@@ -314,6 +318,7 @@ export class CanvasEngine {
 
       // Composite this layer onto the display canvas with layer opacity
       this.displayCtx.save();
+      this.displayCtx.setTransform(1, 0, 0, 1, 0, 0);
       this.displayCtx.globalAlpha = layer.opacity;
       this.displayCtx.drawImage(layerCanvas, 0, 0);
       this.displayCtx.restore();
