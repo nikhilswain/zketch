@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "sources": {
+    "revoy-2025-01": {
+      "title": "Krita brushes 2025-01 bundle",
+      "author": "David Revoy",
+      "url": "https://www.peppercarrot.com/extras/resources/deevad-bundle_25.01.zip",
+      "page": "https://www.davidrevoy.com/article1060/krita-brushes-2025-01-bundle/show",
+      "license": "CC0-1.0",
+      "sha256": "4c628a9418fcde63abacafdcb143881f2cbbf907275cb4f72335545841cf8173",
+      "retrieved": "2026-10-07"
+    }
+  },
+  "tips": {
+    "revoy-2025-01/chalk": {
+      "files": [
+        "revoy-2025-01/chalk.png"
+      ],
+      "source": "revoy-2025-01",
+      "upstream": "brushes/chalk.png"
+    },
+    "revoy-2025-01/chalk-sparse": {
+      "files": [
+        "revoy-2025-01/chalk-sparse.png"
+      ],
+      "source": "revoy-2025-01",
+      "upstream": "brushes/chalk_sparse.png"
+    },
+    "revoy-2025-01/charcoal": {
+      "files": [
+        "revoy-2025-01/charcoal-0.png",
+        "revoy-2025-01/charcoal-1.png",
+        "revoy-2025-01/charcoal-2.png",
+        "revoy-2025-01/charcoal-3.png"
+      ],
+      "source": "revoy-2025-01",
+      "upstream": "brushes/chalk_chisel_random.gih"
+    },
+    "revoy-2025-01/splat": {
+      "files": [
+        "revoy-2025-01/splat-0.png",
+        "revoy-2025-01/splat-1.png",
+        "revoy-2025-01/splat-2.png",
+        "revoy-2025-01/splat-3.png",
+        "revoy-2025-01/splat-4.png"
+      ],
+      "source": "revoy-2025-01",
+      "upstream": "brushes/splats_large.gih"
+    },
+    "revoy-2025-01/splat-dots": {
+      "files": [
+        "revoy-2025-01/splat-dots.png"
+      ],
+      "source": "revoy-2025-01",
+      "upstream": "brushes/splat_dots.png"
+    },
+    "revoy-2025-01/painterly": {
+      "files": [
+        "revoy-2025-01/painterly.png"
+      ],
+      "source": "revoy-2025-01",
+      "upstream": "brushes/deevad-painterly-brush-tip_2023C.png"
+    },
+    "revoy-2025-01/flat-dirty": {
+      "files": [
+        "revoy-2025-01/flat-dirty.png"
+      ],
+      "source": "revoy-2025-01",
+      "upstream": "brushes/flat-tip-dirty.png"
+    },
+    "revoy-2025-01/bristles": {
+      "files": [
+        "revoy-2025-01/bristles.png"
+      ],
+      "source": "revoy-2025-01",
+      "upstream": "brushes/bristles_grouped.gbr"
+    },
+    "revoy-2025-01/scratches": {
+      "files": [
+        "revoy-2025-01/scratches-0.png",
+        "revoy-2025-01/scratches-1.png",
+        "revoy-2025-01/scratches-2.png",
+        "revoy-2025-01/scratches-3.png",
+        "revoy-2025-01/scratches-4.png",
+        "revoy-2025-01/scratches-5.png",
+        "revoy-2025-01/scratches-6.png",
+        "revoy-2025-01/scratches-7.png",
+        "revoy-2025-01/scratches-8.png"
+      ],
+      "source": "revoy-2025-01",
+      "upstream": "brushes/scratches_rough.gih"
+    },
+    "revoy-2025-01/sponge": {
+      "files": [
+        "revoy-2025-01/sponge-0.png",
+        "revoy-2025-01/sponge-1.png",
+        "revoy-2025-01/sponge-2.png",
+        "revoy-2025-01/sponge-3.png",
+        "revoy-2025-01/sponge-4.png",
+        "revoy-2025-01/sponge-5.png",
+        "revoy-2025-01/sponge-6.png"
+      ],
+      "source": "revoy-2025-01",
+      "upstream": "brushes/rock_pitted-fixed.gih"
+    }
+  },
+  "grains": {
+    "revoy-2025-01/paper-grain-b": {
+      "file": "revoy-2025-01/paper-grain-b.png",
+      "size": 512,
+      "source": "revoy-2025-01",
+      "upstream": "patterns/2022-04_paper-grain_B.png"
+    }
+  }
+}
