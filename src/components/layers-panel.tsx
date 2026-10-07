@@ -182,6 +182,7 @@ const LayerItem: React.FC<LayerItemProps> = observer(
     const [showOpacity, setShowOpacity] = useState(false);
     const [showAnimation, setShowAnimation] = useState(false);
     const [thumbnail, setThumbnail] = useState<string>("");
+    const canvasStore = useCanvasStore();
     const thumbnailTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const layerIdRef = useRef(layer.id);
 
@@ -211,7 +212,11 @@ const LayerItem: React.FC<LayerItemProps> = observer(
       }
 
       // Debounce thumbnail generation to prevent hanging on rapid updates
-      thumbnailTimeoutRef.current = setTimeout(async () => {
+      const generate = async () => {
+        if (canvasStore.isInteracting) {
+          thumbnailTimeoutRef.current = setTimeout(generate, 150);
+          return;
+        }
         try {
           // Use snapshot to avoid accessing detached MST nodes
           const snapshot = getSnapshot(layer) as any;
@@ -237,7 +242,8 @@ const LayerItem: React.FC<LayerItemProps> = observer(
           // Layer may have been detached during reorder, ignore
           console.warn("Thumbnail generation skipped:", e);
         }
-      }, 150);
+      };
+      thumbnailTimeoutRef.current = setTimeout(generate, 150);
 
       return () => {
         if (thumbnailTimeoutRef.current) {

@@ -130,6 +130,7 @@ export const CanvasModel = types
     historyIndex: -1,
     maxHistorySize: 50,
     renderVersion: 0, // force re-renders
+    isInteracting: false,
     // Element IDs currently faded for "pending erase". Committed (deleted) on drag-end.
     pendingEraserDeletes: new Set<string>(),
   }))
@@ -604,6 +605,9 @@ export const CanvasModel = types
       },
       bumpRenderVersion() {
         self.renderVersion++;
+      },
+      setInteracting(value: boolean) {
+        self.isInteracting = value;
       },
       addStroke(strokeData: SnapshotIn<typeof Stroke>) {
         self.addStrokeToModel(strokeData);

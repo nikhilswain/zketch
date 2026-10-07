@@ -335,8 +335,16 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             clearTimeout(autosaveTimerRef.current);
           }
 
-          autosaveTimerRef.current = window.setTimeout(async () => {
+          const runAutosave = async () => {
             autosaveTimerRef.current = null;
+
+            if (canvasStore.isInteracting) {
+              autosaveTimerRef.current = window.setTimeout(
+                runAutosave,
+                AUTOSAVE_DEBOUNCE_MS,
+              );
+              return;
+            }
 
             if (canvasStore.isEmpty) return;
 
@@ -354,7 +362,11 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             } else {
               setSaveStatus("idle");
             }
-          }, AUTOSAVE_DEBOUNCE_MS);
+          };
+          autosaveTimerRef.current = window.setTimeout(
+            runAutosave,
+            AUTOSAVE_DEBOUNCE_MS,
+          );
         },
       );
 

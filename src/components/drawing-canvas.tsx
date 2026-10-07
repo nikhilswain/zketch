@@ -214,6 +214,22 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       [canvasStore],
     );
 
+    useEffect(() => {
+      const root = rootRef.current;
+      if (!root) return;
+      const start = () => canvasStore.setInteracting(true);
+      const end = () => canvasStore.setInteracting(false);
+      root.addEventListener("pointerdown", start, { capture: true });
+      window.addEventListener("pointerup", end, { capture: true });
+      window.addEventListener("pointercancel", end, { capture: true });
+      return () => {
+        root.removeEventListener("pointerdown", start, { capture: true });
+        window.removeEventListener("pointerup", end, { capture: true });
+        window.removeEventListener("pointercancel", end, { capture: true });
+        end();
+      };
+    }, [canvasStore]);
+
     useEffect(
       () =>
         reaction(
