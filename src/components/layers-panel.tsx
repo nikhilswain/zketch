@@ -151,7 +151,6 @@ interface LayerItemProps {
   isFirst: boolean;
   isLast: boolean;
   canDelete: boolean;
-  renderVersion: number;
   onAnimationFrame?: (strokes: StrokeLike[]) => void;
   onAnimationStateChange?: (state: PlaybackState) => void;
 }
@@ -175,7 +174,6 @@ const LayerItem: React.FC<LayerItemProps> = observer(
     isFirst,
     isLast,
     canDelete,
-    renderVersion,
     onAnimationFrame,
     onAnimationStateChange,
   }) => {
@@ -552,7 +550,6 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
           isFirst={actualIndex === 0}
           isLast={actualIndex === canvasStore.layers.length - 1}
           canDelete={canvasStore.layerCount > 1}
-          renderVersion={canvasStore.renderVersion}
           onAnimationFrame={(strokes) =>
             onAnimationFrame?.(layer.id, strokes)
           }

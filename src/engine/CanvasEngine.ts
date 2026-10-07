@@ -33,8 +33,20 @@ export class CanvasEngine {
   // Track which layers need re-rendering (dirty tracking)
   private dirtyLayers: Set<string> = new Set();
   private lastLayerVersions: Map<string, number> = new Map();
-  // Signature per layer: re-bake only when content/view/anim changes.
-  private layerSignatures: Map<string, string> = new Map();
+  private layerBakes: Map<
+    string,
+    {
+      version: number;
+      panX: number;
+      panY: number;
+      zoom: number;
+      animating: boolean;
+    }
+  > = new Map();
+  private static readonly OVERSCAN_CSS_PX = 256;
+  private static readonly VIEW_SETTLE_MS = 150;
+  private lastViewChange = 0;
+  private settleTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Image cache for rendering image layers
   private imageCache: Map<string, HTMLImageElement> = new Map();
@@ -48,7 +60,7 @@ export class CanvasEngine {
   private preview: StrokeLike | null = null;
   private previewShape: ShapeElementLike | null = null;
   private marquee: { x: number; y: number; width: number; height: number } | null = null;
-  private cursor: { visible: boolean; x?: number; y?: number; r?: number } = {
+  private cursor: { visible: boolean; x?: number; y?: number; worldRadius?: number } = {
     visible: false,
   };
 
@@ -109,7 +121,8 @@ export class CanvasEngine {
     this.layerContexts.clear();
     this.dirtyLayers.clear();
     this.lastLayerVersions.clear();
-    this.layerSignatures.clear();
+    this.layerBakes.clear();
+    if (this.settleTimer) clearTimeout(this.settleTimer);
 
     // Clean up image cache
     this.imageCache.clear();
@@ -117,8 +130,41 @@ export class CanvasEngine {
   };
 
   setPanZoom(p: Partial<PanZoom>) {
-    this.pz = { ...this.pz, ...p };
+    const next = { ...this.pz, ...p };
+    if (
+      next.panX !== this.pz.panX ||
+      next.panY !== this.pz.panY ||
+      next.zoom !== this.pz.zoom
+    ) {
+      this.lastViewChange = performance.now();
+      if (this.settleTimer) clearTimeout(this.settleTimer);
+      this.settleTimer = setTimeout(() => {
+        this.settleTimer = null;
+        this.invalidate();
+      }, CanvasEngine.VIEW_SETTLE_MS);
+    }
+    this.pz = next;
     this.invalidate();
+  }
+
+  private overscanDevicePx() {
+    const dpr = window.devicePixelRatio || 1;
+    return Math.round(CanvasEngine.OVERSCAN_CSS_PX * dpr);
+  }
+
+  private bakeCoversView(
+    bake: { panX: number; panY: number; zoom: number },
+    margin: number,
+    viewW: number,
+    viewH: number,
+  ) {
+    const k = this.pz.zoom / bake.zoom;
+    if (k < 0.5 || k > 3) return false;
+    const left = this.pz.panX - (margin + bake.panX) * k;
+    const top = this.pz.panY - (margin + bake.panY) * k;
+    const right = this.pz.panX + (viewW + margin - bake.panX) * k;
+    const bottom = this.pz.panY + (viewH + margin - bake.panY) * k;
+    return left <= 0 && top <= 0 && right >= viewW && bottom >= viewH;
   }
   setBackground(bg: EngineConfig["background"]) {
     this.background = bg;
@@ -132,7 +178,7 @@ export class CanvasEngine {
     this.previewShape = s;
     this.invalidate();
   }
-  setCursor(c: { visible: boolean; x?: number; y?: number; r?: number }) {
+  setCursor(c: { visible: boolean; x?: number; y?: number; worldRadius?: number }) {
     this.cursor = c;
     this.invalidate();
   }
@@ -268,9 +314,13 @@ export class CanvasEngine {
     const rv = this.config.getContentVersion?.() ?? 0;
     const dpr = window.devicePixelRatio || 1;
 
-    // Render each layer to its own offscreen canvas, then composite. Layers are
-    // cached and only re-baked when content (renderVersion) or the view transform
-    // (pan/zoom) changes, so live preview frames are cheap.
+    const margin = this.overscanDevicePx() / dpr;
+    const viewW = this.display.width / dpr;
+    const viewH = this.display.height / dpr;
+    const settling =
+      performance.now() - this.lastViewChange < CanvasEngine.VIEW_SETTLE_MS;
+    const { panX, panY, zoom } = this.pz;
+
     for (const layer of layers) {
       if (!layer.visible) continue;
 
@@ -279,24 +329,32 @@ export class CanvasEngine {
 
       const isAnimating =
         this.animatingLayerId === layer.id && !!this.animationStrokes;
-      const sig = `${rv}|${this.pz.panX},${this.pz.panY},${this.pz.zoom}|${
-        isAnimating ? "anim" : "static"
-      }`;
-      const needsRender =
-        isAnimating || this.layerSignatures.get(layer.id) !== sig;
+      const bake = this.layerBakes.get(layer.id);
+      const sameView =
+        !!bake &&
+        bake.panX === panX &&
+        bake.panY === panY &&
+        bake.zoom === zoom;
+      const reusable =
+        !isAnimating &&
+        !!bake &&
+        !bake.animating &&
+        bake.version === rv &&
+        (sameView ||
+          (settling && this.bakeCoversView(bake, margin, viewW, viewH)));
 
-      if (needsRender) {
+      if (!reusable) {
         layerCtx.save();
         layerCtx.setTransform(1, 0, 0, 1, 0, 0);
         layerCtx.clearRect(0, 0, layerCanvas.width, layerCanvas.height);
-        const scale = dpr * this.pz.zoom;
+        const scale = dpr * zoom;
         layerCtx.setTransform(
           scale,
           0,
           0,
           scale,
-          dpr * this.pz.panX,
-          dpr * this.pz.panY,
+          dpr * (panX + margin),
+          dpr * (panY + margin),
         );
 
         if (isAnimating) {
@@ -313,12 +371,26 @@ export class CanvasEngine {
         }
 
         layerCtx.restore();
-        this.layerSignatures.set(layer.id, sig);
+        this.layerBakes.set(layer.id, {
+          version: rv,
+          panX,
+          panY,
+          zoom,
+          animating: isAnimating,
+        });
       }
 
-      // Composite this layer onto the display canvas with layer opacity
+      const baked = this.layerBakes.get(layer.id)!;
+      const k = zoom / baked.zoom;
       this.displayCtx.save();
-      this.displayCtx.setTransform(1, 0, 0, 1, 0, 0);
+      this.displayCtx.setTransform(
+        k,
+        0,
+        0,
+        k,
+        dpr * (panX - (margin + baked.panX) * k),
+        dpr * (panY - (margin + baked.panY) * k),
+      );
       this.displayCtx.globalAlpha = layer.opacity;
       this.displayCtx.drawImage(layerCanvas, 0, 0);
       this.displayCtx.restore();
@@ -441,7 +513,7 @@ export class CanvasEngine {
       !this.cursor.visible ||
       this.cursor.x == null ||
       this.cursor.y == null ||
-      this.cursor.r == null
+      this.cursor.worldRadius == null
     )
       return;
     ctx.save();
@@ -449,7 +521,13 @@ export class CanvasEngine {
     ctx.lineWidth = 2;
     ctx.setLineDash([5, 5]);
     ctx.beginPath();
-    ctx.arc(this.cursor.x, this.cursor.y, this.cursor.r, 0, Math.PI * 2);
+    ctx.arc(
+      this.cursor.x,
+      this.cursor.y,
+      this.cursor.worldRadius * this.pz.zoom,
+      0,
+      Math.PI * 2,
+    );
     ctx.stroke();
     ctx.restore();
   }
@@ -609,8 +687,8 @@ export class CanvasEngine {
     let canvas = this.layerCanvases.get(layerId);
     if (!canvas) {
       canvas = document.createElement("canvas");
-      canvas.width = this.display.width;
-      canvas.height = this.display.height;
+      canvas.width = this.display.width + 2 * this.overscanDevicePx();
+      canvas.height = this.display.height + 2 * this.overscanDevicePx();
       this.layerCanvases.set(layerId, canvas);
       const ctx = canvas.getContext("2d", { alpha: true })!;
       this.layerContexts.set(layerId, ctx);
@@ -626,12 +704,12 @@ export class CanvasEngine {
   // Resize all layer canvases when main canvas resizes
   private resizeLayerCanvases(width: number, height: number) {
     for (const [id, canvas] of this.layerCanvases) {
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = width + 2 * this.overscanDevicePx();
+      canvas.height = height + 2 * this.overscanDevicePx();
     }
     // Mark all layers as dirty after resize
     this.dirtyLayers = new Set(this.layerCanvases.keys());
-    this.layerSignatures.clear();
+    this.layerBakes.clear();
   }
 
   // Clean up unused layer canvases
@@ -642,7 +720,7 @@ export class CanvasEngine {
         this.layerCanvases.delete(id);
         this.layerContexts.delete(id);
         this.lastLayerVersions.delete(id);
-        this.layerSignatures.delete(id);
+        this.layerBakes.delete(id);
       }
     }
   }
