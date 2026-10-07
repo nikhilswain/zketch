@@ -22,8 +22,6 @@ export class CalligraphyBrush implements Brush {
     const angle = ((stroke.angle ?? options?.angle ?? 45) * Math.PI) / 180;
     const nx = Math.cos(angle);
     const ny = Math.sin(angle);
-    const px = -ny;
-    const py = nx;
     const half = stroke.size / 2;
     const nibThickness = Math.max(0.75, stroke.size * 0.1);
     const halfT = nibThickness / 2;
@@ -40,17 +38,8 @@ export class CalligraphyBrush implements Brush {
     const stamp = (x: number, y: number, h: number) => {
       if (stamps >= MAX_STAMPS) return;
       stamps++;
-      const ax = x - nx * h;
-      const ay = y - ny * h;
-      const bx = x + nx * h;
-      const by = y + ny * h;
-      const ox = px * halfT;
-      const oy = py * halfT;
-      ctx.moveTo(ax - ox, ay - oy);
-      ctx.lineTo(bx - ox, by - oy);
-      ctx.lineTo(bx + ox, by + oy);
-      ctx.lineTo(ax + ox, ay + oy);
-      ctx.closePath();
+      ctx.moveTo(x + nx * h, y + ny * h);
+      ctx.ellipse(x, y, h, halfT, angle, 0, Math.PI * 2);
     };
 
     const p0 = pts[0];
