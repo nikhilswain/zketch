@@ -31,18 +31,18 @@ export class ThumbnailService {
   /**
    * Generate thumbnail asynchronously with image layer support
    */
-  static async generateThumbnailAsync(
+  static async generateThumbnailBlob(
     layers: ILayerSnapshot[],
     background: string,
     width = 200,
     height = 150,
-  ): Promise<string> {
+  ): Promise<Blob> {
     const SS = 3;
     const work = document.createElement("canvas");
     work.width = width * SS;
     work.height = height * SS;
     const workCtx = work.getContext("2d");
-    if (!workCtx) return "";
+    if (!workCtx) return new Blob([], { type: "image/png" });
 
     await this.renderThumbnail(
       workCtx,
@@ -57,9 +57,13 @@ export class ThumbnailService {
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext("2d");
-    if (!ctx) return work.toDataURL();
-    ctx.drawImage(work, 0, 0, width, height);
-    return canvas.toDataURL();
+    if (ctx) ctx.drawImage(work, 0, 0, width, height);
+    return new Promise((resolve) =>
+      (ctx ? canvas : work).toBlob(
+        (blob) => resolve(blob ?? new Blob([], { type: "image/png" })),
+        "image/png",
+      ),
+    );
   }
 
   private static async renderThumbnail(

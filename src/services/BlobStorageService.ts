@@ -228,12 +228,8 @@ export class BlobStorageService {
   /**
    * Store a thumbnail from a data URL and return its ID
    */
-  static async storeThumbnail(dataUrl: string): Promise<string> {
+  static async storeThumbnail(blob: Blob): Promise<string> {
     const id = this.generateThumbnailId();
-
-    // Convert data URL to blob
-    const response = await fetch(dataUrl);
-    const blob = await response.blob();
 
     // Thumbnails are typically 200x150
     const storedBlob: IStoredBlob = {

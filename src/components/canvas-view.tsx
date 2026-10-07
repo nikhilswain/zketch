@@ -305,7 +305,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           return baseLayerData;
         });
 
-        const thumbnailDataUrl = await ThumbnailService.generateThumbnailAsync(
+        const thumbnailBlob = await ThumbnailService.generateThumbnailBlob(
           layersToSave as any,
           canvasStore.background,
           200,
@@ -313,7 +313,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         );
 
         const thumbnailId =
-          await BlobStorageService.storeThumbnail(thumbnailDataUrl);
+          await BlobStorageService.storeThumbnail(thumbnailBlob);
 
         if (currentDrawingId) {
           await vaultStore.updateDrawing(

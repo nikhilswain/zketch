@@ -238,17 +238,15 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
         return baseLayerData;
       });
 
-      // Generate thumbnail data URL with images support
-      const thumbnailDataUrl = await ThumbnailService.generateThumbnailAsync(
+      const thumbnailBlob = await ThumbnailService.generateThumbnailBlob(
         layersToSave as any,
         canvasStore.background,
         200,
         150,
       );
 
-      // Store thumbnail as blob and get ID
       const thumbnailId =
-        await BlobStorageService.storeThumbnail(thumbnailDataUrl);
+        await BlobStorageService.storeThumbnail(thumbnailBlob);
 
       if (currentDrawingId) {
         await vaultStore.updateDrawing(
