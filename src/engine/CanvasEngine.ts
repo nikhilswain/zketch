@@ -265,7 +265,7 @@ export class CanvasEngine {
     const activeLayerIds = layers.map((l) => l.id);
     this.cleanupLayerCanvases(activeLayerIds);
 
-    const rv = this.config.getRenderVersion?.() ?? 0;
+    const rv = this.config.getContentVersion?.() ?? 0;
     const dpr = window.devicePixelRatio || 1;
 
     // Render each layer to its own offscreen canvas, then composite. Layers are
