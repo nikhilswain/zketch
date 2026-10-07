@@ -151,6 +151,7 @@ export interface BrushPreset {
 export interface Brush {
   key: string;
   label?: string;
+  legacy?: boolean;
   defaults?: Partial<BrushOptions>;
   presets?: BrushPreset[];
   render(
