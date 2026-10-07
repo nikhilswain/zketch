@@ -1,63 +1,61 @@
-import { withAlpha } from "../render/color";
+import { smoothPoints } from "../render/smooth";
 import type { Brush, BrushOptions, BrushPreset, StrokeLike } from "../types";
 
-const MAX_DABS = 2500;
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
 export class AirbrushBrush implements Brush {
   key = "airbrush" as const;
   label = "Airbrush";
   presets: BrushPreset[] = [
-    { id: "soft", label: "Soft", size: 70, opacity: 0.22, softness: 0.85 },
-    { id: "medium", label: "Medium", size: 48, opacity: 0.3, softness: 0.55 },
-    { id: "hard", label: "Hard", size: 40, opacity: 0.45, softness: 0.12 },
-    { id: "fine", label: "Fine", size: 22, opacity: 0.4, softness: 0.5 },
+    { id: "soft", label: "Soft", size: 70, opacity: 0.5, softness: 0.9 },
+    { id: "medium", label: "Medium", size: 48, opacity: 0.6, softness: 0.6 },
+    { id: "hard", label: "Hard", size: 40, opacity: 0.75, softness: 0.15 },
+    { id: "fine", label: "Fine", size: 24, opacity: 0.7, softness: 0.5 },
   ];
   render(
     ctx: CanvasRenderingContext2D,
     stroke: StrokeLike,
     options?: BrushOptions,
   ) {
-    const pts = stroke.points;
-    if (pts.length === 0) return;
+    const raw = stroke.points;
+    if (raw.length === 0) return;
+    const pts = smoothPoints(raw);
 
-    const radius = Math.max(1, stroke.size / 2);
-    const softness = Math.max(
-      0,
-      Math.min(1, stroke.softness ?? options?.softness ?? 0.6),
-    );
-    const flow = Math.max(0.02, Math.min(1, stroke.opacity ?? 1));
-    const inner = radius * (1 - softness);
-    const step = Math.max(1, radius * 0.3);
+    const size = stroke.size;
+    const softness = clamp01(stroke.softness ?? options?.softness ?? 0.6);
+    const flow = Math.max(0.05, clamp01(stroke.opacity ?? 1));
+    const layers = Math.max(5, Math.round(6 + softness * 12));
+    const layerAlpha = flow / layers;
 
-    let dabs = 0;
-    const dab = (x: number, y: number) => {
-      if (dabs >= MAX_DABS) return;
-      dabs++;
-      const g = ctx.createRadialGradient(x, y, inner, x, y, radius);
-      g.addColorStop(0, withAlpha(stroke.color, flow));
-      g.addColorStop(1, withAlpha(stroke.color, 0));
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(x, y, radius, 0, Math.PI * 2);
-      ctx.fill();
-    };
+    const prevAlpha = ctx.globalAlpha;
+    const prevComp = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.strokeStyle = stroke.color;
+    ctx.fillStyle = stroke.color;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
 
     if (pts.length === 1) {
-      dab(pts[0].x, pts[0].y);
-      return;
-    }
-    for (let i = 0; i < pts.length - 1; i++) {
-      const a = pts[i];
-      const b = pts[i + 1];
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const dist = Math.hypot(dx, dy);
-      const n = Math.max(1, Math.ceil(dist / step));
-      for (let s = 0; s < n; s++) {
-        const t = s / n;
-        dab(a.x + dx * t, a.y + dy * t);
+      const p = pts[0];
+      for (let k = 0; k < layers; k++) {
+        const r = Math.max(0.5, (size / 2) * (1 - k / layers));
+        ctx.globalAlpha = prevAlpha * layerAlpha;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      for (let k = 0; k < layers; k++) {
+        ctx.lineWidth = Math.max(1, size * (1 - k / layers));
+        ctx.globalAlpha = prevAlpha * layerAlpha;
+        ctx.stroke();
       }
     }
-    dab(pts[pts.length - 1].x, pts[pts.length - 1].y);
+
+    ctx.globalAlpha = prevAlpha;
+    ctx.globalCompositeOperation = prevComp;
   }
 }
