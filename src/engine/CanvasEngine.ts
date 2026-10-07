@@ -33,6 +33,8 @@ export class CanvasEngine {
   // Track which layers need re-rendering (dirty tracking)
   private dirtyLayers: Set<string> = new Set();
   private lastLayerVersions: Map<string, number> = new Map();
+  // Signature per layer: re-bake only when content/view/anim changes.
+  private layerSignatures: Map<string, string> = new Map();
 
   // Image cache for rendering image layers
   private imageCache: Map<string, HTMLImageElement> = new Map();
@@ -107,6 +109,7 @@ export class CanvasEngine {
     this.layerContexts.clear();
     this.dirtyLayers.clear();
     this.lastLayerVersions.clear();
+    this.layerSignatures.clear();
 
     // Clean up image cache
     this.imageCache.clear();
@@ -267,36 +270,47 @@ export class CanvasEngine {
     const activeLayerIds = layers.map((l) => l.id);
     this.cleanupLayerCanvases(activeLayerIds);
 
-    // Render each layer to its own offscreen canvas, then composite
+    const rv = this.config.getRenderVersion?.() ?? 0;
+
+    // Render each layer to its own offscreen canvas, then composite. Layers are
+    // cached and only re-baked when content (renderVersion) or the view transform
+    // (pan/zoom) changes, so live preview frames are cheap.
     for (const layer of layers) {
       if (!layer.visible) continue;
 
       const layerCtx = this.getLayerContext(layer.id);
       const layerCanvas = this.getLayerCanvas(layer.id);
 
-      // Clear and render this layer
-      layerCtx.clearRect(0, 0, layerCanvas.width, layerCanvas.height);
-      layerCtx.save();
-      layerCtx.translate(this.pz.panX, this.pz.panY);
-      layerCtx.scale(this.pz.zoom, this.pz.zoom);
+      const isAnimating =
+        this.animatingLayerId === layer.id && !!this.animationStrokes;
+      const sig = `${rv}|${this.pz.panX},${this.pz.panY},${this.pz.zoom}|${
+        isAnimating ? "anim" : "static"
+      }`;
+      const needsRender =
+        isAnimating || this.layerSignatures.get(layer.id) !== sig;
 
-      // Check if this layer is being animated
-      if (this.animatingLayerId === layer.id && this.animationStrokes) {
-        // Render animation strokes instead of normal layer strokes
-        for (const stroke of this.animationStrokes) {
-          renderStroke(
-            layerCtx,
-            stroke,
-            brushRegistry,
-            this.config.getBrushOptions,
-          );
+      if (needsRender) {
+        layerCtx.clearRect(0, 0, layerCanvas.width, layerCanvas.height);
+        layerCtx.save();
+        layerCtx.translate(this.pz.panX, this.pz.panY);
+        layerCtx.scale(this.pz.zoom, this.pz.zoom);
+
+        if (isAnimating) {
+          for (const stroke of this.animationStrokes!) {
+            renderStroke(
+              layerCtx,
+              stroke,
+              brushRegistry,
+              this.config.getBrushOptions,
+            );
+          }
+        } else {
+          this.renderLayer(layerCtx, layer);
         }
-      } else {
-        // Render normal layer content
-        this.renderLayer(layerCtx, layer);
-      }
 
-      layerCtx.restore();
+        layerCtx.restore();
+        this.layerSignatures.set(layer.id, sig);
+      }
 
       // Composite this layer onto the display canvas with layer opacity
       this.displayCtx.save();
@@ -612,6 +626,7 @@ export class CanvasEngine {
     }
     // Mark all layers as dirty after resize
     this.dirtyLayers = new Set(this.layerCanvases.keys());
+    this.layerSignatures.clear();
   }
 
   // Clean up unused layer canvases
@@ -622,6 +637,7 @@ export class CanvasEngine {
         this.layerCanvases.delete(id);
         this.layerContexts.delete(id);
         this.lastLayerVersions.delete(id);
+        this.layerSignatures.delete(id);
       }
     }
   }

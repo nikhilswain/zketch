@@ -115,6 +115,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       const engine = new CanvasEngine(root, {
         background: canvasStore.background as any,
         getStrokes: () => canvasStore.strokes as unknown as StrokeLike[],
+        getRenderVersion: () => canvasStore.renderVersion,
         // Provide layers for multi-layer rendering - use snapshots to avoid MST detachment issues
         getLayers: () => {
           try {

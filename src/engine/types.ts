@@ -163,6 +163,8 @@ export interface Brush {
 export interface EngineConfig {
   background: "white" | "transparent" | "grid";
   getStrokes(): StrokeLike[];
+  // Monotonic content version — layers are only re-baked when this changes.
+  getRenderVersion?: () => number;
   // New: provide layers for multi-layer rendering
   getLayers?: () => LayerLike[];
   // Which layer is currently active (for visual indication)
