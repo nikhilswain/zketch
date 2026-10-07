@@ -32,3 +32,5 @@ wrangler.toml
 # session changelog (working notes for resuming work, not for the repo)
 CHANGELOG.md
  
+# brush source archive cache
+.brush-cache/
