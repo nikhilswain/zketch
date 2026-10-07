@@ -6,6 +6,7 @@ import { renderStroke } from "./render/renderStroke";
 import { renderShape } from "./render/renderShape";
 import { drawImageLayer } from "./render/renderImage";
 import type {
+  ElementLike,
   EngineConfig,
   PanZoom,
   StrokeLike,
@@ -15,6 +16,8 @@ import type {
   TransformableLayer,
 } from "./types";
 import { isShapeElement } from "./types";
+
+type LayerContent = readonly ElementLike[] | string;
 
 export class CanvasEngine {
   // Main display canvases
@@ -36,7 +39,8 @@ export class CanvasEngine {
   private layerBakes: Map<
     string,
     {
-      version: number;
+      content: LayerContent;
+      pending: Set<string> | undefined;
       panX: number;
       panY: number;
       zoom: number;
@@ -311,8 +315,8 @@ export class CanvasEngine {
     const activeLayerIds = layers.map((l) => l.id);
     this.cleanupLayerCanvases(activeLayerIds);
 
-    const rv = this.config.getContentVersion?.() ?? 0;
     const dpr = window.devicePixelRatio || 1;
+    const pending = this.config.getPendingEraserDeletes?.();
 
     const margin = this.overscanDevicePx() / dpr;
     const viewW = this.display.width / dpr;
@@ -329,24 +333,34 @@ export class CanvasEngine {
 
       const isAnimating =
         this.animatingLayerId === layer.id && !!this.animationStrokes;
+      const content = this.layerContentKey(layer);
+      const elements = layer.type === "draw" ? layer.elements : null;
       const bake = this.layerBakes.get(layer.id);
       const sameView =
         !!bake &&
         bake.panX === panX &&
         bake.panY === panY &&
         bake.zoom === zoom;
-      const reusable =
-        !isAnimating &&
+      const sameContent =
         !!bake &&
+        !isAnimating &&
         !bake.animating &&
-        bake.version === rv &&
+        bake.pending === pending &&
+        bake.content === content;
+      const reusable =
+        sameContent &&
         (sameView ||
-          (settling && this.bakeCoversView(bake, margin, viewW, viewH)));
+          (settling && this.bakeCoversView(bake!, margin, viewW, viewH)));
+      const appended =
+        !reusable &&
+        !!bake &&
+        sameView &&
+        !isAnimating &&
+        !bake.animating &&
+        bake.pending === pending &&
+        this.appendedElement(bake.content, elements);
 
-      if (!reusable) {
-        layerCtx.save();
-        layerCtx.setTransform(1, 0, 0, 1, 0, 0);
-        layerCtx.clearRect(0, 0, layerCanvas.width, layerCanvas.height);
+      const applyBakeTransform = () => {
         const scale = dpr * zoom;
         layerCtx.setTransform(
           scale,
@@ -356,6 +370,19 @@ export class CanvasEngine {
           dpr * (panX + margin),
           dpr * (panY + margin),
         );
+      };
+
+      if (appended) {
+        layerCtx.save();
+        applyBakeTransform();
+        this.renderElement(layerCtx, appended, pending);
+        layerCtx.restore();
+        bake!.content = content;
+      } else if (!reusable) {
+        layerCtx.save();
+        layerCtx.setTransform(1, 0, 0, 1, 0, 0);
+        layerCtx.clearRect(0, 0, layerCanvas.width, layerCanvas.height);
+        applyBakeTransform();
 
         if (isAnimating) {
           for (const stroke of this.animationStrokes!) {
@@ -367,12 +394,13 @@ export class CanvasEngine {
             );
           }
         } else {
-          this.renderLayer(layerCtx, layer);
+          this.renderLayer(layerCtx, layer, pending);
         }
 
         layerCtx.restore();
         this.layerBakes.set(layer.id, {
-          version: rv,
+          content,
+          pending,
           panX,
           panY,
           zoom,
@@ -419,35 +447,60 @@ export class CanvasEngine {
     }
   }
 
-  private renderLayer(ctx: CanvasRenderingContext2D, layer: LayerLike) {
+  private layerContentKey(layer: LayerLike): LayerContent {
+    if (layer.type === "draw") return layer.elements;
+    const img = layer as ImageLayerLike;
+    return `${img.blobId}|${img.x}|${img.y}|${img.width}|${img.height}|${
+      img.rotation
+    }|${this.imageCache.has(img.blobId)}`;
+  }
+
+  private appendedElement(
+    prev: LayerContent,
+    next: readonly ElementLike[] | null,
+  ): ElementLike | null {
+    if (!next || typeof prev === "string") return null;
+    if (next.length !== prev.length + 1) return null;
+    for (let i = 0; i < prev.length; i++) {
+      if (next[i] !== prev[i]) return null;
+    }
+    const added = next[next.length - 1];
+    if (!isShapeElement(added) && prev.some(isShapeElement)) return null;
+    return added;
+  }
+
+  private renderElement(
+    ctx: CanvasRenderingContext2D,
+    el: ElementLike,
+    pending: Set<string> | undefined,
+  ) {
+    const faded = pending?.has(el.id);
+    if (faded) ctx.save(), (ctx.globalAlpha *= 0.25);
+    if (isShapeElement(el)) {
+      renderShape(ctx, el);
+    } else {
+      renderStroke(ctx, el, brushRegistry, this.config.getBrushOptions);
+    }
+    if (faded) ctx.restore();
+  }
+
+  private renderLayer(
+    ctx: CanvasRenderingContext2D,
+    layer: LayerLike,
+    pending: Set<string> | undefined,
+  ) {
     if (layer.type === "image") {
       this.renderImageLayer(ctx, layer as ImageLayerLike);
       return;
     }
     if (layer.type === "draw") {
-      const pending = this.config.getPendingEraserDeletes?.();
       // Two-pass within a draw layer: bake strokes first (raster, with destination-out
       // for eraser strokes), then render shape elements as vectors on top.
       for (const el of layer.elements) {
-        if (!isShapeElement(el)) {
-          const faded = pending?.has((el as any).id);
-          if (faded) ctx.save(), (ctx.globalAlpha *= 0.25);
-          renderStroke(
-            ctx,
-            el as StrokeLike,
-            brushRegistry,
-            this.config.getBrushOptions,
-          );
-          if (faded) ctx.restore();
-        }
+        if (!isShapeElement(el)) this.renderElement(ctx, el, pending);
       }
       for (const el of layer.elements) {
-        if (isShapeElement(el)) {
-          const faded = pending?.has((el as any).id);
-          if (faded) ctx.save(), (ctx.globalAlpha *= 0.25);
-          renderShape(ctx, el as ShapeElementLike);
-          if (faded) ctx.restore();
-        }
+        if (isShapeElement(el)) this.renderElement(ctx, el, pending);
       }
     }
   }

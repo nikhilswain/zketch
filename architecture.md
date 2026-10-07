@@ -174,10 +174,15 @@ Per frame (`render()`):
      margin on every side. Bakes use an explicit
      `setTransform(dpr*zoom, dpr*(pan+margin))`; compositing is done 1:1 in
      device pixels (identity transform, then the view delta).
-   - Layers are **cached** per layer (`layerBakes`: content version + the
-     view it was baked at). A layer re-bakes when its content
-     (`config.getContentVersion()`) changes or it is animating. When only the
-     view changes, the cached bitmap is composited with the view delta while
+   - Layers are **cached** per layer (`layerBakes`: content key, pending-erase
+     set, and the view it was baked at). The content key is the layer's
+     `elements` snapshot array (MST snapshots are structurally shared, so it
+     keeps its identity until that layer changes) or, for image layers, a
+     string of blob/geometry/loaded state. A layer re-bakes only when its own
+     key or the pending-erase set changes, or it is animating. If exactly one
+     element was appended (same view, prefix identical, and not a stroke
+     landing under existing shapes), only that element is drawn onto the
+     cached canvas. When only the view changes, the cached bitmap is composited with the view delta while
      a gesture is in progress (view changed < 150 ms ago) and the bitmap still
      covers the viewport (scale delta 0.5–3×); a crisp re-bake runs once the
      gesture settles (`settleTimer`) or coverage runs out. Live preview frames
@@ -303,11 +308,8 @@ State highlights:
 - Selection: `selectedElements: {layerId, elementId|null}[]`,
   `selectionAnchor: {x,y,width,height,rotation}|null`, `interactionMode`.
 - Volatile: `history` / `historyIndex` (max 50), `renderVersion`,
-  `contentVersion`, `pendingEraserDeletes: Set<string>`.
-- `contentVersion` bumps only for patches that change rendered layer content
-  (not pan/zoom, tool, color, size, or selection paths — see
-  `NON_CONTENT_PATHS` in `root-store.ts`) and on pending-erase changes. The
-  engine's layer cache keys on it.
+  `pendingEraserDeletes: Set<string>` (replaced, never mutated, so the engine
+  can key its layer cache on the set's identity).
 
 Important views: `isEmpty`, `activeLayer`, `visibleLayers`,
 `flattenedStrokes`, `exportLayers`, `selectedTransformableLayer`,
@@ -361,7 +363,7 @@ UI prefs (autoHideDock/delay/showGrid/snapToGrid), `touchMode`,
 ```
 root-store.ts
   ├─ canvasModel, vaultModel, settingsModel
-  └─ onPatch(canvasModel) ──(microtask-batched, ignores /renderVersion|/history)──> bumpRenderVersion(contentChanged)
+  └─ onPatch(canvasModel) ──(microtask-batched, ignores /renderVersion|/history)──> bumpRenderVersion()
 
 drawing-canvas.tsx
   ├─ reaction(renderVersion) → engine.invalidate()
