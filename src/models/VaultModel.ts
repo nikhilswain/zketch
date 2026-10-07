@@ -248,22 +248,21 @@ export const VaultModel = types
         self.setLoading(false);
       }
     },
-    async persistToDB() {
+    async persistDrawing(id: string) {
+      const drawing = self.drawings.find((d) => d.id === id);
+      if (!drawing) return;
       try {
-        const drawingsData: ISavedDrawingData[] = self.drawings.map(
-          (drawing) => ({
-            id: drawing.id,
-            name: drawing.name,
-            // Layers are already stored as frozen JSON in the correct format
-            layers: drawing.layers as ILayerData[],
-            activeLayerId: drawing.activeLayerId,
-            thumbnail: drawing.thumbnail,
-            createdAt: new Date(drawing.createdAt),
-            updatedAt: new Date(drawing.updatedAt),
-            background: drawing.background,
-          }),
-        );
-        await DexieService.saveAllDrawings(drawingsData);
+        await DexieService.saveDrawing({
+          id: drawing.id,
+          name: drawing.name,
+          // Layers are already stored as frozen JSON in the correct format
+          layers: drawing.layers as ILayerData[],
+          activeLayerId: drawing.activeLayerId,
+          thumbnail: drawing.thumbnail,
+          createdAt: new Date(drawing.createdAt),
+          updatedAt: new Date(drawing.updatedAt),
+          background: drawing.background,
+        });
       } catch (error) {
         console.error("Failed to persist to Dexie:", error);
       }
@@ -289,7 +288,7 @@ export const VaultModel = types
       };
 
       self.addDrawingToList(drawingData);
-      await self.persistToDB();
+      await self.persistDrawing(drawingData.id);
       await self.updateStorageInfo();
       return self.drawings.find((d) => d.id === drawingData.id);
     },
@@ -331,8 +330,7 @@ export const VaultModel = types
     },
     async renameDrawing(id: string, newName: string) {
       self.updateDrawingInList(id, newName);
-      // Just persist all drawings - the name has been updated in memory
-      await self.persistToDB();
+      await self.persistDrawing(id);
       await self.updateStorageInfo();
     },
     async updateDrawing(
@@ -373,8 +371,7 @@ export const VaultModel = types
         }
       }
 
-      // Persist all drawings to DB
-      await self.persistToDB();
+      await self.persistDrawing(id);
       await self.updateStorageInfo();
     },
     loadDrawing(id: string) {

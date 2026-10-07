@@ -27,13 +27,6 @@ export class DexieService {
     await this.db.drawings.put(drawing);
   }
 
-  static async saveAllDrawings(drawings: ISavedDrawingData[]): Promise<void> {
-    await this.db.transaction("rw", this.db.drawings, async () => {
-      await this.db.drawings.clear();
-      await this.db.drawings.bulkAdd(drawings);
-    });
-  }
-
   static async loadAllDrawings(): Promise<ISavedDrawingData[]> {
     return await this.db.drawings.orderBy("updatedAt").reverse().toArray();
   }
