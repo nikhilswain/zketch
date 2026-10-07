@@ -166,6 +166,26 @@ describe("new brushes", () => {
     expect(a.equals(b)).toBe(true);
   });
 
+  it("airbrush stays soft where ctx.filter is unsupported", () => {
+    const stroke = makeStroke({ brushStyle: "airbrush", size: 24, softness: 0.8 });
+    const withFilter = renderStrokePixels(stroke);
+    const { ctx } = newCtx();
+    Object.defineProperty(ctx, "filter", { value: undefined, writable: true });
+    renderStroke(ctx as never, stroke, brushRegistry);
+    const fallback = ctx.getImageData(0, 0, W, H).data;
+    const soft = (d: Uint8ClampedArray) => {
+      let n = 0;
+      for (let i = 3; i < d.length; i += 4) if (d[i] > 0 && d[i] < 200) n++;
+      return n;
+    };
+    let diff = 0;
+    for (let i = 3; i < withFilter.length; i += 4) {
+      diff += Math.abs(withFilter[i] - fallback[i]);
+    }
+    expect(soft(fallback)).toBeGreaterThan(soft(withFilter) * 0.8);
+    expect(diff / (W * H)).toBeLessThan(4);
+  });
+
   it("marker and highlighter restore the composite operation", () => {
     for (const brushStyle of ["marker", "highlighter"] as const) {
       const { ctx } = newCtx();

@@ -2,6 +2,7 @@ import { smoothPoints } from "../render/smooth";
 import type { Brush, BrushOptions, BrushPreset, StrokeLike } from "../types";
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+const SHADOW_SHIFT_PX = 100000;
 
 export class AirbrushBrush implements Brush {
   key = "airbrush" as const;
@@ -34,7 +35,15 @@ export class AirbrushBrush implements Brush {
     const prevFilter = ctx.filter;
 
     ctx.save();
-    ctx.filter = `blur(${blurPx}px)`;
+    if (typeof prevFilter === "string") {
+      ctx.filter = `blur(${blurPx}px)`;
+    } else {
+      const shift = SHADOW_SHIFT_PX / scale;
+      ctx.shadowColor = stroke.color;
+      ctx.shadowBlur = blurPx * 2;
+      ctx.shadowOffsetX = -SHADOW_SHIFT_PX;
+      ctx.translate(shift, 0);
+    }
     ctx.globalCompositeOperation = "source-over";
     ctx.globalAlpha = flow * prevAlpha;
     ctx.strokeStyle = stroke.color;
@@ -57,6 +66,5 @@ export class AirbrushBrush implements Brush {
     ctx.restore();
     ctx.globalAlpha = prevAlpha;
     ctx.globalCompositeOperation = prevComp;
-    ctx.filter = prevFilter;
   }
 }
