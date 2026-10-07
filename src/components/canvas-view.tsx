@@ -27,7 +27,7 @@ import LayersPanel from "./layers-panel";
 import { ExportService } from "@/services/ExportService";
 import { ThumbnailService } from "@/services/ThumbnailService";
 import { BlobStorageService } from "@/services/BlobStorageService";
-import { optimizeStrokes } from "@/utils/StrokeOptimizer";
+import { serializeLayers } from "@/utils/serializeLayers";
 import { Button } from "./ui/button";
 import { ArrowLeft, ChevronRight, ChevronLeft, Layers, Loader2, Check, Lock } from "lucide-react";
 import type { ExportFormat } from "@/models/SettingsModel";
@@ -212,98 +212,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
       if (canvasStore.isEmpty) return false;
 
       try {
-        // Map layers to save format with optimized strokes
-        const layersToSave = canvasStore.layers.map((layer) => {
-          const baseLayerData = {
-            id: layer.id,
-            name: layer.name,
-            type: layer.type,
-            visible: layer.visible,
-            locked: layer.locked,
-            opacity: layer.opacity,
-          };
-
-          if (layer.type === "draw") {
-            const drawLayer = layer as any;
-            const elementsData = drawLayer.elements.map((el: any) => {
-              if ("shapeType" in el) {
-                return {
-                  id: el.id,
-                  shapeType: el.shapeType,
-                  x: el.x,
-                  y: el.y,
-                  width: el.width,
-                  height: el.height,
-                  rotation: el.rotation,
-                  strokeColor: el.strokeColor,
-                  strokeWidth: el.strokeWidth,
-                  cornerRadius: el.cornerRadius,
-                  fillColor: el.fillColor ?? null,
-                  opacity: el.opacity,
-                };
-              }
-              return {
-                id: el.id,
-                points: el.points.map((p: any) => ({
-                  x: p.x,
-                  y: p.y,
-                  pressure: p.pressure,
-                })),
-                color: el.color,
-                size: el.size,
-                opacity: el.opacity ?? 1,
-                brushStyle: el.brushStyle,
-                timestamp: el.timestamp,
-                startTime: el.startTime ?? null,
-                duration: el.duration ?? null,
-                thinning: el.thinning,
-                smoothing: el.smoothing,
-                streamline: el.streamline,
-                taperStart: el.taperStart,
-                taperEnd: el.taperEnd,
-                easing: el.easing,
-                angle: el.angle,
-                softness: el.softness,
-              };
-            });
-
-            // Run optimization on stroke elements only.
-            const strokeElements = elementsData.filter(
-              (e: any) => !("shapeType" in e),
-            );
-            const shapeElements = elementsData.filter(
-              (e: any) => "shapeType" in e,
-            );
-            const optimizedStrokes = optimizeStrokes(strokeElements as any);
-            // Preserve original element ordering: rebuild by matching ids.
-            const optimizedById = new Map<string, any>(
-              optimizedStrokes.map((s: any) => [s.id, s]),
-            );
-            const finalElements = elementsData.map((e: any) =>
-              "shapeType" in e ? e : (optimizedById.get(e.id) ?? e),
-            );
-
-            return {
-              ...baseLayerData,
-              elements: finalElements,
-            };
-          } else if (layer.type === "image") {
-            const imageLayer = layer as any;
-            return {
-              ...baseLayerData,
-              blobId: imageLayer.blobId,
-              naturalWidth: imageLayer.naturalWidth,
-              naturalHeight: imageLayer.naturalHeight,
-              x: imageLayer.x,
-              y: imageLayer.y,
-              width: imageLayer.width,
-              height: imageLayer.height,
-              rotation: imageLayer.rotation,
-              aspectLocked: imageLayer.aspectLocked,
-            };
-          }
-          return baseLayerData;
-        });
+        const layersToSave = serializeLayers(canvasStore.layers);
 
         const thumbnailBlob = await ThumbnailService.generateThumbnailBlob(
           layersToSave as any,
