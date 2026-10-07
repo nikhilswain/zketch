@@ -15,7 +15,8 @@ const RETRIEVED = "2026-10-07";
 
 interface TipJob {
   id: string;
-  file: string;
+  file: string | string[];
+  mode?: "alpha";
 }
 
 interface GrainJob {
@@ -63,6 +64,34 @@ const SOURCES: Source[] = [
     ],
     grains: [{ id: "paper-grain-b", file: "patterns/2022-04_paper-grain_B.png" }],
   },
+  {
+    dir: "oga-grunge",
+    title: "~100 grunge brushstrokes and splatters set",
+    author: "Dino0040",
+    url: "https://opengameart.org/sites/default/files/grunge_brushes.zip",
+    page: "https://opengameart.org/node/119417",
+    sha256: "ce17c54ed6ca8b3ecfb92e46a68a46b1c0d52f77fcdae5bfa310fc3afc092d2a",
+    license: "CC0-1.0",
+    licenseText:
+      "License: CC0 (OpenGameArt.org, https://opengameart.org/node/119417, submitted by Dino0040).\n\nCreative Commons CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/\n",
+    tips: [
+      {
+        id: "wash",
+        mode: "alpha",
+        file: [44, 45, 46, 47].map(
+          (n) => `grunge_brushes/normal_opacity/brush0${n}.png`,
+        ),
+      },
+      {
+        id: "bloom",
+        mode: "alpha",
+        file: [79, 92, 95, 98].map(
+          (n) => `grunge_brushes/normal_opacity/brush0${n}.png`,
+        ),
+      },
+    ],
+    grains: [],
+  },
 ];
 
 async function download(source: Source) {
@@ -96,7 +125,12 @@ function fit(width: number, height: number, max: number) {
   return [Math.max(1, Math.round(width * k)), Math.max(1, Math.round(height * k))];
 }
 
-function maskFromRgba(rgba: Uint8ClampedArray | Uint8Array, width: number, height: number) {
+function maskFromRgba(
+  rgba: Uint8ClampedArray | Uint8Array,
+  width: number,
+  height: number,
+  mode?: "alpha",
+) {
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext("2d");
   const image = ctx.createImageData(width, height);
@@ -104,7 +138,7 @@ function maskFromRgba(rgba: Uint8ClampedArray | Uint8Array, width: number, heigh
   for (let i = 0; i < alpha.length; i++) {
     const o = i * 4;
     const lum = (0.2126 * rgba[o] + 0.7152 * rgba[o + 1] + 0.0722 * rgba[o + 2]) / 255;
-    alpha[i] = rgba[o + 3] * (1 - lum);
+    alpha[i] = mode === "alpha" ? rgba[o + 3] : rgba[o + 3] * (1 - lum);
   }
   const sorted = alpha.filter((v) => v > 0).sort();
   const peak = sorted.length ? sorted[Math.floor(sorted.length * 0.995)] : 255;
@@ -131,12 +165,17 @@ function maskFromGimp(brush: GimpBrush) {
   return maskFromRgba(rgba, brush.width, brush.height);
 }
 
-async function maskFromPng(data: Uint8Array) {
+async function maskFromPng(data: Uint8Array, mode?: "alpha") {
   const img = await loadImage(Buffer.from(data));
   const canvas = createCanvas(img.width, img.height);
   const ctx = canvas.getContext("2d");
   ctx.drawImage(img, 0, 0);
-  return maskFromRgba(ctx.getImageData(0, 0, img.width, img.height).data, img.width, img.height);
+  return maskFromRgba(
+    ctx.getImageData(0, 0, img.width, img.height).data,
+    img.width,
+    img.height,
+    mode,
+  );
 }
 
 function resize(canvas: Canvas, max: number) {
@@ -199,15 +238,17 @@ async function main() {
     mkdirSync(dir, { recursive: true });
 
     for (const tip of source.tips) {
-      const data = files[tip.file];
-      if (!data) throw new Error(`Missing ${tip.file} in ${source.url}`);
-      let frames: Canvas[];
-      if (tip.file.endsWith(".gih")) {
-        frames = parseGih(data).frames.map(maskFromGimp);
-      } else if (tip.file.endsWith(".gbr")) {
-        frames = [maskFromGimp(parseGbr(data))];
-      } else {
-        frames = [await maskFromPng(data)];
+      const frames: Canvas[] = [];
+      for (const file of Array.isArray(tip.file) ? tip.file : [tip.file]) {
+        const data = files[file];
+        if (!data) throw new Error(`Missing ${file} in ${source.url}`);
+        if (file.endsWith(".gih")) {
+          frames.push(...parseGih(data).frames.map(maskFromGimp));
+        } else if (file.endsWith(".gbr")) {
+          frames.push(maskFromGimp(parseGbr(data)));
+        } else {
+          frames.push(await maskFromPng(data, tip.mode));
+        }
       }
       const names: string[] = [];
       frames.forEach((frame, i) => {
@@ -218,7 +259,7 @@ async function main() {
       manifest.tips[`${source.dir}/${tip.id}`] = {
         files: names,
         source: source.dir,
-        upstream: tip.file,
+        upstream: Array.isArray(tip.file) ? tip.file.join(", ") : tip.file,
       };
     }
 

@@ -10,6 +10,7 @@ every asset to its source and upstream file.
 | Folder | Source | Author | License |
 |---|---|---|---|
 | `public/brushes/revoy-2025-01/` | [Krita brushes 2025-01 bundle](https://www.davidrevoy.com/article1060/krita-brushes-2025-01-bundle/show) | David Revoy | CC0-1.0 |
+| `public/brushes/oga-grunge/` | [~100 grunge brushstrokes and splatters set](https://opengameart.org/node/119417) | Dino0040 | CC0-1.0 |
 
 CC0 requires no attribution; credit is given anyway. Assets are served as
 separate files and are not part of the MIT-licensed source code bundle.

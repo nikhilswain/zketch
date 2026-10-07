@@ -138,6 +138,23 @@ describe("StampBrush", () => {
     expect(maxDiff).toBeLessThanOrEqual(2);
   });
 
+  it("tints dabs with the stroke color", () => {
+    const d = pixels(stroke({ color: "#ff0000", id: "red" }), flat);
+    let r = 0;
+    let g = 0;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] > 200) {
+        r += d[i];
+        g += d[i + 1];
+        n++;
+      }
+    }
+    expect(n).toBeGreaterThan(50);
+    expect(r / n).toBeGreaterThan(200);
+    expect(g / n).toBeLessThan(40);
+  });
+
   it("respects the ctx transform", () => {
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext("2d");

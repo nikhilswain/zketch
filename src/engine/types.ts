@@ -13,7 +13,8 @@ export type BrushStyle =
   | "gouache"
   | "drybrush"
   | "sponge"
-  | "splatter";
+  | "splatter"
+  | "watercolor";
 
 // Layer types — draw layers hold mixed elements (strokes + shapes); image is its own layer.
 export type LayerType = "draw" | "image";
