@@ -47,6 +47,7 @@ export const Stroke = types
       "drybrush",
       "sponge",
       "splatter",
+      "watercolor",
     ]),
     timestamp: types.number,
     startTime: types.optional(types.maybeNull(types.number), null),
@@ -104,7 +105,8 @@ export type BrushStyle =
   | "gouache"
   | "drybrush"
   | "sponge"
-  | "splatter";
+  | "splatter"
+  | "watercolor";
 export type BackgroundType = "white" | "transparent" | "grid";
 
 export interface IStroke extends Instance<typeof Stroke> {}

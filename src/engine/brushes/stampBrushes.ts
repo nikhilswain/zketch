@@ -138,10 +138,33 @@ export const gouacheBrush = new StampBrush({
   ],
 });
 
+const OGA = "oga-grunge";
+
+export const watercolorBrush = new StampBrush({
+  key: "watercolor",
+  label: "Watercolor",
+  tips: Array.from({ length: 4 }, (_, i) => `${OGA}/wash-${i}`),
+  spacing: 0.1,
+  flow: 0.17,
+  flowPressure: 0.5,
+  flowJitter: 0.5,
+  sizePressure: 0.3,
+  sizeJitter: 0.3,
+  scatter: 0.18,
+  angleMode: "random",
+  grain: { id: PAPER, scale: 0.9, depth: 0.3 },
+  presets: [
+    { id: "wash", label: "Wash", size: 60, opacity: 0.75 },
+    { id: "wet", label: "Wet Round", size: 32, opacity: 0.9 },
+    { id: "glaze", label: "Glaze", size: 90, opacity: 0.5 },
+  ],
+});
+
 export const stampBrushes = [
   pencilBrush,
   charcoalBrush,
   pastelBrush,
+  watercolorBrush,
   gouacheBrush,
   dryBrush,
   spongeBrush,

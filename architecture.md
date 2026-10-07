@@ -17,7 +17,7 @@ Core capabilities:
 - Freehand drawing with pressure sensitivity (Perfect Freehand).
 - Brushes: **Pen/Ink**, **Marker**, **Highlighter**, **Airbrush**,
   **Calligraphy**, **Eraser**, plus stamp-engine media: **Pencil**, **Charcoal**,
-  **Pastel**, **Gouache**, **Dry Brush**, **Sponge**, **Splatter**. `spray` and `texture` are **legacy** (`Brush.legacy`):
+  **Pastel**, **Watercolor**, **Gouache**, **Dry Brush**, **Sponge**, **Splatter**. `spray` and `texture` are **legacy** (`Brush.legacy`):
   still registered so old saves render, but hidden from the picker/shortcuts.
 - Shape tools: rectangle, circle, diamond, triangle (drag-to-create; Shift =
   square aspect).

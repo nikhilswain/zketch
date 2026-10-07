@@ -67,6 +67,7 @@ export const CanvasModel = types
         "drybrush",
         "sponge",
         "splatter",
+        "watercolor",
       ]),
       "ink",
     ),
@@ -643,7 +644,8 @@ export const CanvasModel = types
           | "gouache"
           | "drybrush"
           | "sponge"
-          | "splatter",
+          | "splatter"
+          | "watercolor",
       ) {
         self.currentBrushStyle = style;
       },
@@ -1707,7 +1709,8 @@ export type BrushStyle =
   | "gouache"
   | "drybrush"
   | "sponge"
-  | "splatter";
+  | "splatter"
+  | "watercolor";
 export type BackgroundType = "white" | "transparent" | "grid";
 
 export interface ICanvasModel extends Instance<typeof CanvasModel> {}

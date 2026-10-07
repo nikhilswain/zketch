@@ -9,6 +9,15 @@
       "license": "CC0-1.0",
       "sha256": "4c628a9418fcde63abacafdcb143881f2cbbf907275cb4f72335545841cf8173",
       "retrieved": "2026-10-07"
+    },
+    "oga-grunge": {
+      "title": "~100 grunge brushstrokes and splatters set",
+      "author": "Dino0040",
+      "url": "https://opengameart.org/sites/default/files/grunge_brushes.zip",
+      "page": "https://opengameart.org/node/119417",
+      "license": "CC0-1.0",
+      "sha256": "ce17c54ed6ca8b3ecfb92e46a68a46b1c0d52f77fcdae5bfa310fc3afc092d2a",
+      "retrieved": "2026-10-07"
     }
   },
   "tips": {
@@ -102,6 +111,26 @@
       ],
       "source": "revoy-2025-01",
       "upstream": "brushes/rock_pitted-fixed.gih"
+    },
+    "oga-grunge/wash": {
+      "files": [
+        "oga-grunge/wash-0.png",
+        "oga-grunge/wash-1.png",
+        "oga-grunge/wash-2.png",
+        "oga-grunge/wash-3.png"
+      ],
+      "source": "oga-grunge",
+      "upstream": "grunge_brushes/normal_opacity/brush044.png, grunge_brushes/normal_opacity/brush045.png, grunge_brushes/normal_opacity/brush046.png, grunge_brushes/normal_opacity/brush047.png"
+    },
+    "oga-grunge/bloom": {
+      "files": [
+        "oga-grunge/bloom-0.png",
+        "oga-grunge/bloom-1.png",
+        "oga-grunge/bloom-2.png",
+        "oga-grunge/bloom-3.png"
+      ],
+      "source": "oga-grunge",
+      "upstream": "grunge_brushes/normal_opacity/brush079.png, grunge_brushes/normal_opacity/brush092.png, grunge_brushes/normal_opacity/brush095.png, grunge_brushes/normal_opacity/brush098.png"
     }
   },
   "grains": {

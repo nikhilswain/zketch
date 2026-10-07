@@ -45,6 +45,7 @@ const MobileSidebar: React.FC<MobileSidebarProps> = observer(
       { value: "pencil", label: "Pencil" },
       { value: "charcoal", label: "Charcoal" },
       { value: "pastel", label: "Pastel" },
+      { value: "watercolor", label: "Watercolor" },
       { value: "gouache", label: "Gouache" },
       { value: "drybrush", label: "Dry Brush" },
       { value: "sponge", label: "Sponge" },

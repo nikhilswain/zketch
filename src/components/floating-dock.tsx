@@ -32,6 +32,7 @@ import {
   PaintbrushVertical,
   Cloud,
   Droplets,
+  Droplet,
 } from "lucide-react";
 
 const NumberBadge: React.FC<{ value: string; active?: boolean }> = ({
@@ -93,6 +94,7 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
       drybrush: <PaintbrushVertical className="w-4 h-4" />,
       sponge: <Cloud className="w-4 h-4" />,
       splatter: <Droplets className="w-4 h-4" />,
+      watercolor: <Droplet className="w-4 h-4" />,
     };
 
     const brushShortcuts: Record<string, string> = {
