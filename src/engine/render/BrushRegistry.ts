@@ -5,6 +5,7 @@ import { MarkerBrush } from "../brushes/MarkerBrush";
 import { HighlighterBrush } from "../brushes/HighlighterBrush";
 import { AirbrushBrush } from "../brushes/AirbrushBrush";
 import { CalligraphyBrush } from "../brushes/CalligraphyBrush";
+import { stampBrushes } from "../brushes/stampBrushes";
 import type { Brush } from "../types";
 
 export class BrushRegistry {
@@ -43,6 +44,7 @@ export function registerDefaultBrushes() {
   brushRegistry.register(new HighlighterBrush());
   brushRegistry.register(new AirbrushBrush());
   brushRegistry.register(new CalligraphyBrush());
+  for (const brush of stampBrushes) brushRegistry.register(brush);
   brushRegistry.register(new SprayBrush());
   brushRegistry.register(new TextureBrush());
 }

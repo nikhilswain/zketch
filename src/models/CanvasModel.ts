@@ -60,6 +60,7 @@ export const CanvasModel = types
         "highlighter",
         "airbrush",
         "calligraphy",
+        "pencil",
       ]),
       "ink",
     ),
@@ -629,7 +630,8 @@ export const CanvasModel = types
           | "marker"
           | "highlighter"
           | "airbrush"
-          | "calligraphy",
+          | "calligraphy"
+          | "pencil",
       ) {
         self.currentBrushStyle = style;
       },
@@ -1686,7 +1688,8 @@ export type BrushStyle =
   | "marker"
   | "highlighter"
   | "airbrush"
-  | "calligraphy";
+  | "calligraphy"
+  | "pencil";
 export type BackgroundType = "white" | "transparent" | "grid";
 
 export interface ICanvasModel extends Instance<typeof CanvasModel> {}

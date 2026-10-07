@@ -15,8 +15,8 @@ raster snapshot to a short share link via Cloudflare KV.
 Core capabilities:
 
 - Freehand drawing with pressure sensitivity (Perfect Freehand).
-- Brushes: **Pen/Ink**, **Marker**, **Highlighter**, **Airbrush**,
-  **Calligraphy**, **Eraser**. `spray` and `texture` are **legacy** (`Brush.legacy`):
+- Brushes: **Pen/Ink**, **Pencil** (stamp engine), **Marker**, **Highlighter**,
+  **Airbrush**, **Calligraphy**, **Eraser**. `spray` and `texture` are **legacy** (`Brush.legacy`):
   still registered so old saves render, but hidden from the picker/shortcuts.
 - Shape tools: rectangle, circle, diamond, triangle (drag-to-create; Shift =
   square aspect).
@@ -239,6 +239,36 @@ the `BrushStyle` union (`engine/types.ts`, `SharedModels.ts`, `CanvasModel.ts`,
 `VaultModel.ts`), and add a dock icon/list entry. PNG/JPG/thumbnail parity is
 automatic via the shared `renderStroke`. Set `legacy = true` to keep a brush
 render-only (excluded from the dock picker).
+
+### 4.2.1 Stamp brush engine (`engine/stamp/`)
+
+Textured media are `StampBrush` instances configured by a `StampSpec`
+(`engine/brushes/stampBrushes.ts`): tip ids, spacing (fraction of size), flow,
+scatter, size/flow jitter and pressure response, angle mode
+(fixed/direction/random), roundness, and optional paper `grain`
+(`{id, scale, depth}`).
+
+- **Dabs** are placed along a fixed 2-pass smoothed path (`stampSmooth`) at
+  `spacing × size` and drawn as tinted tip canvases with a per-dab affine
+  transform. Every jitter comes from `seededRandom(hashString(stroke.id) + dab
+  index)`, so canvas, thumbnails and export are identical.
+- **Stroke buffer**: dabs accumulate at `flow` in an offscreen buffer (clipped
+  to the stroke's device bounds), grain is applied with `destination-in` using a
+  world-anchored pattern, and the buffer is composited once at the stroke's
+  `opacity` (self-overlap never exceeds opacity; eraser `destination-out` still
+  applies to the composite).
+- **Tips** (`stamp/tips.ts`): registry of white-on-alpha mask canvases;
+  `round-hard/round-medium/round-soft` are procedural; tinted copies are cached
+  per `tip|color` (LRU 96). **Grain** (`stamp/grain.ts`): tileable grayscale
+  values → per-depth alpha masks; `paper-noise` is procedural seeded value noise.
+- **Live preview** (`stroke.live`, set on the drawing-canvas temp stroke): dabs on
+  segments whose smoothed points can no longer change are accumulated once in a
+  persistent canvas; each frame only draws new settled dabs plus the moving
+  tail. The preview stroke uses the final stroke id (generated at pointer-down),
+  so the committed render is pixel-identical, and the commit reuses the live
+  buffer (integer-offset blit onto the overscanned layer) instead of re-stamping.
+- Offscreen canvases come from `render/canvasFactory.ts` (`setCanvasFactory` lets
+  Node tests inject `@napi-rs/canvas`).
 
 `brushOptions.ts::createGetBrushOptions(settings)` converts the per-draw brush
 settings (`thinning/smoothing/streamline/taper/easing`) into `BrushOptions`,
@@ -482,7 +512,7 @@ Persistence layers:
   (register/handle). `useKeyboardShortcuts` wires these to store actions.
 
 **Shortcuts summary**: Ctrl+Z/Y undo/redo · Ctrl+Backspace clear · Delete/Backspace
-delete selection · V/1 select · 2 pen · 3 eraser · 5 shapes ·
+delete selection · V/1 select · 2 pen · 3 eraser · 4 pencil · 5 shapes ·
 6 marker · 7 highlighter · 8 airbrush · 9 calligraphy ·
 (shape mode) 1–4 shape kinds · Space pan · Ctrl +/-/0 zoom · Ctrl+F fit ·
 Ctrl+S save · Ctrl+E export · Ctrl+N new · Ctrl+V vault · B/W/R colors ·

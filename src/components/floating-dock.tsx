@@ -25,6 +25,7 @@ import {
   Highlighter,
   SprayCan,
   Feather,
+  PencilLine,
 } from "lucide-react";
 
 const NumberBadge: React.FC<{ value: string; active?: boolean }> = ({
@@ -79,10 +80,12 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
       highlighter: <Highlighter className="w-4 h-4" />,
       airbrush: <SprayCan className="w-4 h-4" />,
       calligraphy: <Feather className="w-4 h-4" />,
+      pencil: <PencilLine className="w-4 h-4" />,
     };
 
     const brushShortcuts: Record<string, string> = {
       ink: "2",
+      pencil: "4",
       marker: "6",
       highlighter: "7",
       airbrush: "8",

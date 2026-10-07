@@ -60,6 +60,9 @@ export const useKeyboardShortcuts = (
       canvasStore.setActiveTool("brush");
       canvasStore.setBrushStyle("eraser");
     });
+    KeyBindingManager.registerHandler("selectPencil", () =>
+      applyBrushPreset(canvasStore, "pencil"),
+    );
     KeyBindingManager.registerHandler("selectMarker", () =>
       applyBrushPreset(canvasStore, "marker"),
     );
