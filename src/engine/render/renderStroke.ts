@@ -11,25 +11,17 @@ export function renderStroke(
   ) => BrushOptions | undefined,
 ) {
   const isEraser = stroke.brushStyle === "eraser";
-  const prevComposite = ctx.globalCompositeOperation;
-
-  if (isEraser) {
-    ctx.globalCompositeOperation = "destination-out";
-  }
-
   const key = isEraser ? "ink" : stroke.brushStyle;
   const brush = registry.get(key);
-  if (!brush) {
-    ctx.globalCompositeOperation = prevComposite;
-    return;
-  }
+  if (!brush) return;
 
   const strokeForRender = isEraser
     ? { ...stroke, taperStart: 0, taperEnd: 0, opacity: 1 }
     : stroke;
 
   const opts = getBrushOptions?.(key, stroke.size);
+  ctx.save();
+  if (isEraser) ctx.globalCompositeOperation = "destination-out";
   brush.render(ctx, strokeForRender, opts);
-
-  ctx.globalCompositeOperation = prevComposite;
+  ctx.restore();
 }

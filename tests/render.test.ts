@@ -174,6 +174,43 @@ describe("new brushes", () => {
     }
   });
 
+  it("every brush leaves the context drawing state unchanged", () => {
+    for (const brushStyle of brushRegistry.keys()) {
+      const { ctx } = newCtx();
+      ctx.lineWidth = 3;
+      ctx.lineCap = "square";
+      ctx.lineJoin = "bevel";
+      ctx.fillStyle = "#123456";
+      ctx.strokeStyle = "#654321";
+      ctx.globalAlpha = 0.7;
+      renderStroke(
+        ctx as never,
+        makeStroke({ brushStyle: brushStyle as never }),
+        brushRegistry,
+      );
+      expect([
+        brushStyle,
+        ctx.lineWidth,
+        ctx.lineCap,
+        ctx.lineJoin,
+        ctx.globalCompositeOperation,
+      ]).toEqual([brushStyle, 3, "square", "bevel", "source-over"]);
+      expect(ctx.globalAlpha).toBeCloseTo(0.7);
+      ctx.globalAlpha = 1;
+      ctx.clearRect(0, 0, 10, 10);
+      ctx.fillRect(0, 0, 4, 4);
+      ctx.beginPath();
+      ctx.moveTo(6, 0);
+      ctx.lineTo(6, 10);
+      ctx.stroke();
+      expect([
+        brushStyle,
+        ...ctx.getImageData(1, 1, 1, 1).data.slice(0, 3),
+        ...ctx.getImageData(6, 5, 1, 1).data.slice(0, 3),
+      ]).toEqual([brushStyle, 0x12, 0x34, 0x56, 0x65, 0x43, 0x21]);
+    }
+  });
+
   it("calligraphy nib angle changes the mark", () => {
     const a = Buffer.from(
       renderStrokePixels(makeStroke({ brushStyle: "calligraphy", angle: 0 })),
