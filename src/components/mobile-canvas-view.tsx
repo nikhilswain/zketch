@@ -15,7 +15,7 @@ import ExportDialog from "./export-dialog";
 import { ExportService } from "@/services/ExportService";
 import { ThumbnailService } from "@/services/ThumbnailService";
 import { BlobStorageService } from "@/services/BlobStorageService";
-import { optimizeStrokes } from "@/utils/StrokeOptimizer";
+import { serializeLayers } from "@/utils/serializeLayers";
 import type { BackgroundType } from "@/models/CanvasModel";
 import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
@@ -149,94 +149,7 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
 
     const handleSave = async () => {
       if (canvasStore.isEmpty) return;
-
-      // Map layers to save format with optimized strokes
-      const layersToSave = canvasStore.layers.map((layer) => {
-        const baseLayerData = {
-          id: layer.id,
-          name: layer.name,
-          type: layer.type,
-          visible: layer.visible,
-          locked: layer.locked,
-          opacity: layer.opacity,
-        };
-
-        if (layer.type === "draw") {
-          const drawLayer = layer as any;
-          const elementsData = drawLayer.elements.map((el: any) => {
-            if ("shapeType" in el) {
-              return {
-                id: el.id,
-                shapeType: el.shapeType,
-                x: el.x,
-                y: el.y,
-                width: el.width,
-                height: el.height,
-                rotation: el.rotation,
-                strokeColor: el.strokeColor,
-                strokeWidth: el.strokeWidth,
-                cornerRadius: el.cornerRadius,
-                fillColor: el.fillColor ?? null,
-                opacity: el.opacity,
-              };
-            }
-            return {
-              id: el.id,
-              points: el.points.map((p: any) => ({
-                x: p.x,
-                y: p.y,
-                pressure: p.pressure,
-              })),
-              color: el.color,
-              size: el.size,
-              opacity: el.opacity ?? 1,
-              brushStyle: el.brushStyle,
-              timestamp: el.timestamp,
-              startTime: el.startTime ?? null,
-              duration: el.duration ?? null,
-              thinning: el.thinning,
-              smoothing: el.smoothing,
-              streamline: el.streamline,
-              taperStart: el.taperStart,
-              taperEnd: el.taperEnd,
-              easing: el.easing,
-              angle: el.angle,
-              softness: el.softness,
-            };
-          });
-
-          const strokeOnly = elementsData.filter(
-            (e: any) => !("shapeType" in e),
-          );
-          const optimizedStrokes = optimizeStrokes(strokeOnly as any);
-          const optimizedById = new Map<string, any>(
-            optimizedStrokes.map((s: any) => [s.id, s]),
-          );
-          const finalElements = elementsData.map((e: any) =>
-            "shapeType" in e ? e : (optimizedById.get(e.id) ?? e),
-          );
-
-          return {
-            ...baseLayerData,
-            elements: finalElements,
-          };
-        } else if (layer.type === "image") {
-          const imageLayer = layer as any;
-          return {
-            ...baseLayerData,
-            blobId: imageLayer.blobId,
-            naturalWidth: imageLayer.naturalWidth,
-            naturalHeight: imageLayer.naturalHeight,
-            x: imageLayer.x,
-            y: imageLayer.y,
-            width: imageLayer.width,
-            height: imageLayer.height,
-            rotation: imageLayer.rotation,
-            aspectLocked: imageLayer.aspectLocked,
-          };
-        }
-        return baseLayerData;
-      });
+      const layersToSave = serializeLayers(canvasStore.layers);
 
       const thumbnailBlob = await ThumbnailService.generateThumbnailBlob(
         layersToSave as any,
