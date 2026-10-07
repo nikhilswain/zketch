@@ -7,7 +7,13 @@ export type BrushStyle =
   | "highlighter"
   | "airbrush"
   | "calligraphy"
-  | "pencil";
+  | "pencil"
+  | "charcoal"
+  | "pastel"
+  | "gouache"
+  | "drybrush"
+  | "sponge"
+  | "splatter";
 
 // Layer types — draw layers hold mixed elements (strokes + shapes); image is its own layer.
 export type LayerType = "draw" | "image";

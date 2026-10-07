@@ -5,6 +5,10 @@ import { brushRegistry, registerDefaultBrushes } from "./render/BrushRegistry";
 import { renderStroke } from "./render/renderStroke";
 import { renderShape } from "./render/renderShape";
 import { drawImageLayer } from "./render/renderImage";
+import {
+  installBrushAssetLoader,
+  onBrushAssetsChanged,
+} from "./stamp/assets";
 import type {
   ElementLike,
   EngineConfig,
@@ -51,6 +55,7 @@ export class CanvasEngine {
   private static readonly VIEW_SETTLE_MS = 150;
   private lastViewChange = 0;
   private settleTimer: ReturnType<typeof setTimeout> | null = null;
+  private stopAssetListener: () => void = () => {};
 
   // Image cache for rendering image layers
   private imageCache: Map<string, HTMLImageElement> = new Map();
@@ -108,6 +113,11 @@ export class CanvasEngine {
 
     // Register brushes
     registerDefaultBrushes();
+    installBrushAssetLoader();
+    this.stopAssetListener = onBrushAssetsChanged(() => {
+      this.layerBakes.clear();
+      this.invalidate();
+    });
     this.resize();
     window.addEventListener("resize", this.resize);
     this.loop();
@@ -115,6 +125,7 @@ export class CanvasEngine {
 
   destroy = () => {
     if (this.rafId) cancelAnimationFrame(this.rafId);
+    this.stopAssetListener();
     window.removeEventListener("resize", this.resize);
     this.bg.remove();
     this.display.remove();

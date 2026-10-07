@@ -5,7 +5,12 @@ const MAX_TINTED = 96;
 
 const masks = new Map<string, HTMLCanvasElement>();
 const tinted = new Map<string, HTMLCanvasElement>();
-const listeners = new Set<() => void>();
+const fallbacks = new Map<string, HTMLCanvasElement>();
+let loader: ((id: string) => void) | null = null;
+
+export function setTipLoader(next: ((id: string) => void) | null) {
+  loader = next;
+}
 
 function proceduralTip(id: string): HTMLCanvasElement {
   const canvas = createCanvas(TIP_SIZE, TIP_SIZE);
@@ -27,12 +32,6 @@ export function registerTipMask(id: string, mask: HTMLCanvasElement) {
   for (const key of [...tinted.keys()]) {
     if (key.startsWith(id + "|")) tinted.delete(key);
   }
-  for (const fn of listeners) fn();
-}
-
-export function onTipsChanged(fn: () => void) {
-  listeners.add(fn);
-  return () => listeners.delete(fn);
 }
 
 export function hasTipMask(id: string) {
@@ -40,12 +39,20 @@ export function hasTipMask(id: string) {
 }
 
 export function getTipMask(id: string): HTMLCanvasElement {
-  let mask = masks.get(id);
-  if (!mask) {
-    mask = proceduralTip(id);
-    if (id.startsWith("round-")) masks.set(id, mask);
+  const mask = masks.get(id);
+  if (mask) return mask;
+  if (id.startsWith("round-")) {
+    const procedural = proceduralTip(id);
+    masks.set(id, procedural);
+    return procedural;
   }
-  return mask;
+  loader?.(id);
+  let fallback = fallbacks.get("round-soft");
+  if (!fallback) {
+    fallback = proceduralTip("round-soft");
+    fallbacks.set("round-soft", fallback);
+  }
+  return fallback;
 }
 
 export function getTintedTip(id: string, color: string): HTMLCanvasElement {

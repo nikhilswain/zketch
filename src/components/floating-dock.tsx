@@ -26,6 +26,12 @@ import {
   SprayCan,
   Feather,
   PencilLine,
+  PenTool,
+  Palette,
+  Paintbrush,
+  PaintbrushVertical,
+  Cloud,
+  Droplets,
 } from "lucide-react";
 
 const NumberBadge: React.FC<{ value: string; active?: boolean }> = ({
@@ -81,6 +87,12 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
       airbrush: <SprayCan className="w-4 h-4" />,
       calligraphy: <Feather className="w-4 h-4" />,
       pencil: <PencilLine className="w-4 h-4" />,
+      charcoal: <PenTool className="w-4 h-4" />,
+      pastel: <Palette className="w-4 h-4" />,
+      gouache: <Paintbrush className="w-4 h-4" />,
+      drybrush: <PaintbrushVertical className="w-4 h-4" />,
+      sponge: <Cloud className="w-4 h-4" />,
+      splatter: <Droplets className="w-4 h-4" />,
     };
 
     const brushShortcuts: Record<string, string> = {
