@@ -40,6 +40,7 @@ export const Stroke = types
       "highlighter",
       "airbrush",
       "calligraphy",
+      "pencil",
     ]),
     timestamp: types.number,
     startTime: types.optional(types.maybeNull(types.number), null),
@@ -90,7 +91,8 @@ export type BrushStyle =
   | "marker"
   | "highlighter"
   | "airbrush"
-  | "calligraphy";
+  | "calligraphy"
+  | "pencil";
 export type BackgroundType = "white" | "transparent" | "grid";
 
 export interface IStroke extends Instance<typeof Stroke> {}

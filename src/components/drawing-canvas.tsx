@@ -67,6 +67,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
     // Stroke timing for animation playback
     const strokeStartTimeRef = useRef<number | null>(null);
+    const strokeIdRef = useRef("");
     // Distinguishes a real draw from onDrawStart that early-returned (image select / transform).
     const drawingStartedRef = useRef(false);
     // Active shape creation drag (start + current canvas-space coords).
@@ -446,7 +447,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           settingsStore.eraserWholeStroke;
         if (currentPoints.length > 1 && !suppressPreview) {
           const temp: StrokeLike = {
-            id: "temp",
+            id: strokeIdRef.current || "temp",
+            live: true,
             points: currentPoints.map((p) => ({
               x: p.x,
               y: p.y,
@@ -839,6 +841,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           }
 
           strokeStartTimeRef.current = Date.now();
+          strokeIdRef.current = crypto.randomUUID();
           drawingStartedRef.current = true;
           setIsDrawing(true);
           setCurrentPoints([canvasPoint]);
@@ -1156,7 +1159,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           const duration = endTime - startTime;
 
           const strokeData = {
-            id: crypto.randomUUID(),
+            id: strokeIdRef.current || crypto.randomUUID(),
             points: currentPoints.map((point) => ({ ...point })),
             color: canvasStore.currentColor,
             size:
@@ -1177,6 +1180,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             angle: canvasStore.brushSettings.angle,
             softness: canvasStore.brushSettings.softness,
           };
+          strokeIdRef.current = "";
 
           if (canvasStore.hasLayers) {
             canvasStore.addStrokeToActiveLayer(strokeData);

@@ -6,7 +6,8 @@ export type BrushStyle =
   | "marker"
   | "highlighter"
   | "airbrush"
-  | "calligraphy";
+  | "calligraphy"
+  | "pencil";
 
 // Layer types — draw layers hold mixed elements (strokes + shapes); image is its own layer.
 export type LayerType = "draw" | "image";
@@ -42,6 +43,7 @@ export interface StrokeLike {
   easing?: string;
   angle?: number;
   softness?: number;
+  live?: boolean;
 }
 
 // Base layer interface (shared properties)
