@@ -129,6 +129,7 @@ src/
 │
 ├── utils/
 │   ├── StrokeOptimizer.ts     # RDP simplification before save
+│   ├── serializeLayers.ts     # MST layers → save format, cached per element snapshot
 │   ├── ImageProcessingUtils.ts# validate/resize/compress/sanitize images
 │   ├── applyBrushPreset.ts    # Select a brush + apply its first preset
 │   └── keyBindings.ts         # KEY_BINDINGS table + KeyBindingManager
@@ -345,7 +346,9 @@ Important actions (grouped):
 Holds `SavedDrawing[]` persisted in Dexie (`DrawingVault` DB, table `drawings`).
 `layers` are stored as **frozen JSON** (`ILayerData[]`, supporting legacy
 `stroke`/`shape` + new `draw`/`image`). Handles add/delete/rename/update,
-thumbnail + image-blob cleanup, storage info, and orphan-blob cleanup. The
+thumbnail + image-blob cleanup, storage info, and orphan-blob cleanup. Writes
+are per drawing (`persistDrawing(id)` → `DexieService.saveDrawing`), never the
+whole vault. The
 on-disk snapshot interfaces live here (`IStrokeData`, `IShapeElementData`,
 `IDrawLayerData`, `IImageLayerData`, `IShapeLayerData`, `ISavedDrawingData`).
 
@@ -372,9 +375,11 @@ drawing-canvas.tsx
   └─ useEffect[animatingLayerId] → engine.setAnimationState
 
 canvas-view.tsx
-  ├─ reaction(renderVersion) → debounce 500ms → performSave()   (autosave)
+  ├─ reaction(renderVersion) → debounce 500ms → performSave()   (autosave;
+  │    reschedules while canvasStore.isInteracting, i.e. a pointer is down)
   ├─ beforeunload warns if isDirtyRef
-  └─ performSave(): optimize strokes → ThumbnailService → BlobStorageService.storeThumbnail
+  └─ performSave(): serializeLayers → ThumbnailService.generateThumbnailBlob
+                     → BlobStorageService.storeThumbnail(blob)
                      → vaultStore.updateDrawing / addDrawing
                      → history.replaceState("/draw/<id>") on first save
 ```
@@ -446,8 +451,9 @@ Persistence layers:
   - SVG export is **hidden in the UI** (still strokes-only in the service) until
     shapes/images/eraser are supported.
   - `downloadFile(dataUrl, filename)` triggers the browser download.
-- **`ThumbnailService`** — `generateThumbnailAsync(layers, background, w, h)`
-  renders visible layers (strokes + shapes + images) to a data URL. Draw layers
+- **`ThumbnailService`** — `generateThumbnailBlob(layers, background, w, h)`
+  renders visible layers (strokes + shapes + images) to a PNG `Blob` (async
+  `toBlob` encode). Draw layers
   are baked to an offscreen per layer (eraser isolation) using the shared
   `renderStroke`/`renderShape` renderers; grid uses `GridRenderer` (20px) for
   parity with the canvas/export. Renders at **3× then downscales** (supersampling)
@@ -464,8 +470,12 @@ Persistence layers:
 ## 9. Utilities (`src/utils/`)
 
 - **`StrokeOptimizer`** — RDP (Ramer–Douglas–Peucker) simplification
-  (`epsilon 0.5`) + coordinate/pressure truncation. Used on save (canvas-view &
-  mobile-canvas-view) to shrink stroke data.
+  (`epsilon 0.5`) + coordinate/pressure truncation. Applied on save via
+  `serializeLayers` to shrink stroke data.
+- **`serializeLayers`** — maps MST layers to the save format from
+  `getSnapshot`, caching each element's serialized/optimized output in a
+  `WeakMap` keyed by its snapshot, so a save only processes new or changed
+  elements. Shared by canvas-view and mobile-canvas-view.
 - **`ImageProcessingUtils`** — validate, resize, compress, SVG sanitize,
   dataURL↔blob.
 - **`keyBindings`** — `KEY_BINDINGS` table + `KeyBindingManager`
