@@ -1,4 +1,5 @@
 import type { Brush, BrushPreset, StrokeLike } from "../types";
+import { smoothPoints } from "../render/smooth";
 
 export class HighlighterBrush implements Brush {
   key = "highlighter" as const;
@@ -9,8 +10,9 @@ export class HighlighterBrush implements Brush {
     { id: "neon", label: "Neon", size: 44, opacity: 0.22 },
   ];
   render(ctx: CanvasRenderingContext2D, stroke: StrokeLike) {
-    const pts = stroke.points;
-    if (pts.length === 0) return;
+    const raw = stroke.points;
+    if (raw.length === 0) return;
+    const pts = smoothPoints(raw);
 
     const prevAlpha = ctx.globalAlpha;
     const prevComp = ctx.globalCompositeOperation;
@@ -18,7 +20,7 @@ export class HighlighterBrush implements Brush {
     ctx.globalAlpha = (stroke.opacity ?? 0.35) * prevAlpha;
     ctx.strokeStyle = stroke.color;
     ctx.lineWidth = stroke.size;
-    ctx.lineCap = "square";
+    ctx.lineCap = "butt";
     ctx.lineJoin = "round";
     ctx.beginPath();
     ctx.moveTo(pts[0].x, pts[0].y);
