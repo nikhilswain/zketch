@@ -12,46 +12,66 @@ export class CalligraphyBrush implements Brush {
     { id: "upright", label: "Upright", size: 28, opacity: 1, angle: 90 },
   ];
 
-  private strokeSegments(
+  private sweep(
     ctx: CanvasRenderingContext2D,
     pts: ReturnType<typeof smoothPoints>,
     angle: number,
     half: number,
-    nibThickness: number,
-    stepPx: number,
+    thickness: number,
   ) {
-    const T = nibThickness;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const nib = pts.map((p) => {
+      const h = half * (0.35 + 0.65 * p.pressure);
+      return { x: cos * h, y: sin * h };
+    });
 
-    const draw = (x0: number, y0: number, x1: number, y1: number, w: number) => {
-      ctx.lineWidth = w;
-      ctx.beginPath();
-      ctx.moveTo(x0, y0);
-      ctx.lineTo(x1, y1);
-      ctx.stroke();
-    };
+    ctx.beginPath();
+    if (pts.length === 1) {
+      const p = pts[0];
+      const n = nib[0];
+      const tx = -sin * (thickness / 2);
+      const ty = cos * (thickness / 2);
+      ctx.moveTo(p.x - n.x - tx, p.y - n.y - ty);
+      ctx.lineTo(p.x + n.x - tx, p.y + n.y - ty);
+      ctx.lineTo(p.x + n.x + tx, p.y + n.y + ty);
+      ctx.lineTo(p.x - n.x + tx, p.y - n.y + ty);
+      ctx.closePath();
+      ctx.fill();
+      return;
+    }
 
     for (let i = 0; i < pts.length - 1; i++) {
       const a = pts[i];
       const b = pts[i + 1];
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const len = Math.hypot(dx, dy);
-      const n = Math.max(1, Math.ceil(len / stepPx));
-      for (let s = 0; s < n; s++) {
-        const t0 = s / n;
-        const t1 = (s + 1) / n;
-        const x0 = a.x + dx * t0;
-        const y0 = a.y + dy * t0;
-        const x1 = a.x + dx * t1;
-        const y1 = a.y + dy * t1;
-        const dir = Math.atan2(y1 - y0, x1 - x0);
-        const proj = Math.abs(Math.sin(dir - angle));
-        const pressure = a.pressure + (b.pressure - a.pressure) * t0;
-        const h = half * (0.35 + 0.65 * pressure);
-        const w = T + (2 * h - T) * proj;
-        draw(x0, y0, x1, y1, w);
+      const na = nib[i];
+      const nb = nib[i + 1];
+      const quad = [
+        [a.x - na.x, a.y - na.y],
+        [a.x + na.x, a.y + na.y],
+        [b.x + nb.x, b.y + nb.y],
+        [b.x - nb.x, b.y - nb.y],
+      ];
+      let area = 0;
+      for (let k = 0; k < 4; k++) {
+        const [x0, y0] = quad[k];
+        const [x1, y1] = quad[(k + 1) % 4];
+        area += x0 * y1 - x1 * y0;
       }
+      if (area < 0) quad.reverse();
+      ctx.moveTo(quad[0][0], quad[0][1]);
+      for (let k = 1; k < 4; k++) ctx.lineTo(quad[k][0], quad[k][1]);
+      ctx.closePath();
     }
+    ctx.fill("nonzero");
+
+    ctx.lineWidth = thickness;
+    ctx.lineCap = "butt";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
   }
 
   render(
@@ -65,30 +85,11 @@ export class CalligraphyBrush implements Brush {
 
     const angle = ((stroke.angle ?? options?.angle ?? 45) * Math.PI) / 180;
     const half = stroke.size / 2;
-    const nibThickness = Math.max(1, stroke.size * 0.1);
-    const stepPx = Math.max(1.5, nibThickness * 0.8);
+    const thickness = Math.max(1, stroke.size * 0.1);
     const opacity = stroke.opacity ?? 1;
-
     const prevAlpha = ctx.globalAlpha;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = stroke.color;
 
-    if (pts.length === 1) {
-      ctx.globalAlpha = opacity * prevAlpha;
-      const p = pts[0];
-      const h = half * (0.35 + 0.65 * p.pressure);
-      ctx.lineWidth = Math.max(nibThickness, 2 * h);
-      ctx.beginPath();
-      ctx.moveTo(p.x - 0.01, p.y);
-      ctx.lineTo(p.x, p.y);
-      ctx.stroke();
-      ctx.globalAlpha = prevAlpha;
-      return;
-    }
-
-    const canOffscreen =
-      opacity < 1 && typeof document !== "undefined";
+    const canOffscreen = opacity < 1 && typeof document !== "undefined";
     if (canOffscreen) {
       const canvas = ctx.canvas;
       const off = document.createElement("canvas");
@@ -97,10 +98,9 @@ export class CalligraphyBrush implements Brush {
       const octx = off.getContext("2d");
       if (octx) {
         octx.setTransform(ctx.getTransform());
-        octx.lineCap = "round";
-        octx.lineJoin = "round";
+        octx.fillStyle = stroke.color;
         octx.strokeStyle = stroke.color;
-        this.strokeSegments(octx, pts, angle, half, nibThickness, stepPx);
+        this.sweep(octx, pts, angle, half, thickness);
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.globalAlpha = opacity * prevAlpha;
@@ -111,8 +111,10 @@ export class CalligraphyBrush implements Brush {
       }
     }
 
+    ctx.fillStyle = stroke.color;
+    ctx.strokeStyle = stroke.color;
     ctx.globalAlpha = opacity * prevAlpha;
-    this.strokeSegments(ctx, pts, angle, half, nibThickness, stepPx);
+    this.sweep(ctx, pts, angle, half, thickness);
     ctx.globalAlpha = prevAlpha;
   }
 }
