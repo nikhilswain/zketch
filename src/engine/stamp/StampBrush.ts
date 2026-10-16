@@ -30,6 +30,7 @@ export interface StampSpec {
   angleMode?: "fixed" | "direction" | "random";
   angle?: number;
   directionOffset?: number;
+  followCurve?: boolean;
   angleJitter?: number;
   roundness?: number;
   grain?: { id: string; scale: number; depth: number };
@@ -46,6 +47,7 @@ interface WalkState {
   segment: number;
   carry: number;
   dabs: number;
+  lastDir?: number;
 }
 
 type Matrix = [number, number, number, number, number, number];
@@ -376,6 +378,25 @@ export class StampBrush implements Brush {
       }
     };
 
+    const follow = spec.followCurve && spec.angleMode === "direction";
+    const unit = (x: number, y: number) => {
+      const l = Math.hypot(x, y);
+      return l > 0 ? [x / l, y / l] : [0, 0];
+    };
+    const vertexDir = (k: number) => {
+      const [ix, iy] =
+        k > 0 ? unit(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y) : [0, 0];
+      const [ox, oy] =
+        k < pts.length - 1
+          ? unit(pts[k + 1].x - pts[k].x, pts[k + 1].y - pts[k].y)
+          : [0, 0];
+      const sx = ix + ox;
+      const sy = iy + oy;
+      if (sx === 0 && sy === 0) return Math.atan2(oy || iy, ox || ix);
+      return Math.atan2(sy, sx);
+    };
+    const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+
     const state = { ...start };
     if (pts.length === 1) {
       if (state.dabs === 0 && endPoint >= 1) {
@@ -396,15 +417,34 @@ export class StampBrush implements Brush {
       const dy = p1.y - p0.y;
       const len = Math.hypot(dx, dy);
       if (len === 0) continue;
-      const dir = Math.atan2(dy, dx);
+      const segDir = Math.atan2(dy, dx);
+      const d0 = follow ? vertexDir(state.segment - 1) : segDir;
+      const turn = follow ? wrap(vertexDir(state.segment) - d0) : 0;
       while (state.carry <= len && state.dabs < MAX_DABS) {
         const u = state.carry / len;
         const pressure = p0.pressure + (p1.pressure - p0.pressure) * u;
-        placeDab(state.dabs, p0.x + dx * u, p0.y + dy * u, pressure, dir);
+        const x = p0.x + dx * u;
+        const y = p0.y + dy * u;
+        const step = Math.max(
+          minStep,
+          spec.spacing * size * (1 - (spec.sizePressure ?? 0) * (1 - pressure)),
+        );
+        let dir = segDir;
+        if (follow) {
+          dir = d0 + turn * u;
+          if (state.lastDir !== undefined) {
+            const delta = wrap(dir - state.lastDir);
+            const fill = Math.ceil((Math.abs(delta) * size * 0.5) / step);
+            for (let k = 1; k < fill && state.dabs < MAX_DABS; k++) {
+              placeDab(state.dabs, x, y, pressure, state.lastDir + (delta * k) / fill);
+              state.dabs++;
+            }
+          }
+          state.lastDir = dir;
+        }
+        placeDab(state.dabs, x, y, pressure, dir);
         state.dabs++;
-        const step =
-          spec.spacing * size * (1 - (spec.sizePressure ?? 0) * (1 - pressure));
-        state.carry += Math.max(minStep, step);
+        state.carry += step;
       }
       state.carry -= len;
     }

@@ -41,6 +41,7 @@ export const rakeBrush = new StampBrush({
   flowPressure: 0.5,
   sizePressure: 0.3,
   angleMode: "direction",
+  followCurve: true,
   presets: [
     { id: "rake", label: "Rake", size: 40, opacity: 1 },
     { id: "hair", label: "Hair", size: 22, opacity: 0.85 },
@@ -60,6 +61,7 @@ export const smearBrush = new StampBrush({
   sizePressure: 0.3,
   flowJitter: 0.2,
   angleMode: "direction",
+  followCurve: true,
   grain: { id: SKIN, scale: 0.8, depth: 0.5 },
   presets: [
     { id: "smear", label: "Smear", size: 70, opacity: 0.9 },
@@ -80,6 +82,7 @@ export const flatBristleBrush = new StampBrush({
   flowJitter: 0.4,
   sizePressure: 0.3,
   angleMode: "direction",
+  followCurve: true,
   angleJitter: 0.08,
   grain: { id: ROUGH_PAPER, scale: 0.7, depth: 0.75 },
   presets: [
@@ -101,6 +104,7 @@ export const knifeBrush = new StampBrush({
   flowJitter: 0.25,
   sizePressure: 0.25,
   angleMode: "direction",
+  followCurve: true,
   angleJitter: 0.15,
   presets: [
     { id: "knife", label: "Knife", size: 60, opacity: 1 },
@@ -121,6 +125,7 @@ export const softFlatBrush = new StampBrush({
   flowJitter: 0.12,
   sizePressure: 0.2,
   angleMode: "direction",
+  followCurve: true,
   grain: { id: WATERCOLOR_PAPER, scale: 1, depth: 0.45 },
   presets: [
     { id: "blend", label: "Blend", size: 70, opacity: 0.8 },
@@ -140,6 +145,7 @@ export const wetFlatBrush = new StampBrush({
   flowPressure: 0.5,
   sizePressure: 0.25,
   angleMode: "direction",
+  followCurve: true,
   directionOffset: Math.PI / 2,
   presets: [
     { id: "wet", label: "Wet", size: 60, opacity: 0.85 },
@@ -180,6 +186,7 @@ export const streaksBrush = new StampBrush({
   scatter: 0.25,
   scatterBothAxes: true,
   angleMode: "direction",
+  followCurve: true,
   angleJitter: 0.25,
   presets: [
     { id: "streaks", label: "Streaks", size: 45, opacity: 1 },
@@ -218,6 +225,7 @@ export const crayonBrush = new StampBrush({
   flowJitter: 0.3,
   sizePressure: 0.2,
   angleMode: "direction",
+  followCurve: true,
   angleJitter: 0.2,
   grain: { id: ROUGH_PAPER, scale: 0.5, depth: 0.7 },
   presets: [
