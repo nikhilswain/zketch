@@ -17,7 +17,13 @@ Core capabilities:
 - Freehand drawing with pressure sensitivity (Perfect Freehand).
 - Brushes: **Pen/Ink**, **Marker**, **Highlighter**, **Airbrush**,
   **Calligraphy**, **Eraser**, plus stamp-engine media: **Pencil**, **Charcoal**,
-  **Pastel**, **Watercolor**, **Gouache**, **Dry Brush**, **Sponge**, **Splatter**. `spray` and `texture` are **legacy** (`Brush.legacy`):
+  **Pastel**, **Watercolor**, **Gouache**, **Dry Brush**, **Sponge**, **Splatter**,
+  and 23 brushes from RaV89's Photoshop pack (`engine/brushes/rav89Brushes.ts`):
+  paint (Oil Paint, Bristle Rake, Flat Bristle, Palette Knife, Rough Smear, Soft
+  Flat, Wet Flat), Wax Crayon, texture (Impressionist, Streaks, Scratchy, Dust),
+  nature stamps (Clouds, Foliage, Leaves, Grass, Bush, Pine, Forest, Bare Tree)
+  and effects (Sparkle, Starfield, Water Glints). The picker groups brushes by
+  `Brush.category` (draw/paint/texture/nature/effects, `utils/brushCategories.ts`). `spray` and `texture` are **legacy** (`Brush.legacy`):
   still registered so old saves render, but hidden from the picker/shortcuts.
 - Shape tools: rectangle, circle, diamond, triangle (drag-to-create; Shift =
   square aspect).
@@ -228,16 +234,19 @@ rendering, and export/thumbnails call the same function. Strokes carry their ful
 render params (`thinning/smoothing/streamline/taperStart/taperEnd/easing`), so
 committed strokes and exports are **deterministic** — changing current brush
 settings never alters already-drawn strokes. `engine/easing.ts` resolves the
-stored easing name to a function. `Brush` metadata is optional: `label?` (UI text)
-and `defaults?: Partial<BrushOptions>` (per-brush fallback options consumed by
+stored easing name to a function. `Brush` metadata is optional: `label?` (UI text),
+`category?` (picker group), `maxSize?` (size slider max, default 100; the store
+clamps at 400) and `defaults?: Partial<BrushOptions>` (per-brush fallback options consumed by
 `createGetBrushOptions`, so a new brush usually doesn't need to touch
 `brushOptions.ts`). Shared helpers: `easingFn` (`engine/easing.ts`) and
 `seededRandom` (`engine/render/seededRandom.ts`). The registry exposes
 `register/unregister/get/has/keys/all` and is re-exported from `engine/index.ts`.
 **To add a brush**: implement `Brush { key; label?; defaults?; render(...) }` in
 `src/engine/brushes/`, register it in `registerDefaultBrushes()`, add its key to
-the `BrushStyle` union (`engine/types.ts`, `SharedModels.ts`, `CanvasModel.ts`,
-`VaultModel.ts`), and add a dock icon/list entry. PNG/JPG/thumbnail parity is
+`BRUSH_STYLES` in `engine/types.ts` (the `BrushStyle` type and the MST enums in
+`SharedModels.ts`/`CanvasModel.ts` derive from it; never remove or rename a key,
+saved strokes reference it), give it a `category`, and add a dock icon (the
+picker and mobile list read the registry). PNG/JPG/thumbnail parity is
 automatic via the shared `renderStroke`. Set `legacy = true` to keep a brush
 render-only (excluded from the dock picker).
 
@@ -245,9 +254,13 @@ render-only (excluded from the dock picker).
 
 Textured media are `StampBrush` instances configured by a `StampSpec`
 (`engine/brushes/stampBrushes.ts`): tip ids, spacing (fraction of size), flow,
-scatter, size/flow jitter and pressure response, angle mode
-(fixed/direction/random), roundness, and optional paper `grain`
-(`{id, scale, depth}`).
+scatter (perpendicular, or both axes with `scatterBothAxes`), `count` (dabs per
+step), size/flow jitter and pressure response, angle mode
+(fixed/direction/random, `directionOffset` rotates direction-following tips),
+roundness, `keepAspect` (fit the tip's longer side to the size instead of
+squashing it into a square; the original brushes predate it and keep the square
+fit so saved strokes render unchanged), `flip` (random mirror), and optional
+paper `grain` (`{id, scale, depth}`).
 
 - **Dabs** are placed along a fixed 2-pass smoothed path (`stampSmooth`) at
   `spacing × size` and drawn as tinted tip canvases with a per-dab affine
@@ -278,11 +291,17 @@ scatter, size/flow jitter and pressure response, angle mode
   tip / paper noise is used. `onBrushAssetsChanged` makes the engine drop its
   layer caches and re-bake. Only assets of brushes actually used are fetched.
 - **Asset pipeline**: `npm run brushes` (`tools/convert-brushes.ts`) downloads
-  CC0 source archives (sha256-verified, cached in `.brush-cache/`), parses
-  GIMP `.gbr/.gih` via `engine/brush-formats/gimp.ts`, writes white-on-alpha
-  tip masks and grayscale grain tiles, per-source `LICENSE.txt`/`README.md`,
-  and `public/brushes/manifest.json`. Credits: `THIRD_PARTY_ASSETS.md`. Only
-  bundle CC0/permissive sources (see the brush-asset research in `.work`).
+  source archives (sha256-verified, cached in `.brush-cache/`), parses
+  GIMP `.gbr/.gih` via `engine/brush-formats/gimp.ts` and Photoshop `.abr`
+  (tips by preset name, patterns by name) via `ag-psd`, writes white-on-alpha
+  tip masks (per-tip `max` up to 768 px for large stamps) and grayscale grain
+  tiles, per-source `LICENSE.txt`/`README.md`, and
+  `public/brushes/manifest.json`. Sources without a direct download URL (the
+  RaV89 `.abr`) must be placed in `.brush-cache/` by hand; the converter
+  verifies their sha256. Never commit or serve a raw brush pack: only converted
+  tips ship. Credits: `THIRD_PARTY_ASSETS.md`. Only bundle sources whose license
+  allows use inside the app (CC0, or free-for-commercial-use without
+  redistribution of the files themselves).
 
 `brushOptions.ts::createGetBrushOptions(settings)` converts the per-draw brush
 settings (`thinning/smoothing/streamline/taper/easing`) into `BrushOptions`,

@@ -7,6 +7,7 @@ const SHADOW_SHIFT_PX = 100000;
 export class AirbrushBrush implements Brush {
   key = "airbrush" as const;
   label = "Airbrush";
+  category = "paint" as const;
   presets: BrushPreset[] = [
     { id: "soft", label: "Soft", size: 70, opacity: 0.55, softness: 0.9 },
     { id: "medium", label: "Medium", size: 48, opacity: 0.7, softness: 0.6 },

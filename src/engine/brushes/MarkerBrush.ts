@@ -5,6 +5,7 @@ import type { Brush, BrushOptions, BrushPreset, StrokeLike } from "../types";
 export class MarkerBrush implements Brush {
   key = "marker" as const;
   label = "Marker";
+  category = "draw" as const;
   defaults: Partial<BrushOptions> = {
     thinning: 0.15,
     smoothing: 0.45,

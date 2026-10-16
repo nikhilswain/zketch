@@ -1,20 +1,46 @@
-export type BrushStyle =
-  | "ink"
-  | "eraser"
-  | "spray"
-  | "texture"
-  | "marker"
-  | "highlighter"
-  | "airbrush"
-  | "calligraphy"
-  | "pencil"
-  | "charcoal"
-  | "pastel"
-  | "gouache"
-  | "drybrush"
-  | "sponge"
-  | "splatter"
-  | "watercolor";
+export const BRUSH_STYLES = [
+  "ink",
+  "eraser",
+  "spray",
+  "texture",
+  "marker",
+  "highlighter",
+  "airbrush",
+  "calligraphy",
+  "pencil",
+  "charcoal",
+  "pastel",
+  "gouache",
+  "drybrush",
+  "sponge",
+  "splatter",
+  "watercolor",
+  "oil",
+  "rake",
+  "smear",
+  "flatbristle",
+  "knife",
+  "softflat",
+  "wetflat",
+  "dabs",
+  "streaks",
+  "scratch",
+  "crayon",
+  "clouds",
+  "dust",
+  "sparkle",
+  "stars",
+  "glint",
+  "foliage",
+  "leaves",
+  "grass",
+  "forest",
+  "bush",
+  "pine",
+  "tree",
+] as const;
+
+export type BrushStyle = (typeof BRUSH_STYLES)[number];
 
 // Layer types — draw layers hold mixed elements (strokes + shapes); image is its own layer.
 export type LayerType = "draw" | "image";
@@ -157,9 +183,13 @@ export interface BrushPreset {
   softness?: number;
 }
 
+export type BrushCategory = "draw" | "paint" | "texture" | "nature" | "effects";
+
 export interface Brush {
   key: string;
   label?: string;
+  category?: BrushCategory;
+  maxSize?: number;
   legacy?: boolean;
   defaults?: Partial<BrushOptions>;
   presets?: BrushPreset[];

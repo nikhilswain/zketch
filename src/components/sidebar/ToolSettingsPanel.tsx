@@ -213,7 +213,7 @@ const ToolSettingsPanel: React.FC = observer(() => {
           value={[canvasStore.currentSize]}
           onValueChange={(v) => setSize(v[0])}
           min={1}
-          max={100}
+          max={brush?.maxSize ?? 100}
           step={1}
           className="w-full"
         />

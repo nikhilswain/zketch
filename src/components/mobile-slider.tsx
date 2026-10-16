@@ -7,7 +7,9 @@ import { Label } from "./ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
@@ -25,6 +27,8 @@ import {
   X,
 } from "lucide-react";
 import type { BrushStyle, BackgroundType } from "../models/CanvasModel";
+import { pickerBrushGroups } from "@/utils/brushCategories";
+import { brushRegistry } from "@/engine/render/BrushRegistry";
 
 interface MobileSidebarProps {
   onSave: () => void;
@@ -36,22 +40,7 @@ const MobileSidebar: React.FC<MobileSidebarProps> = observer(
   ({ onSave, onExport, onClose }) => {
     const canvasStore = useCanvasStore();
 
-    const brushStyles: { value: BrushStyle; label: string }[] = [
-      { value: "ink", label: "Pen" },
-      { value: "marker", label: "Marker" },
-      { value: "highlighter", label: "Highlighter" },
-      { value: "airbrush", label: "Airbrush" },
-      { value: "calligraphy", label: "Calligraphy" },
-      { value: "pencil", label: "Pencil" },
-      { value: "charcoal", label: "Charcoal" },
-      { value: "pastel", label: "Pastel" },
-      { value: "watercolor", label: "Watercolor" },
-      { value: "gouache", label: "Gouache" },
-      { value: "drybrush", label: "Dry Brush" },
-      { value: "sponge", label: "Sponge" },
-      { value: "splatter", label: "Splatter" },
-      { value: "eraser", label: "Eraser" },
-    ];
+    const brushGroups = pickerBrushGroups();
 
     const backgroundOptions: {
       value: BackgroundType;
@@ -153,11 +142,20 @@ const MobileSidebar: React.FC<MobileSidebarProps> = observer(
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {brushStyles.map((brush) => (
-                      <SelectItem key={brush.value} value={brush.value}>
-                        {brush.label}
-                      </SelectItem>
+                    {brushGroups.map((group) => (
+                      <SelectGroup key={group.id}>
+                        <SelectLabel>{group.label}</SelectLabel>
+                        {group.brushes.map((brush) => (
+                          <SelectItem key={brush.key} value={brush.key}>
+                            {brush.label ?? brush.key}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
                     ))}
+                    <SelectGroup>
+                      <SelectLabel>Erase</SelectLabel>
+                      <SelectItem value="eraser">Eraser</SelectItem>
+                    </SelectGroup>
                   </SelectContent>
                 </Select>
               </div>
@@ -170,7 +168,10 @@ const MobileSidebar: React.FC<MobileSidebarProps> = observer(
                   value={[canvasStore.currentSize]}
                   onValueChange={handleSizeChange}
                   min={1}
-                  max={50}
+                  max={
+                    brushRegistry.get(canvasStore.currentBrushStyle)?.maxSize ??
+                    50
+                  }
                   step={1}
                   className="w-full mt-2"
                 />

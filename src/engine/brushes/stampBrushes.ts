@@ -8,6 +8,7 @@ const PAPER = `${REVOY}/paper-grain-b`;
 export const pencilBrush = new StampBrush({
   key: "pencil",
   label: "Pencil",
+  category: "draw",
   tips: ["round-hard"],
   spacing: 0.12,
   flow: 0.5,
@@ -29,6 +30,7 @@ export const pencilBrush = new StampBrush({
 export const charcoalBrush = new StampBrush({
   key: "charcoal",
   label: "Charcoal",
+  category: "draw",
   tips: frames("charcoal", 4),
   spacing: 0.16,
   flow: 0.8,
@@ -50,6 +52,7 @@ export const charcoalBrush = new StampBrush({
 export const pastelBrush = new StampBrush({
   key: "pastel",
   label: "Pastel",
+  category: "draw",
   tips: [`${REVOY}/chalk`, `${REVOY}/chalk-sparse`],
   spacing: 0.14,
   flow: 0.8,
@@ -69,6 +72,7 @@ export const pastelBrush = new StampBrush({
 export const splatterBrush = new StampBrush({
   key: "splatter",
   label: "Splatter",
+  category: "texture",
   tips: [...frames("splat", 5), `${REVOY}/splat-dots`],
   spacing: 1.1,
   flow: 1,
@@ -85,6 +89,7 @@ export const splatterBrush = new StampBrush({
 export const dryBrush = new StampBrush({
   key: "drybrush",
   label: "Dry Brush",
+  category: "paint",
   tips: [`${REVOY}/bristles`],
   spacing: 0.02,
   flow: 0.22,
@@ -103,6 +108,7 @@ export const dryBrush = new StampBrush({
 export const spongeBrush = new StampBrush({
   key: "sponge",
   label: "Sponge",
+  category: "texture",
   tips: frames("sponge", 7),
   spacing: 0.3,
   flow: 0.75,
@@ -121,6 +127,7 @@ export const spongeBrush = new StampBrush({
 export const gouacheBrush = new StampBrush({
   key: "gouache",
   label: "Gouache",
+  category: "paint",
   tips: [`${REVOY}/painterly`],
   spacing: 0.04,
   flow: 0.45,
@@ -143,6 +150,7 @@ const OGA = "oga-grunge";
 export const watercolorBrush = new StampBrush({
   key: "watercolor",
   label: "Watercolor",
+  category: "paint",
   tips: Array.from({ length: 4 }, (_, i) => `${OGA}/wash-${i}`),
   spacing: 0.1,
   flow: 0.17,

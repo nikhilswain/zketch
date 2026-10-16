@@ -6,7 +6,8 @@ import {
 } from "@/engine/render/BrushRegistry";
 import { renderStroke } from "@/engine/render/renderStroke";
 import { StampBrush } from "@/engine/stamp/StampBrush";
-import type { StrokeLike } from "@/engine/types";
+import { registerTipMask } from "@/engine/stamp/tips";
+import { BRUSH_STYLES, type StrokeLike } from "@/engine/types";
 
 const W = 240;
 const H = 140;
@@ -167,5 +168,84 @@ describe("StampBrush", () => {
     }
     expect(stats(d).covered).toBeGreaterThan(100);
     expect(rightHalf).toBe(0);
+  });
+
+  it("keepAspect preserves a non-square tip's proportions", () => {
+    const mask = createCanvas(40, 10);
+    const mctx = mask.getContext("2d");
+    mctx.fillStyle = "#fff";
+    mctx.fillRect(0, 0, 40, 10);
+    registerTipMask("test/wide", mask as never);
+    const bounds = (keepAspect: boolean) => {
+      const brush = new StampBrush({
+        key: "aspect-test",
+        label: "Aspect",
+        tips: ["test/wide"],
+        spacing: 1,
+        flow: 1,
+        keepAspect,
+      });
+      const d = pixels(
+        stroke({ points: [{ x: 120, y: 70, pressure: 1 }], size: 80 }),
+        brush,
+      );
+      let x0 = W;
+      let x1 = 0;
+      let y0 = H;
+      let y1 = 0;
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          if (d[(y * W + x) * 4 + 3] > 128) {
+            x0 = Math.min(x0, x);
+            x1 = Math.max(x1, x);
+            y0 = Math.min(y0, y);
+            y1 = Math.max(y1, y);
+          }
+        }
+      }
+      return { w: x1 - x0 + 1, h: y1 - y0 + 1 };
+    };
+    const kept = bounds(true);
+    expect(kept.w).toBeGreaterThan(76);
+    expect(kept.h).toBeLessThan(24);
+    const squashed = bounds(false);
+    expect(squashed.h).toBeGreaterThan(70);
+  });
+
+  it("count stamps extra deterministic dabs per step", () => {
+    const sparse = new StampBrush({
+      ...flat.spec,
+      key: "count-1",
+      spacing: 1.5,
+      scatter: 0.8,
+      scatterBothAxes: true,
+      flip: true,
+    });
+    const dense = new StampBrush({ ...sparse.spec, key: "count-3", count: 3 });
+    const one = stats(pixels(stroke(), sparse));
+    const three = stats(pixels(stroke(), dense));
+    expect(three.covered).toBeGreaterThan(one.covered * 1.5);
+    const again = Buffer.from(pixels(stroke(), dense));
+    expect(Buffer.from(pixels(stroke(), dense)).equals(again)).toBe(true);
+  });
+
+  it("every picker brush has a category and a persisted style key", () => {
+    for (const brush of brushRegistry.all()) {
+      expect(BRUSH_STYLES).toContain(brush.key);
+      if (!brush.legacy) expect(brush.category).toBeTruthy();
+    }
+  });
+
+  it("renders every stamp brush with its procedural fallback tip", () => {
+    for (const brush of brushRegistry.all()) {
+      if (!(brush instanceof StampBrush)) continue;
+      const preset = brush.presets?.[0];
+      const s = stroke({
+        id: `all-${brush.key}`,
+        brushStyle: brush.key as StrokeLike["brushStyle"],
+        size: Math.min(preset?.size ?? 14, 40),
+      });
+      expect(stats(pixels(s, brush)).covered, brush.key).toBeGreaterThan(100);
+    }
   });
 });

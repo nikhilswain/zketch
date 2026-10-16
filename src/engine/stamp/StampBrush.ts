@@ -1,4 +1,10 @@
-import type { Brush, BrushOptions, BrushPreset, StrokeLike } from "../types";
+import type {
+  Brush,
+  BrushCategory,
+  BrushOptions,
+  BrushPreset,
+  StrokeLike,
+} from "../types";
 import { hashString, seededRandom } from "../render/seededRandom";
 import { createCanvas } from "../render/canvasFactory";
 import { getTintedTip } from "./tips";
@@ -7,16 +13,23 @@ import { getGrainMask } from "./grain";
 export interface StampSpec {
   key: string;
   label: string;
+  category?: BrushCategory;
+  maxSize?: number;
   tips: readonly string[];
   spacing: number;
   flow: number;
+  count?: number;
   scatter?: number;
+  scatterBothAxes?: boolean;
+  keepAspect?: boolean;
+  flip?: boolean;
   sizeJitter?: number;
   sizePressure?: number;
   flowJitter?: number;
   flowPressure?: number;
   angleMode?: "fixed" | "direction" | "random";
   angle?: number;
+  directionOffset?: number;
   angleJitter?: number;
   roundness?: number;
   grain?: { id: string; scale: number; depth: number };
@@ -90,11 +103,15 @@ export function stampSmooth(
 export class StampBrush implements Brush {
   readonly key: string;
   readonly label: string;
+  readonly category?: BrushCategory;
+  readonly maxSize?: number;
   readonly presets?: BrushPreset[];
 
   constructor(readonly spec: StampSpec) {
     this.key = spec.key;
     this.label = spec.label;
+    this.category = spec.category;
+    this.maxSize = spec.maxSize;
     this.presets = spec.presets;
   }
 
@@ -174,7 +191,8 @@ export class StampBrush implements Brush {
       if (p.x > maxX) maxX = p.x;
       if (p.y > maxY) maxY = p.y;
     }
-    const pad = size * (0.75 + (this.spec.scatter ?? 0)) + 2 / scale;
+    const reach = (this.spec.scatter ?? 0) * (this.spec.scatterBothAxes ? 1.42 : 1);
+    const pad = size * (0.75 + reach) + 2 / scale;
     const xs: number[] = [];
     const ys: number[] = [];
     for (const [x, y] of [
@@ -285,9 +303,10 @@ export class StampBrush implements Brush {
     const rand = (i: number, k: number) =>
       seededRandom(seed + i * 7.137 + k * 0.917);
     const tips = spec.tips.map((id) => getTintedTip(id, stroke.color));
+    const count = Math.max(1, Math.round(spec.count ?? 1));
 
-    const placeDab = (
-      i: number,
+    const placeOne = (
+      r: (k: number) => number,
       x: number,
       y: number,
       pressure: number,
@@ -296,30 +315,39 @@ export class StampBrush implements Brush {
       const diameter =
         size *
         (1 - (spec.sizePressure ?? 0) * (1 - pressure)) *
-        (1 - (spec.sizeJitter ?? 0) * rand(i, 1));
+        (1 - (spec.sizeJitter ?? 0) * r(1));
       const flow =
         spec.flow *
         (1 - (spec.flowPressure ?? 0) * (1 - pressure)) *
-        (1 - (spec.flowJitter ?? 0) * rand(i, 2));
+        (1 - (spec.flowJitter ?? 0) * r(2));
       if (diameter <= 0 || flow <= 0) return;
       let angle =
         spec.angleMode === "direction"
-          ? dir
+          ? dir + (spec.directionOffset ?? 0)
           : spec.angleMode === "random"
-            ? rand(i, 3) * Math.PI * 2
+            ? r(3) * Math.PI * 2
             : (spec.angle ?? 0);
-      angle += (spec.angleJitter ?? 0) * (rand(i, 4) * 2 - 1);
+      angle += (spec.angleJitter ?? 0) * (r(4) * 2 - 1);
       if (scatter > 0) {
-        const off = (rand(i, 5) * 2 - 1) * scatter * diameter;
+        const off = (r(5) * 2 - 1) * scatter * diameter;
         x += -Math.sin(dir) * off;
         y += Math.cos(dir) * off;
+        if (spec.scatterBothAxes) {
+          const along = (r(7) * 2 - 1) * scatter * diameter;
+          x += Math.cos(dir) * along;
+          y += Math.sin(dir) * along;
+        }
       }
       const tip =
-        tips.length === 1 ? tips[0] : tips[Math.floor(rand(i, 6) * tips.length)];
+        tips.length === 1 ? tips[0] : tips[Math.floor(r(6) * tips.length)];
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);
-      const sx = diameter / tip.width;
-      const sy = (diameter * roundness) / tip.height;
+      const fit = spec.keepAspect
+        ? diameter / Math.max(tip.width, tip.height)
+        : 0;
+      let sx = fit || diameter / tip.width;
+      const sy = (fit || diameter / tip.height) * roundness;
+      if (spec.flip && r(8) < 0.5) sx = -sx;
       const da = cos * sx;
       const db = sin * sx;
       const dc = -sin * sy;
@@ -334,6 +362,18 @@ export class StampBrush implements Brush {
       );
       bctx.globalAlpha = Math.min(1, flow);
       bctx.drawImage(tip, -tip.width / 2, -tip.height / 2);
+    };
+
+    const placeDab = (
+      i: number,
+      x: number,
+      y: number,
+      pressure: number,
+      dir: number,
+    ) => {
+      for (let c = 0; c < count; c++) {
+        placeOne((k) => rand(i, k + c * 16), x, y, pressure, dir);
+      }
     };
 
     const state = { ...start };

@@ -4,6 +4,7 @@ import {
   type SnapshotIn,
   type SnapshotOut,
 } from "mobx-state-tree";
+import { BRUSH_STYLES, type BrushStyle } from "@/engine/types";
 
 // Base Point model - shared across all models
 export const Point = types
@@ -31,24 +32,7 @@ export const Stroke = types
     color: types.string,
     size: types.number,
     opacity: types.optional(types.number, 1),
-    brushStyle: types.enumeration("BrushStyle", [
-      "ink",
-      "eraser",
-      "spray",
-      "texture",
-      "marker",
-      "highlighter",
-      "airbrush",
-      "calligraphy",
-      "pencil",
-      "charcoal",
-      "pastel",
-      "gouache",
-      "drybrush",
-      "sponge",
-      "splatter",
-      "watercolor",
-    ]),
+    brushStyle: types.enumeration("BrushStyle", [...BRUSH_STYLES]),
     timestamp: types.number,
     startTime: types.optional(types.maybeNull(types.number), null),
     duration: types.optional(types.maybeNull(types.number), null),
@@ -90,23 +74,7 @@ export const BrushSettings = types.model("BrushSettings", {
 });
 
 // Export type aliases
-export type BrushStyle =
-  | "ink"
-  | "eraser"
-  | "spray"
-  | "texture"
-  | "marker"
-  | "highlighter"
-  | "airbrush"
-  | "calligraphy"
-  | "pencil"
-  | "charcoal"
-  | "pastel"
-  | "gouache"
-  | "drybrush"
-  | "sponge"
-  | "splatter"
-  | "watercolor";
+export type { BrushStyle };
 export type BackgroundType = "white" | "transparent" | "grid";
 
 export interface IStroke extends Instance<typeof Stroke> {}

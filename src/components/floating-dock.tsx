@@ -33,6 +33,22 @@ import {
   Cloud,
   Droplets,
   Droplet,
+  Blend,
+  Wheat,
+  Grip,
+  CloudFog,
+  Leaf,
+  Sprout,
+  Shrub,
+  TreePine,
+  Trees,
+  TreeDeciduous,
+  Sparkles,
+  Star,
+  Waves,
+  Wind,
+  Hash,
+  Slash,
 } from "lucide-react";
 
 const NumberBadge: React.FC<{ value: string; active?: boolean }> = ({
@@ -49,7 +65,7 @@ const NumberBadge: React.FC<{ value: string; active?: boolean }> = ({
 );
 import type { BrushStyle } from "@/models/CanvasModel";
 import type { ShapeKind } from "@/models/ShapeLayerModel";
-import { brushRegistry } from "@/engine/render/BrushRegistry";
+import { pickerBrushGroups } from "@/utils/brushCategories";
 import { applyBrushPreset } from "@/utils/applyBrushPreset";
 
 interface FloatingDockProps {
@@ -95,6 +111,29 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
       sponge: <Cloud className="w-4 h-4" />,
       splatter: <Droplets className="w-4 h-4" />,
       watercolor: <Droplet className="w-4 h-4" />,
+      oil: <Paintbrush className="w-4 h-4" />,
+      rake: <Wheat className="w-4 h-4" />,
+      flatbristle: <PaintbrushVertical className="w-4 h-4" />,
+      knife: <Slash className="w-4 h-4" />,
+      smear: <Wind className="w-4 h-4" />,
+      softflat: <Blend className="w-4 h-4" />,
+      wetflat: <Waves className="w-4 h-4" />,
+      crayon: <PencilLine className="w-4 h-4" />,
+      dabs: <Grip className="w-4 h-4" />,
+      streaks: <Wind className="w-4 h-4" />,
+      scratch: <Hash className="w-4 h-4" />,
+      dust: <Grip className="w-4 h-4" />,
+      clouds: <CloudFog className="w-4 h-4" />,
+      foliage: <Leaf className="w-4 h-4" />,
+      leaves: <Sprout className="w-4 h-4" />,
+      grass: <Wheat className="w-4 h-4" />,
+      bush: <Shrub className="w-4 h-4" />,
+      pine: <TreePine className="w-4 h-4" />,
+      forest: <Trees className="w-4 h-4" />,
+      tree: <TreeDeciduous className="w-4 h-4" />,
+      sparkle: <Sparkles className="w-4 h-4" />,
+      stars: <Star className="w-4 h-4" />,
+      glint: <Waves className="w-4 h-4" />,
     };
 
     const brushShortcuts: Record<string, string> = {
@@ -106,7 +145,7 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
       calligraphy: "9",
     };
 
-    const pickerBrushes = brushRegistry.all().filter((b) => !b.legacy);
+    const brushGroups = pickerBrushGroups();
 
     // Auto-hide functionality
     useEffect(() => {
@@ -279,36 +318,47 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
                 </Button>
 
                 {brushPickerOpen && (
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-white border border-gray-200 rounded-xl shadow-lg p-1.5 flex flex-col gap-0.5 min-w-[168px]">
-                    {pickerBrushes.map((b) => {
-                      const isActive =
-                        canvasStore.activeTool === "brush" &&
-                        canvasStore.currentBrushStyle === b.key;
-                      return (
-                        <button
-                          key={b.key}
-                          onClick={() => {
-                            selectBrush(b.key as BrushStyle);
-                            setBrushPickerOpen(false);
-                          }}
-                          className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm transition-colors ${
-                            isActive
-                              ? "bg-blue-50 text-blue-700"
-                              : "text-gray-700 hover:bg-gray-100"
-                          }`}
-                        >
-                          <span className="w-4 h-4 flex items-center justify-center">
-                            {brushIcons[b.key]}
-                          </span>
-                          <span className="flex-1 text-left">
-                            {b.label ?? b.key}
-                          </span>
-                          <span className="text-[10px] text-gray-400">
-                            {brushShortcuts[b.key] ?? ""}
-                          </span>
-                        </button>
-                      );
-                    })}
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-white border border-gray-200 rounded-xl shadow-lg p-1.5 w-[340px] max-h-[70vh] overflow-y-auto">
+                    {brushGroups.map((group) => (
+                      <div key={group.id} className="mb-1 last:mb-0">
+                        <div className="px-2 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                          {group.label}
+                        </div>
+                        <div className="grid grid-cols-2 gap-0.5">
+                          {group.brushes.map((b) => {
+                            const isActive =
+                              canvasStore.activeTool === "brush" &&
+                              canvasStore.currentBrushStyle === b.key;
+                            return (
+                              <button
+                                key={b.key}
+                                onClick={() => {
+                                  selectBrush(b.key as BrushStyle);
+                                  setBrushPickerOpen(false);
+                                }}
+                                className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm transition-colors ${
+                                  isActive
+                                    ? "bg-blue-50 text-blue-700"
+                                    : "text-gray-700 hover:bg-gray-100"
+                                }`}
+                              >
+                                <span className="w-4 h-4 flex items-center justify-center">
+                                  {brushIcons[b.key] ?? (
+                                    <Paintbrush className="w-4 h-4" />
+                                  )}
+                                </span>
+                                <span className="flex-1 text-left truncate">
+                                  {b.label ?? b.key}
+                                </span>
+                                <span className="text-[10px] text-gray-400">
+                                  {brushShortcuts[b.key] ?? ""}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

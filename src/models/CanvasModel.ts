@@ -6,6 +6,7 @@ import {
   getSnapshot,
   isStateTreeNode,
 } from "mobx-state-tree";
+import { BRUSH_STYLES, type BrushStyle } from "@/engine/types";
 import {
   Layer,
   createLayerId,
@@ -51,24 +52,7 @@ export const CanvasModel = types
     currentSize: types.optional(types.number, 4),
     eraserSize: types.optional(types.number, 20),
     currentBrushStyle: types.optional(
-      types.enumeration("BrushStyle", [
-        "ink",
-        "eraser",
-        "spray",
-        "texture",
-        "marker",
-        "highlighter",
-        "airbrush",
-        "calligraphy",
-        "pencil",
-        "charcoal",
-        "pastel",
-        "gouache",
-        "drybrush",
-        "sponge",
-        "splatter",
-        "watercolor",
-      ]),
+      types.enumeration("BrushStyle", [...BRUSH_STYLES]),
       "ink",
     ),
     background: types.optional(
@@ -629,28 +613,12 @@ export const CanvasModel = types
         self.saveToHistory();
       },
       setBrushStyle(
-        style:
-          | "ink"
-          | "eraser"
-          | "spray"
-          | "texture"
-          | "marker"
-          | "highlighter"
-          | "airbrush"
-          | "calligraphy"
-          | "pencil"
-          | "charcoal"
-          | "pastel"
-          | "gouache"
-          | "drybrush"
-          | "sponge"
-          | "splatter"
-          | "watercolor",
+        style: BrushStyle,
       ) {
         self.currentBrushStyle = style;
       },
       setPenSize(size: number) {
-        self.currentSize = Math.max(1, Math.min(100, size));
+        self.currentSize = Math.max(1, Math.min(400, size));
       },
       setEraserSize(size: number) {
         self.eraserSize = Math.max(1, Math.min(100, size));
@@ -1694,23 +1662,7 @@ export const CanvasModel = types
   });
 
 // Export type aliases for backward compatibility
-export type BrushStyle =
-  | "ink"
-  | "eraser"
-  | "spray"
-  | "texture"
-  | "marker"
-  | "highlighter"
-  | "airbrush"
-  | "calligraphy"
-  | "pencil"
-  | "charcoal"
-  | "pastel"
-  | "gouache"
-  | "drybrush"
-  | "sponge"
-  | "splatter"
-  | "watercolor";
+export type { BrushStyle };
 export type BackgroundType = "white" | "transparent" | "grid";
 
 export interface ICanvasModel extends Instance<typeof CanvasModel> {}

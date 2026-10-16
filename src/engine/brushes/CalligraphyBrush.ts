@@ -4,6 +4,7 @@ import { smoothPoints } from "../render/smooth";
 export class CalligraphyBrush implements Brush {
   key = "calligraphy" as const;
   label = "Calligraphy";
+  category = "draw" as const;
   presets: BrushPreset[] = [
     { id: "italic", label: "Italic", size: 28, opacity: 1, angle: 30 },
     { id: "classic", label: "Classic", size: 28, opacity: 1, angle: 45 },

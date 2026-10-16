@@ -4,6 +4,7 @@ import { smoothPoints } from "../render/smooth";
 export class HighlighterBrush implements Brush {
   key = "highlighter" as const;
   label = "Highlighter";
+  category = "draw" as const;
   presets: BrushPreset[] = [
     { id: "classic", label: "Classic", size: 34, opacity: 0.35 },
     { id: "narrow", label: "Narrow", size: 16, opacity: 0.45 },

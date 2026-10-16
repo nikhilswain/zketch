@@ -6,6 +6,7 @@ import type { Brush, BrushOptions, StrokeLike } from "../types";
 export class FreehandBrush implements Brush {
   key = "ink" as const;
   label = "Pen";
+  category = "draw" as const;
 
   render(
     ctx: CanvasRenderingContext2D,
