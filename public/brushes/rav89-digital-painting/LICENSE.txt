@@ -1,0 +1,5 @@
+License: Free for Commercial Use (MyPhotoshopBrushes, https://myphotoshopbrushes.com/licenses#free-commercial).
+
+Free to download and use in both personal and commercial projects. No attribution is required, though a credit is always appreciated. You may not redistribute or resell the files themselves, as standalone downloads or as part of a competing resource library.
+
+These tips are converted for use inside the Zketch brush engine only. The original .abr is not distributed with Zketch.
