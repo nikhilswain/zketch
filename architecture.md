@@ -119,7 +119,8 @@ src/
 │   ├── drawing-canvas.tsx     # Canvas host: mounts engine, wires InputManager
 │   ├── floating-dock.tsx      # Bottom tool dock (tools, shapes, zoom)
 │   ├── layers-panel.tsx       # Right layers panel + per-layer thumbnails/animation
-│   ├── export-dialog.tsx      # Export + share dialog
+│   ├── export-dialog.tsx      # Export + share dialog (preview pane + options column)
+│   ├── share/ShareViewer.tsx  # Shared viewer for /share and /share/[id] (pages only load data)
 │   ├── import-dialog.tsx      # Image import (file/URL/drag)
 │   ├── layer-animation-controls.tsx
 │   ├── mobile-canvas-view.tsx / mobile-drawing-app.tsx / mobile-slider.tsx
@@ -537,6 +538,14 @@ Persistence layers:
   - Dock state: `utils/dockLayout.ts` (panel → dock/order/collapsed, dock
     open flags, layout bottom | sidebars | minimal | custom; localStorage
     `zketch-dock-layout-v1`, bad data falls back to Bottom deck).
+- **Dialogs** (`ui/dialog.tsx`): dark `bg-zk-surface` sheet, 150 ms fade +
+  0.97 scale in place. Never add shadcn `slide-in-from-*` classes to centred
+  dialogs: tw-animate's transform stacks on Tailwind 4's `translate` centring
+  and the dialog flies in from the corner. Dialogs that shouldn't show a focus
+  ring on open focus the content (`onOpenAutoFocus` → preventDefault + focus).
+- **Vault** (`valut-view.tsx`): studio chrome; grid/list choice in
+  localStorage `zketch-vault-view`; delete goes through a confirm dialog;
+  Settings opens the same `SettingsPage`.
 - **`studio/SettingsPage.tsx`** — full-page Settings over the studio (Z menu →
   Settings, Esc closes; key events stop at the page so drawing shortcuts don't
   fire): Appearance (5 accents + custom HSV, live preview), Layout (3 layouts +

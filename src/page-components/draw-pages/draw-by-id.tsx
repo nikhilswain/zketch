@@ -45,29 +45,26 @@ const DrawByIdPage: React.FC = observer(() => {
     window.location.href = "/";
   };
 
-  // Loading state
   if (drawingExists === null) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">Loading drawing...</div>
+      <div className="flex min-h-screen items-center justify-center bg-zk-surface font-ui text-[13px] text-zk-muted">
+        Opening drawing…
       </div>
     );
   }
 
-  // Drawing not found
   if (!drawingExists) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
-        <h1 className="text-2xl font-bold">Drawing not found</h1>
-        <p className="text-muted-foreground">
-          The drawing with ID "{drawingId}" could not be found in your local
-          vault.
+      <div className="flex min-h-screen flex-col items-center justify-center bg-zk-surface px-6 text-center font-ui text-zk-text">
+        <h1 className="font-display text-[32px] font-semibold">Drawing not found</h1>
+        <p className="mt-3 max-w-md text-[14px] leading-relaxed text-zk-muted">
+          It isn’t in the vault on this device. Drawings are saved only in the browser they were made in.
         </p>
         <button
           onClick={handleBackToVault}
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+          className="mt-6 h-10 rounded-[4px] bg-zk-accent px-5 text-[14px] font-semibold text-zk-on-accent hover:brightness-110"
         >
-          Back to Vault
+          Back to your drawings
         </button>
       </div>
     );
