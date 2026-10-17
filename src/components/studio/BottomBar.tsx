@@ -32,6 +32,7 @@ import { BrushLibrary } from "./panels/BrushesPanel";
 import { PresetsBody } from "./panels/PresetsPanel";
 import { SWATCHES } from "./panels/ColourPanel";
 import { PANELS } from "./panels";
+import { visibleCanvasCenter } from "@/utils/viewport";
 
 const SHAPES: { kind: ShapeKind; label: string; Icon: typeof SquareIcon }[] = [
   { kind: "rectangle", label: "Rectangle", Icon: SquareIcon },
@@ -110,6 +111,11 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
   useEffect(() => {
     if (!drawing) setPopover(false);
   }, [drawing]);
+
+  const zoomBy = (factor: number) => {
+    const c = visibleCanvasCenter();
+    canvasStore.zoomAt(canvasStore.zoom * factor, c.x, c.y);
+  };
 
   const openBrushes = () => {
     const dock = dockLayout.state.panels.brushes.dock;
@@ -297,11 +303,11 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
       <div className="flex-1" />
 
       <div className="hidden items-center gap-0.5 text-[12px] tabular-nums min-[1000px]:flex">
-        <button aria-label="Zoom out" onClick={() => canvasStore.setZoom(Math.max(0.1, canvasStore.zoom / 1.2))} className="h-8 w-8 rounded-[4px] text-[15px] hover:bg-zk-raised">
+        <button aria-label="Zoom out" onClick={() => zoomBy(1 / 1.2)} className="h-8 w-8 rounded-[4px] text-[15px] hover:bg-zk-raised">
           −
         </button>
         <span className="w-11 text-center">{Math.round(canvasStore.zoom * 100)}%</span>
-        <button aria-label="Zoom in" onClick={() => canvasStore.setZoom(Math.min(5, canvasStore.zoom * 1.2))} className="h-8 w-8 rounded-[4px] text-[15px] hover:bg-zk-raised">
+        <button aria-label="Zoom in" onClick={() => zoomBy(1.2)} className="h-8 w-8 rounded-[4px] text-[15px] hover:bg-zk-raised">
           +
         </button>
         <button aria-label="Fit to screen" title="Fit to screen" onClick={onFit} className="flex h-8 w-8 items-center justify-center rounded-[4px] hover:bg-zk-raised">

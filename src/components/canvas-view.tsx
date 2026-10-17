@@ -29,16 +29,18 @@ import { toast } from "sonner";
 import type { StrokeLike } from "@/engine";
 import type { PlaybackState } from "@/engine/AnimationPlaybackEngine";
 import { reaction } from "mobx";
+import { newPage } from "@/utils/page";
 
 interface CanvasViewProps {
   editingDrawingId: string | null;
+  newPageSize?: { width: number; height: number } | null;
   onBackToVault: () => void;
 }
 
 const AUTOSAVE_DEBOUNCE_MS = 500;
 
 const CanvasView: React.FC<CanvasViewProps> = observer(
-  ({ editingDrawingId, onBackToVault }) => {
+  ({ editingDrawingId, newPageSize = null, onBackToVault }) => {
     const canvasStore = useCanvasStore();
     const vaultStore = useVaultStore();
     const settingsStore = useSettingsStore();
@@ -106,6 +108,11 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         if (drawing) {
           setDrawingName(drawing.name);
           canvasStore.setBackground(drawing.background as any);
+          canvasStore.loadPage(
+            drawing.page
+              ? { x: drawing.page.x, y: drawing.page.y, width: drawing.page.width, height: drawing.page.height }
+              : null,
+          );
 
           // Load layers from saved drawing - handle both stroke and image layers
           if (drawing.layers && drawing.layers.length > 0) {
@@ -197,6 +204,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           }
         }
       } else {
+        canvasStore.loadPage(newPageSize ? newPage(newPageSize.width, newPageSize.height) : null);
         canvasStore.clear();
         canvasStore.setBackground(settingsStore.defaultBackground as BackgroundType);
         setDrawingName("Untitled Drawing");
@@ -227,6 +235,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             layersToSave as any,
             canvasStore.activeLayerId,
             drawingName,
+            canvasStore.page ? { ...canvasStore.page } : null,
           );
         } else {
           const newDrawing = await vaultStore.addDrawing(
@@ -235,6 +244,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             canvasStore.background as any,
             layersToSave as any,
             canvasStore.activeLayerId,
+            canvasStore.page ? { ...canvasStore.page } : null,
           );
           if (newDrawing) {
             setCurrentDrawingId(newDrawing.id);

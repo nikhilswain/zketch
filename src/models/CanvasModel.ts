@@ -19,6 +19,15 @@ import { createShapeElement, type ShapeKind } from "./ShapeLayerModel";
 // Import shared models and re-export for backward compatibility
 import { Point, Stroke, BrushSettings } from "./SharedModels";
 export { Point, Stroke, BrushSettings } from "./SharedModels";
+import { clampZoom } from "@/utils/zoom";
+import type { Page } from "@/utils/page";
+
+export const PageModel = types.model("Page", {
+  x: types.number,
+  y: types.number,
+  width: types.number,
+  height: types.number,
+});
 
 export const CanvasState = types.model("CanvasState", {
   strokes: types.array(Stroke),
@@ -32,6 +41,7 @@ export const CanvasState = types.model("CanvasState", {
   zoom: types.number,
   panX: types.number,
   panY: types.number,
+  page: types.optional(types.maybeNull(PageModel), null),
 });
 
 export const CanvasModel = types
@@ -62,6 +72,7 @@ export const CanvasModel = types
     zoom: types.optional(types.number, 1),
     panX: types.optional(types.number, 0),
     panY: types.optional(types.number, 0),
+    page: types.optional(types.maybeNull(PageModel), null),
     brushSettings: types.optional(BrushSettings, {}),
     // Eraser configuration - use optimized advanced eraser for all backgrounds
     useAdvancedEraserForAllBackgrounds: types.optional(types.boolean, true),
@@ -487,6 +498,7 @@ export const CanvasModel = types
         zoom: self.zoom,
         panX: self.panX,
         panY: self.panY,
+        page: self.page ? { ...getSnapshot(self.page) } : null,
         selectionAnchor: self.selectionAnchor
           ? {
               x: self.selectionAnchor.x,
@@ -551,6 +563,7 @@ export const CanvasModel = types
       self.zoom = state.zoom;
       self.panX = state.panX;
       self.panY = state.panY;
+      self.page = state.page ? { ...state.page } : null;
 
       // Restore the selection anchor so the bbox snaps back with elements on undo/redo.
       const anchor = (state as any).selectionAnchor as
@@ -645,7 +658,22 @@ export const CanvasModel = types
         self.background = background;
       },
       setZoom(zoom: number) {
-        self.zoom = Math.max(0.1, Math.min(5, zoom));
+        self.zoom = clampZoom(zoom);
+      },
+      zoomAt(zoom: number, screenX: number, screenY: number) {
+        const next = clampZoom(zoom);
+        const wx = (screenX - self.panX) / self.zoom;
+        const wy = (screenY - self.panY) / self.zoom;
+        self.zoom = next;
+        self.panX = screenX - wx * next;
+        self.panY = screenY - wy * next;
+      },
+      loadPage(page: Page | null) {
+        self.page = page ? { ...page } : null;
+      },
+      setPage(page: Page | null) {
+        self.page = page ? { ...page } : null;
+        self.saveToHistory();
       },
       setPan(x: number, y: number) {
         self.panX = x;

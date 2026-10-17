@@ -1,7 +1,8 @@
 import { types, type Instance, type SnapshotIn } from "mobx-state-tree";
 import { DexieService } from "@/services/DexieService";
 import { BlobStorageService } from "@/services/BlobStorageService";
-import { Stroke } from "./CanvasModel";
+import { Stroke, PageModel } from "./CanvasModel";
+import type { Page } from "@/utils/page";
 
 // Stroke data interface for persistence
 export interface IStrokeData {
@@ -122,6 +123,7 @@ export interface ISavedDrawingData {
   createdAt: Date;
   updatedAt: Date;
   background: string;
+  page?: Page;
 }
 
 // Saved layer model for MST (stroke layers only - for backward compatibility)
@@ -145,6 +147,7 @@ export const SavedDrawing = types.model("SavedDrawing", {
   createdAt: types.Date,
   updatedAt: types.Date,
   background: types.string,
+  page: types.maybe(PageModel),
 });
 
 export const StorageInfo = types.model("StorageInfo", {
@@ -208,9 +211,11 @@ export const VaultModel = types
       background: string,
       layers: ILayerData[],
       activeLayerId: string,
+      page: Page | null = null,
     ) {
       const drawing = self.drawings.find((d) => d.id === id);
       if (drawing) {
+        drawing.page = page ? { ...page } : undefined;
         // Update layers - now stored as frozen JSON, supports both stroke and image layers
         (drawing as any).layers = layers;
         drawing.activeLayerId = activeLayerId || layers[0]?.id || "";
@@ -263,6 +268,9 @@ export const VaultModel = types
           createdAt: new Date(drawing.createdAt),
           updatedAt: new Date(drawing.updatedAt),
           background: drawing.background,
+          ...(drawing.page
+            ? { page: { x: drawing.page.x, y: drawing.page.y, width: drawing.page.width, height: drawing.page.height } }
+            : {}),
         });
       } catch (error) {
         console.error("Failed to persist to Dexie:", error);
@@ -276,6 +284,7 @@ export const VaultModel = types
       background: string,
       layers: ILayerData[],
       activeLayerId: string,
+      page: Page | null = null,
     ) {
       const drawingData = {
         id: crypto.randomUUID(),
@@ -286,6 +295,7 @@ export const VaultModel = types
         createdAt: new Date(),
         updatedAt: new Date(),
         background,
+        ...(page ? { page: { ...page } } : {}),
       };
 
       self.addDrawingToList(drawingData);
@@ -341,6 +351,7 @@ export const VaultModel = types
       layers: ILayerData[],
       activeLayerId: string,
       name?: string,
+      page: Page | null = null,
     ) {
       // Get old thumbnail to clean up if it changed
       const drawing = self.drawings.find((d) => d.id === id);
@@ -357,6 +368,7 @@ export const VaultModel = types
         background,
         layers,
         activeLayerId,
+        page,
       );
 
       // Clean up old thumbnail blob if it changed

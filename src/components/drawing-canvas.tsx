@@ -18,6 +18,7 @@ import type { StrokeInput } from "@/engine/types";
 import { createGetBrushOptions } from "@/engine/brushOptions";
 import { ImportService } from "@/services/ImportService";
 import { toast } from "sonner";
+import { clampZoom } from "@/utils/zoom";
 
 interface DrawingCanvasProps {
   isDrawingMode: boolean;
@@ -569,10 +570,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         if (e.ctrlKey) {
           // Zooming branch (supports pinch zoom because browsers synthesize ctrlKey)
           const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-          const newZoom = Math.max(
-            0.1,
-            Math.min(5, canvasStore.zoom * zoomFactor),
-          );
+          const newZoom = clampZoom(canvasStore.zoom * zoomFactor);
           const rect = rootRef.current?.getBoundingClientRect();
           if (rect) {
             const mouseX = e.clientX - rect.left;
@@ -1125,7 +1123,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             const localX = gesture.zoomCenterX - rect.left;
             const localY = gesture.zoomCenterY - rect.top;
 
-            const newZoom = Math.max(0.1, Math.min(5, curZoom * gesture.zoomDelta));
+            const newZoom = clampZoom(curZoom * gesture.zoomDelta);
             const worldX = (localX - curPanX) / curZoom;
             const worldY = (localY - curPanY) / curZoom;
             const newPanX = localX - worldX * newZoom + gesture.panDeltaX;
