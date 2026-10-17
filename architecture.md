@@ -51,7 +51,7 @@ Slogan from README: *"A simple drawing app where you can sketch anything you wan
 | Drawing | **perfect-freehand**, Canvas 2D |
 | Icons | lucide-react + local `src/icons/*` |
 | Hosting | Cloudflare Pages + KV (`ZKETCH_SHARES`) |
-| Color picker | `@zzro/z-color-picker` |
+| Color picker | own `studio/HsvPicker.tsx` |
 
 ```bash
 npm install
@@ -124,7 +124,7 @@ src/
 │   ├── layer-animation-controls.tsx
 │   ├── mobile-canvas-view.tsx / mobile-drawing-app.tsx / mobile-slider.tsx
 │   ├── drawing-app.tsx / valut-view.tsx   (note: "valut" typo is intentional/baked in)
-│   ├── sidebar/               # IconBar + draggable FloatingPanel + settings panels
+│   ├── studio/                # drawing-screen shell, bottom bar, docks, panels, StrokeTrack
 │   └── ui/                    # shadcn primitives
 │
 ├── services/         # Storage + IO
@@ -508,31 +508,48 @@ Persistence layers:
   toggle, group drag), transform (single vs group via `groupTransformRef`),
   eraser pending-delete scan, wheel zoom (Ctrl) / pan (Shift+wheel), Space
   pan override, clipboard image paste, and the eraser circular cursor.
-- **`canvas-view.tsx`** — desktop editor shell. Floating header (name, save
-  status, undo/redo/clear), `IconBar` + floating sidebar panels, `LayersPanel`,
-  `FloatingDock`, export/import dialogs, autosave, animation playback state,
-  canvas lock while animating.
-- **`floating-dock.tsx`** — bottom dock: Pan, Select(1), the brush button
-  (opens `brush-picker/BrushPicker.tsx`: 3-column grid of pre-rendered stroke
-  previews from `public/brushes/previews/`, tabs All/Draw/Paint/Texture/Nature/
-  Effects, All = every category under headings; selected = soft grey fill;
-  closes on pick, Esc or outside click), Eraser(3), Shapes(5) + shape picker
-  popover, zoom out / % / zoom in / fit. Picking calls
-  `brushMemory.selectBrush`.
-- **`layers-panel.tsx`** — per-layer row with generated thumbnail (via shared
-  `renderStroke`/`renderShape`, rendered at 3× then downscaled), visibility, lock,
-  focus/solo, rename, duplicate, reorder, opacity, delete, clear strokes, and
-  expandable animation controls. Layer list is reversed (top = last).
-- **`sidebar/`** — `index.tsx` (IconBar: Tool/Shape/Color/Background/TouchMode/
-  Import/Export) + draggable `FloatingPanel` + panels:
-  `ToolSettingsPanel` + `sidebar/brush-settings/` (name + category, live preview
-  `StrokeCanvas`, `PresetList` rows that draw each preset's own stroke and mark
-  the active one "edited" with Reset, size (max `Brush.maxSize`)/opacity, nib
-  angle or softness where relevant, collapsible `StrokeSection` showing only
-  `Brush.strokeSettings`; eraser keeps its own view),
-  `ShapeSettingsPanel`
-  (stroke width/opacity/corner radius/fill), `ColorPanel` (stroke/fill target),
-  `BackgroundPanel`, `TouchModePanel`.
+- **`canvas-view.tsx`** — desktop editor logic (load/autosave, rename, export/
+  import/clear dialogs, animation playback state and canvas lock); renders the
+  studio shell and passes animation handlers through `studio/StudioContext`.
+- **`studio/`** — the drawing screen UI (spec `.work/specs/2026-10-17-app-redesign-design.md`):
+  - `StudioShell` — canvas viewport between the left/right docks, over the
+    bottom deck and bar. Desktop (≥1100 px): docks reserve space and the view is
+    pan-compensated when the viewport's left edge moves; below 1100 px docks
+    overlay the canvas and close on pointer-down on `[data-canvas-root]`.
+    Shows the layers strip when the Layers dock is closed and reopen tabs for
+    closed sidebars.
+  - `TopLeftBlock` (Z menu: rename, vault, import, export, background, touch &
+    stylus, layout, clear; name input; save status), `TopRightBlock` (undo,
+    redo, Share → export dialog).
+  - `BottomBar` — tools (select, draw, erase, shapes, pan), tool-dependent area
+    (brush chip + Size/Opacity, eraser size + whole-stroke mode, shape kinds +
+    stroke), colour + swatches, zoom/fit, deck toggle. In the Minimal layout
+    the brush chip opens a popover (brush grid + presets).
+  - `DockArea` (one per dock; drag-and-drop target with drop line),
+    `PanelFrame` (grip, title, collapse, dock-left/bottom/right buttons;
+    `PanelVariantContext` = deck | side | popover), `panels/` (Brushes,
+    Presets, Stroke, Colour with `HsvPicker`, Layers + `LayersStrip`, Shapes;
+    registry in `panels/index.ts`).
+  - `StrokeTrack` — the only slider style for app settings: a picture of the
+    setting (`trackShapes.ts`: size wedge, opacity checkerboard, stabilizer
+    wobble, width variation, taper, flat), notch knob, value tag, keyboard,
+    double-click to type, `role="slider"`.
+  - Dock state: `utils/dockLayout.ts` (panel → dock/order/collapsed, dock
+    open flags, layout bottom | sidebars | minimal | custom; localStorage
+    `zketch-dock-layout-v1`, bad data falls back to Bottom deck).
+- **Tokens and accent**: `styles/global.css` defines `--zk-*` colours (Tailwind
+  `bg-zk-surface`, `text-zk-muted`, `bg-zk-accent`, …) and `font-display`
+  (Fraunces) / `font-ui` (Instrument Sans); shadcn variables map onto them.
+  `SettingsModel.accent` (default Coral `#FF6B5B`) is applied live by
+  `utils/accent.ts` to `--zk-accent` and to on-canvas selection overlays via
+  `engine/render/overlayColor.ts`.
+- **`layers-panel.tsx`** — per-layer row with generated thumbnail
+  (`useLayerThumbnail`, shared renderers at 3× then downscaled), visibility,
+  lock, focus/solo, rename, duplicate, reorder, opacity (StrokeTrack), delete,
+  clear, animation controls. `embedded` hides its own header (the studio panel
+  shows `LayersActions` in its frame). Layer list is reversed (top = last).
+- **`floating-dock.tsx`** + `brush-picker/BrushPicker.tsx` — only used by the
+  phone-size `mobile-canvas-view.tsx` now.
 - **`valut-view.tsx`** — vault gallery (grid/list, search, sort, rename, delete,
   storage usage, async thumbnail loading). *(Filename typo is load-bearing.)*
 - **Mobile**: `drawing-app.tsx` switches to `MobileDrawingApp` below 768px;
@@ -639,7 +656,7 @@ toggle used by `MobileDrawingApp`) contains the mobile/desktop switch.
 
 ### 11.2 Eraser
 
-Two modes (Settings → `eraserWholeStroke`, shown in `ToolSettingsPanel`):
+Two modes (Settings → `eraserWholeStroke`, toggled in the bottom bar while erasing):
 
 - **Pixel (default, off)** — eraser is committed as a stroke with
   `brushStyle:"eraser"`; engine renders it `destination-out` on the layer.
@@ -717,7 +734,7 @@ While animating, `canvasLocked` blocks all drawing/import.
 | Export format/parity | `ExportService`, `ThumbnailService`, `export-dialog.tsx` |
 | Keyboard shortcut | `utils/keyBindings.ts` + `hooks/useKeyboardShortcuts.ts` |
 | Share/API | `services/ShareService.ts`, `pages/api/share/*`, `export-dialog.tsx` |
-| New sidebar panel | `components/sidebar/` + wire into `canvas-view.tsx` + `sidebar/index.tsx` |
+| New studio panel | `components/studio/panels/` + `PanelId` and preset placement in `utils/dockLayout.ts` + `panels/index.ts` |
 
 ---
 
