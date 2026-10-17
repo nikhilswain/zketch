@@ -35,4 +35,6 @@ because `currentColor` only works for inline SVG.
 
 ## Building
 
-`node build.mjs` regenerates `svg/`, `sprite.svg` and `gallery.html`.
+`node build.mjs` regenerates `svg/`, `sprite.svg` and `gallery.html`, and writes nothing outside
+this folder. `node build.mjs --app <file.tsx>` also writes React components for the icons named in
+`app.json` to that file (Zketch uses this for its own copy).

@@ -103,7 +103,7 @@ const PanelFrame: React.FC<PanelFrameProps> = observer(
               className="flex flex-1 items-center gap-1.5 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-zk-muted hover:text-zk-text"
             >
               {title}
-              <ChevronRightIcon size={10} className={`transition-transform ${collapsed ? "" : "rotate-90"}`} />
+              <ChevronRightIcon size={13} className={`transition-transform ${collapsed ? "" : "rotate-90"}`} />
             </button>
             {actions}
             <div className="ml-1 flex gap-0.5">

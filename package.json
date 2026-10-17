@@ -10,7 +10,7 @@
     "test": "vitest run",
     "brushes": "node tools/convert-brushes.ts && npm run brushes:previews",
     "brushes:previews": "vite-node --config vitest.config.ts tools/render-brush-previews.ts",
-    "icons": "node icons/build.mjs"
+    "icons": "node icons/build.mjs --app src/components/icons/index.tsx"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^12.6.7",
