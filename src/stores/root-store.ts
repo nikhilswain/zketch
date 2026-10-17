@@ -4,6 +4,7 @@ import { VaultModel } from "../models/VaultModel";
 import { SettingsModel } from "../models/SettingsModel";
 import { installBrushMemory } from "../utils/brushMemory";
 import { installAccent } from "../utils/accent";
+import { loadDockLayout } from "../utils/dockLayout";
 
 export const RootStore = types
   .model("RootStore", {
@@ -25,6 +26,7 @@ export const rootStore = RootStore.create({});
 if (typeof window !== "undefined") {
   installBrushMemory(rootStore.canvasModel);
   installAccent(rootStore.settingsModel);
+  loadDockLayout();
 }
 
 // Auto-increment renderVersion on any visual state change.
