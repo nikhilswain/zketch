@@ -7,6 +7,7 @@ export const poly = (points, radii = 0, opts = {}) => ({
   radii: Array.isArray(radii) ? radii : points.map(() => radii),
   closed: opts.closed ?? true,
 });
+export const seg = (x1, y1, x2, y2) => poly([[x1, y1], [x2, y2]], 0, { closed: false });
 export const path = (d) => ({ kind: "path", d });
 export const soft = (d, radius) => ({ kind: "soft", d, radius });
 export const dot = (x, y) => ({ kind: "dot", x, y });
@@ -316,4 +317,33 @@ export function mirrorX(def) {
       throw new Error(`mirrorX does not support ${s.kind}`);
     }),
   };
+}
+
+export function rotate(def, deg) {
+  const t = (deg * Math.PI) / 180;
+  const c = Math.cos(t);
+  const s = Math.sin(t);
+  const turn = ([x, y]) => [12 + (x - 12) * c - (y - 12) * s, 12 + (x - 12) * s + (y - 12) * c];
+  return {
+    strokes: def.strokes.map((st) => {
+      if (st.kind === "poly") return { ...st, points: st.points.map(turn) };
+      if (st.kind === "dot") {
+        const [x, y] = turn([st.x, st.y]);
+        return { ...st, x, y };
+      }
+      if (st.kind === "ring" || st.kind === "arc") {
+        const [cx, cy] = turn([st.cx, st.cy]);
+        return st.kind === "arc" ? { ...st, cx, cy, from: st.from + deg, to: st.to + deg } : { ...st, cx, cy };
+      }
+      throw new Error(`rotate does not support ${st.kind}`);
+    }),
+  };
+}
+
+export function rect(cx, cy, w, h, radius, deg = 0) {
+  const t = (deg * Math.PI) / 180;
+  const c = Math.cos(t);
+  const s = Math.sin(t);
+  const corner = (dx, dy) => [cx + dx * c - dy * s, cy + dx * s + dy * c];
+  return poly([corner(-w / 2, -h / 2), corner(w / 2, -h / 2), corner(w / 2, h / 2), corner(-w / 2, h / 2)], radius);
 }
