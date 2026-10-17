@@ -22,6 +22,7 @@ import StudioShell from "./studio/StudioShell";
 import TopLeftBlock from "./studio/TopLeftBlock";
 import TopRightBlock from "./studio/TopRightBlock";
 import { StudioContext } from "./studio/StudioContext";
+import SettingsPage from "./studio/SettingsPage";
 import type { ExportFormat } from "@/models/SettingsModel";
 import type { BackgroundType } from "@/models/CanvasModel";
 import { toast } from "sonner";
@@ -46,6 +47,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     const isDrawingMode = canvasStore.activeTool !== "pan";
     const [showExportDialog, setShowExportDialog] = useState(false);
     const [showImportDialog, setShowImportDialog] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
     const [showClearModal, setShowClearModal] = useState(false);
     // Track the current drawing ID (may differ from prop after first save of new drawing)
     const [currentDrawingId, setCurrentDrawingId] = useState<string | null>(
@@ -194,6 +196,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         }
       } else {
         canvasStore.clear();
+        canvasStore.setBackground(settingsStore.defaultBackground as BackgroundType);
         setDrawingName("Untitled Drawing");
       }
     }, [editingDrawingId, canvasStore, vaultStore]);
@@ -464,6 +467,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               onImport={() => setShowImportDialog(true)}
               onExport={handleShowExportDialog}
               onClear={handleClear}
+              onOpenSettings={() => setShowSettings(true)}
             />
           }
           topRight={<TopRightBlock onShare={handleShowExportDialog} />}
@@ -515,6 +519,8 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           onFlattenLayers={() => canvasStore.flattenAllLayers()}
           layers={canvasStore.exportLayers as any}
         />
+
+        {showSettings && <SettingsPage onClose={() => setShowSettings(false)} />}
 
         <ImportDialog
           isOpen={showImportDialog}

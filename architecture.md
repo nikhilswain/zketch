@@ -537,6 +537,12 @@ Persistence layers:
   - Dock state: `utils/dockLayout.ts` (panel → dock/order/collapsed, dock
     open flags, layout bottom | sidebars | minimal | custom; localStorage
     `zketch-dock-layout-v1`, bad data falls back to Bottom deck).
+- **`studio/SettingsPage.tsx`** — full-page Settings over the studio (Z menu →
+  Settings, Esc closes; key events stop at the page so drawing shortcuts don't
+  fire): Appearance (5 accents + custom HSV, live preview), Layout (3 layouts +
+  reset), Canvas (default background for new drawings, applied in
+  `canvas-view` when a new drawing starts), Drawing (touch & stylus mode,
+  eraser mode), Shortcuts (from `KEY_BINDINGS`, one row per action).
 - **Tokens and accent**: `styles/global.css` defines `--zk-*` colours (Tailwind
   `bg-zk-surface`, `text-zk-muted`, `bg-zk-accent`, …) and `font-display`
   (Fraunces) / `font-ui` (Instrument Sans); shadcn variables map onto them.
