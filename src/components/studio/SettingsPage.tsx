@@ -7,6 +7,7 @@ import { ACCENTS } from "@/utils/accent";
 import { applyLayout, dockLayout, type LayoutId } from "@/utils/dockLayout";
 import { KEY_BINDINGS, type KeyBinding } from "@/utils/keyBindings";
 import HsvPicker from "./HsvPicker";
+import { SURROUND, type SurroundTone } from "@/utils/page";
 
 const SECTIONS = [
   { id: "appearance", label: "Appearance" },
@@ -20,6 +21,11 @@ const LAYOUTS: { id: Exclude<LayoutId, "custom">; label: string; hint: string }[
   { id: "bottom", label: "Bottom deck", hint: "Brushes, presets, stroke and colour open above the bar; layers on the right." },
   { id: "sidebars", label: "Sidebars", hint: "Layers on the left, everything else in a right sidebar. The bottom stays one slim bar." },
   { id: "minimal", label: "Minimal", hint: "Just the bar and a layers strip. The brush chip opens brushes in a popover." },
+];
+
+const SURROUNDS: { id: SurroundTone; label: string }[] = [
+  { id: "light", label: "Light" },
+  { id: "dark", label: "Dark" },
 ];
 
 const BACKGROUNDS = [
@@ -238,6 +244,16 @@ const SettingsPage: React.FC<{ onClose: () => void }> = observer(({ onClose }) =
                             : "repeating-conic-gradient(#3A3A40 0% 25%, #222226 0% 50%) 0 0 / 10px 10px",
                     }}
                   />
+                </Option>
+              ))}
+            </div>
+            <p className="mb-3 mt-6 text-[13px] text-zk-muted">Around fixed-size pages, the workspace outside the page.</p>
+            <div className="grid grid-cols-2 gap-2">
+              {SURROUNDS.map((t) => (
+                <Option key={t.id} selected={settings.surround === t.id} label={t.label} onClick={() => settings.setSurround(t.id)}>
+                  <span className="flex h-12 w-full items-center justify-center rounded-[4px]" style={{ background: SURROUND[t.id] }}>
+                    <span className="h-8 w-6 bg-white shadow-[0_2px_6px_rgba(0,0,0,0.25)]" />
+                  </span>
                 </Option>
               ))}
             </div>

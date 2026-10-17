@@ -41,6 +41,7 @@ export const SettingsModel = types
     // (deletes whole strokes/shapes, fade preview, commit on release).
     eraserWholeStroke: types.optional(types.boolean, false),
     accent: types.optional(types.string, "#FF6B5B"),
+    surround: types.optional(types.enumeration("SurroundTone", ["light", "dark"]), "light"),
   })
   .views((self) => ({
     get defaultSettings() {
@@ -73,6 +74,7 @@ export const SettingsModel = types
           touchMode: self.touchMode,
           eraserWholeStroke: self.eraserWholeStroke,
           accent: self.accent,
+          surround: self.surround,
         };
         localStorage.setItem("drawing-app-settings", JSON.stringify(settings));
       } catch (error) {
@@ -114,6 +116,9 @@ export const SettingsModel = types
             /^#[0-9a-fA-F]{6}$/.test(settings.accent)
           ) {
             self.accent = settings.accent;
+          }
+          if (settings.surround === "light" || settings.surround === "dark") {
+            self.surround = settings.surround;
           }
         }
       } catch (error) {
@@ -167,6 +172,10 @@ export const SettingsModel = types
       },
       setEraserWholeStroke(v: boolean) {
         self.eraserWholeStroke = v;
+        saveToStorage();
+      },
+      setSurround(tone: "light" | "dark") {
+        self.surround = tone;
         saveToStorage();
       },
       setAccent(hex: string) {

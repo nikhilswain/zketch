@@ -19,6 +19,7 @@ import { createGetBrushOptions } from "@/engine/brushOptions";
 import { ImportService } from "@/services/ImportService";
 import { toast } from "sonner";
 import { clampZoom } from "@/utils/zoom";
+import { SURROUND, type SurroundTone } from "@/utils/page";
 
 interface DrawingCanvasProps {
   isDrawingMode: boolean;
@@ -211,6 +212,32 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       engineRef.current?.setBackground(canvasStore.background as any);
       engineRef.current?.invalidate();
     }, [canvasStore.background]);
+
+    useEffect(
+      () =>
+        reaction(
+          () => {
+            const p = canvasStore.page;
+            return p ? `${p.x}|${p.y}|${p.width}|${p.height}` : "";
+          },
+          () => {
+            const p = canvasStore.page;
+            engineRef.current?.setPage(p ? { x: p.x, y: p.y, width: p.width, height: p.height } : null);
+          },
+          { fireImmediately: true },
+        ),
+      [canvasStore],
+    );
+
+    useEffect(
+      () =>
+        reaction(
+          () => settingsStore.surround as SurroundTone,
+          (tone) => engineRef.current?.setSurround(SURROUND[tone], tone === "dark"),
+          { fireImmediately: true },
+        ),
+      [settingsStore],
+    );
 
     useEffect(
       () =>

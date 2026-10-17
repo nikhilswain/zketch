@@ -19,6 +19,7 @@ import type {
   ImageLayerLike,
   ShapeElementLike,
   TransformableLayer,
+  PageRect,
 } from "./types";
 import { isShapeElement } from "./types";
 
@@ -68,6 +69,10 @@ export class CanvasEngine {
   private rafId: number | null = null;
   private invalid = true;
   private background: EngineConfig["background"];
+  private page: PageRect | null = null;
+  private surround = "#D9D7D2";
+  private surroundDark = false;
+  private checker: CanvasPattern | null = null;
   private preview: StrokeLike | null = null;
   private previewShape: ShapeElementLike | null = null;
   private marquee: { x: number; y: number; width: number; height: number } | null = null;
@@ -196,6 +201,20 @@ export class CanvasEngine {
     this.background = bg;
     this.invalidate();
   }
+  setPage(page: PageRect | null) {
+    this.page = page ? { ...page } : null;
+    this.invalidate();
+  }
+  setSurround(color: string, dark: boolean) {
+    this.surround = color;
+    this.surroundDark = dark;
+    this.invalidate();
+  }
+  private pageOnScreen() {
+    const p = this.page!;
+    const { panX, panY, zoom } = this.pz;
+    return { x: panX + p.x * zoom, y: panY + p.y * zoom, width: p.width * zoom, height: p.height * zoom };
+  }
   setPreviewStroke(s: StrokeLike | null) {
     this.preview = s;
     this.invalidate();
@@ -279,6 +298,10 @@ export class CanvasEngine {
     const ctx = this.bgCtx;
     const c = this.bg;
     ctx.clearRect(0, 0, c.width, c.height);
+    if (this.page) {
+      this.renderPageBackground(ctx, c);
+      return;
+    }
     if (this.background === "white") {
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, c.width, c.height);
@@ -288,6 +311,61 @@ export class CanvasEngine {
       // Draw checkerboard pattern to indicate transparency
       this.drawCheckerboard(ctx, c.width, c.height);
     }
+  }
+
+  private renderPageBackground(ctx: CanvasRenderingContext2D, c: HTMLCanvasElement) {
+    const r = this.pageOnScreen();
+    ctx.fillStyle = this.surround;
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.save();
+    ctx.shadowColor = this.surroundDark ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.18)";
+    ctx.shadowBlur = this.surroundDark ? 28 : 18;
+    ctx.shadowOffsetY = this.surroundDark ? 8 : 4;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(r.x, r.y, r.width, r.height);
+    ctx.restore();
+    if (this.background === "white") return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(r.x, r.y, r.width, r.height);
+    ctx.clip();
+    if (this.background === "grid") {
+      this.grid.draw(ctx, c, this.pz, this.page!);
+    } else {
+      if (!this.checker) {
+        const tile = document.createElement("canvas");
+        tile.width = 40;
+        tile.height = 40;
+        const t = tile.getContext("2d")!;
+        t.fillStyle = "#ffffff";
+        t.fillRect(0, 0, 40, 40);
+        t.fillStyle = "#f0f0f0";
+        t.fillRect(20, 0, 20, 20);
+        t.fillRect(0, 20, 20, 20);
+        this.checker = ctx.createPattern(tile, "repeat");
+      }
+      if (this.checker) {
+        this.checker.setTransform(new DOMMatrix().translate(r.x, r.y).scale(this.pz.zoom));
+        ctx.fillStyle = this.checker;
+        ctx.fillRect(r.x, r.y, r.width, r.height);
+      }
+    }
+    ctx.restore();
+  }
+
+  private renderPageVeil() {
+    if (!this.page) return;
+    const dpr = window.devicePixelRatio || 1;
+    const r = this.pageOnScreen();
+    const ctx = this.displayCtx;
+    ctx.save();
+    ctx.globalAlpha = 0.72;
+    ctx.fillStyle = this.surround;
+    ctx.beginPath();
+    ctx.rect(0, 0, this.display.width / dpr, this.display.height / dpr);
+    ctx.rect(r.x, r.y, r.width, r.height);
+    ctx.fill("evenodd");
+    ctx.restore();
   }
 
   private drawCheckerboard(
@@ -467,6 +545,8 @@ export class CanvasEngine {
       renderShape(this.displayCtx, this.previewShape);
       this.displayCtx.restore();
     }
+
+    this.renderPageVeil();
   }
 
   private layerContentKey(layer: LayerLike): LayerContent {

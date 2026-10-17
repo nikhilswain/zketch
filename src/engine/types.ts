@@ -245,6 +245,13 @@ export interface EngineConfig {
   onInvalidate?: () => void;
 }
 
+export interface PageRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface PanZoom {
   panX: number;
   panY: number;

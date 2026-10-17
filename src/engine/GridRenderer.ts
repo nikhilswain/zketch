@@ -3,11 +3,22 @@ import type { PanZoom } from "./types";
 export class GridRenderer {
   constructor(private gridSize = 20) {}
 
-  draw(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, pz: PanZoom) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  draw(
+    ctx: CanvasRenderingContext2D,
+    canvas: HTMLCanvasElement,
+    pz: PanZoom,
+    origin?: { x: number; y: number },
+  ) {
+    if (!origin) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
     ctx.save();
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (!origin) {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    const ox = origin ? origin.x : 0;
+    const oy = origin ? origin.y : 0;
 
     // Match stroke transform: translate then scale (screen = zoom*world + pan)
     ctx.translate(pz.panX, pz.panY);
@@ -21,10 +32,10 @@ export class GridRenderer {
     const worldTop = (0 - pz.panY) / pz.zoom;
     const worldBottom = (canvas.height - pz.panY) / pz.zoom;
 
-    const startX = Math.floor(worldLeft / this.gridSize) * this.gridSize;
-    const endX = Math.ceil(worldRight / this.gridSize) * this.gridSize;
-    const startY = Math.floor(worldTop / this.gridSize) * this.gridSize;
-    const endY = Math.ceil(worldBottom / this.gridSize) * this.gridSize;
+    const startX = ox + Math.floor((worldLeft - ox) / this.gridSize) * this.gridSize;
+    const endX = ox + Math.ceil((worldRight - ox) / this.gridSize) * this.gridSize;
+    const startY = oy + Math.floor((worldTop - oy) / this.gridSize) * this.gridSize;
+    const endY = oy + Math.ceil((worldBottom - oy) / this.gridSize) * this.gridSize;
 
     for (let x = startX; x <= endX; x += this.gridSize) {
       ctx.beginPath();
