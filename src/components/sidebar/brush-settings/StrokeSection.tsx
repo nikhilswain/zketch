@@ -1,6 +1,6 @@
 import type React from "react";
 import type { StrokeSettingKey } from "@/engine/types";
-import SettingSlider from "./SettingSlider";
+import StrokeTrack from "@/components/studio/StrokeTrack";
 
 export interface StrokeValues {
   thinning: number;
@@ -61,7 +61,8 @@ const StrokeSection: React.FC<StrokeSectionProps> = ({
       {open && (
         <div className="space-y-4 pt-3">
           {has("variation") && (
-            <SettingSlider
+            <StrokeTrack
+              kind="variation"
               label="Width variation"
               value={values.thinning}
               display={percent(values.thinning)}
@@ -73,7 +74,8 @@ const StrokeSection: React.FC<StrokeSectionProps> = ({
             />
           )}
           {has("stabilizer") && (
-            <SettingSlider
+            <StrokeTrack
+              kind="stabilizer"
               label="Stabilizer"
               value={values.streamline}
               display={percent(values.streamline)}
@@ -84,7 +86,8 @@ const StrokeSection: React.FC<StrokeSectionProps> = ({
             />
           )}
           {has("smoothing") && (
-            <SettingSlider
+            <StrokeTrack
+              kind="flat"
               label="Smoothing"
               value={values.smoothing}
               display={percent(values.smoothing)}
@@ -96,7 +99,8 @@ const StrokeSection: React.FC<StrokeSectionProps> = ({
           )}
           {has("taper") && (
             <>
-              <SettingSlider
+              <StrokeTrack
+                kind="taper"
                 label="Taper start"
                 value={values.taperStart}
                 display={`${values.taperStart} px`}
@@ -105,7 +109,8 @@ const StrokeSection: React.FC<StrokeSectionProps> = ({
                 step={1}
                 onChange={(v) => onChange({ taperStart: v })}
               />
-              <SettingSlider
+              <StrokeTrack
+                kind="taper"
                 label="Taper end"
                 value={values.taperEnd}
                 display={`${values.taperEnd} px`}

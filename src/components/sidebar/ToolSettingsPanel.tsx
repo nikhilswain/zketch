@@ -17,7 +17,7 @@ import {
 } from "@/utils/brushMemory";
 import StrokeCanvas, { type StrokeLook } from "./brush-settings/StrokeCanvas";
 import PresetList from "./brush-settings/PresetList";
-import SettingSlider from "./brush-settings/SettingSlider";
+import StrokeTrack from "@/components/studio/StrokeTrack";
 import StrokeSection, { type StrokeValues } from "./brush-settings/StrokeSection";
 
 const PANEL_W = 264;
@@ -138,7 +138,8 @@ const ToolSettingsPanel: React.FC = observer(() => {
       )}
 
       <div className="space-y-4 px-1">
-        <SettingSlider
+        <StrokeTrack
+          kind="size"
           label="Size"
           value={canvasStore.currentSize}
           display={`${canvasStore.currentSize} px`}
@@ -150,7 +151,8 @@ const ToolSettingsPanel: React.FC = observer(() => {
             canvasStore.setPenSize(v);
           }}
         />
-        <SettingSlider
+        <StrokeTrack
+          kind="opacity" color={canvasStore.currentColor}
           label="Opacity"
           value={bs.opacity ?? 1}
           display={`${Math.round((bs.opacity ?? 1) * 100)}%`}
@@ -163,7 +165,8 @@ const ToolSettingsPanel: React.FC = observer(() => {
           }}
         />
         {brushStyle === "calligraphy" && (
-          <SettingSlider
+          <StrokeTrack
+            kind="flat"
             label="Nib angle"
             value={bs.angle}
             display={`${bs.angle}°`}
@@ -177,7 +180,8 @@ const ToolSettingsPanel: React.FC = observer(() => {
           />
         )}
         {brushStyle === "airbrush" && (
-          <SettingSlider
+          <StrokeTrack
+            kind="flat"
             label="Softness"
             value={bs.softness}
             display={`${Math.round(bs.softness * 100)}%`}
