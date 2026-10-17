@@ -1,11 +1,12 @@
-import { isShapeElement, isStrokeElement } from "@/engine/types";
+import { isShapeElement } from "@/engine/types";
 import { getStroke } from "perfect-freehand";
 import type { IStroke, BackgroundType } from "../models/CanvasModel";
 import type { IExportSettings } from "../models/SettingsModel";
 import { BlobStorageService } from "./BlobStorageService";
 import { brushRegistry } from "@/engine/render/BrushRegistry";
 import { renderStroke } from "@/engine/render/renderStroke";
-import { renderShape } from "@/engine/render/renderShape";
+import { renderDrawLayer } from "@/engine/render/renderDrawLayer";
+import { buildElementLookup } from "@/engine/render/lookup";
 import { easingFn } from "@/engine/easing";
 import type { Page } from "@/utils/page";
 
@@ -249,28 +250,25 @@ export class ExportService {
     await this.preloadImages(layers);
     const kx = outW / page.width;
     const ky = outH / page.height;
+    const lookup = buildElementLookup(layers as any);
     for (const layer of layers) {
       if (!layer.visible) continue;
       const prevAlpha = ctx.globalAlpha;
       ctx.globalAlpha = layer.opacity * prevAlpha;
       if (layer.type === "draw" && layer.elements) {
-        const strokeOnly = layer.elements.filter((e) => isStrokeElement(e)) as IStroke[];
-        if (strokeOnly.length > 0) {
-          const strokeCanvas = document.createElement("canvas");
-          strokeCanvas.width = outW;
-          strokeCanvas.height = outH;
-          const strokeCtx = strokeCanvas.getContext("2d");
-          if (strokeCtx) {
-            strokeCtx.setTransform(kx, 0, 0, ky, -page.x * kx, -page.y * ky);
-            this.renderStrokesToCanvas(strokeCtx, strokeOnly);
+        if (layer.elements.length > 0) {
+          const layerCanvas = document.createElement("canvas");
+          layerCanvas.width = outW;
+          layerCanvas.height = outH;
+          const layerCtx = layerCanvas.getContext("2d");
+          if (layerCtx) {
+            layerCtx.setTransform(kx, 0, 0, ky, -page.x * kx, -page.y * ky);
+            renderDrawLayer(layerCtx, layer.elements as any, { lookup });
             ctx.save();
             ctx.setTransform(1, 0, 0, 1, 0, 0);
-            ctx.drawImage(strokeCanvas, 0, 0);
+            ctx.drawImage(layerCanvas, 0, 0);
             ctx.restore();
           }
-        }
-        for (const el of layer.elements) {
-          if (isShapeElement(el)) renderShape(ctx, el as any);
         }
       } else if (layer.type === "image" && layer.imageData) {
         await this.renderImageLayer(ctx, layer.imageData);
@@ -433,6 +431,7 @@ export class ExportService {
     ctx.translate(offsetX, offsetY);
     ctx.scale(scale, scale);
 
+    const lookup = buildElementLookup(layers as any);
     for (const layer of layers) {
       if (!layer.visible) continue;
 
@@ -440,12 +439,7 @@ export class ExportService {
       ctx.globalAlpha = layer.opacity * prevAlpha;
 
       if (layer.type === "draw" && layer.elements) {
-        // Strokes bake into an offscreen so eraser destination-out works as a layer-local op.
-        const strokeOnly = layer.elements.filter(
-          (e) => isStrokeElement(e),
-        ) as IStroke[];
-
-        if (strokeOnly.length > 0) {
+        if (layer.elements.length > 0) {
           const b = bounds ?? {
             minX: 0,
             minY: 0,
@@ -459,22 +453,15 @@ export class ExportService {
           const worldY = b.minY - pad;
           const offW = Math.max(1, Math.ceil(b.width + pad * 2));
           const offH = Math.max(1, Math.ceil(b.height + pad * 2));
-          const strokeCanvas = document.createElement("canvas");
-          strokeCanvas.width = offW;
-          strokeCanvas.height = offH;
-          const strokeCtx = strokeCanvas.getContext("2d");
+          const layerCanvas = document.createElement("canvas");
+          layerCanvas.width = Math.max(1, Math.ceil(offW * scale));
+          layerCanvas.height = Math.max(1, Math.ceil(offH * scale));
+          const layerCtx = layerCanvas.getContext("2d");
 
-          if (strokeCtx) {
-            strokeCtx.translate(-worldX, -worldY);
-            this.renderStrokesToCanvas(strokeCtx, strokeOnly);
-            ctx.drawImage(strokeCanvas, worldX, worldY);
-          }
-        }
-
-        // Shapes render as vectors on top, in element order.
-        for (const el of layer.elements) {
-          if (isShapeElement(el)) {
-            renderShape(ctx, el as any);
+          if (layerCtx) {
+            layerCtx.setTransform(scale, 0, 0, scale, -worldX * scale, -worldY * scale);
+            renderDrawLayer(layerCtx, layer.elements as any, { lookup });
+            ctx.drawImage(layerCanvas, worldX, worldY, offW, offH);
           }
         }
       } else if (layer.type === "image" && layer.imageData) {

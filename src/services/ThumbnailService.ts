@@ -1,11 +1,12 @@
-import { isShapeElement, isStrokeElement } from "@/engine/types";
+import { isShapeElement } from "@/engine/types";
 import type { IStroke } from "../models/CanvasModel";
 import type { ILayerSnapshot } from "../models/LayerModel";
 import { BlobStorageService } from "./BlobStorageService";
 import { GridRenderer } from "@/engine/GridRenderer";
 import { brushRegistry } from "@/engine/render/BrushRegistry";
 import { renderStroke } from "@/engine/render/renderStroke";
-import { renderShape } from "@/engine/render/renderShape";
+import { renderDrawLayer } from "@/engine/render/renderDrawLayer";
+import { buildElementLookup } from "@/engine/render/lookup";
 import type { Page } from "@/utils/page";
 
 interface ImageLayerData {
@@ -124,6 +125,7 @@ export class ThumbnailService {
     }
 
     // Render layers in order
+    const lookup = buildElementLookup(visibleLayers as any);
     for (const layer of visibleLayers) {
       const prevAlpha = ctx.globalAlpha;
       ctx.globalAlpha = layer.opacity ?? 1;
@@ -162,22 +164,10 @@ export class ThumbnailService {
           offCtx.save();
           offCtx.translate(offsetX, offsetY);
           offCtx.scale(scale, scale);
-          for (const el of elements) {
-            if (isStrokeElement(el) && (el as any).points?.length >= 2) {
-              renderStroke(offCtx, el as any, brushRegistry);
-            }
-          }
+          renderDrawLayer(offCtx, elements, { lookup });
           offCtx.restore();
           ctx.drawImage(off, 0, 0);
         }
-
-        ctx.save();
-        ctx.translate(offsetX, offsetY);
-        ctx.scale(scale, scale);
-        for (const el of elements) {
-          if (isShapeElement(el)) renderShape(ctx, el as any);
-        }
-        ctx.restore();
       }
 
       ctx.globalAlpha = prevAlpha;

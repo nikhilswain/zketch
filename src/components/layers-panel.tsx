@@ -39,9 +39,7 @@ import { getSnapshot } from "mobx-state-tree";
 import { BlobStorageService } from "@/services/BlobStorageService";
 import LayerAnimationControls from "@/components/layer-animation-controls";
 import type { StrokeLike } from "@/engine";
-import { brushRegistry } from "@/engine/render/BrushRegistry";
-import { renderStroke } from "@/engine/render/renderStroke";
-import { renderShape } from "@/engine/render/renderShape";
+import { renderDrawLayer } from "@/engine/render/renderDrawLayer";
 import type { PlaybackState } from "@/engine/AnimationPlaybackEngine";
 
 // Generate a small thumbnail preview of a draw layer (strokes + shapes).
@@ -143,22 +141,10 @@ function drawElements(
     offCtx.save();
     offCtx.translate(ox, oy);
     offCtx.scale(scale, scale);
-    for (const el of elements) {
-      if (isStrokeElement(el) && el.points && el.points.length >= 2) {
-        renderStroke(offCtx, el as any, brushRegistry);
-      }
-    }
+    renderDrawLayer(offCtx, elements as any);
     offCtx.restore();
     ctx.drawImage(off, 0, 0);
   }
-
-  ctx.save();
-  ctx.translate(ox, oy);
-  ctx.scale(scale, scale);
-  for (const el of elements) {
-    if (isShapeElement(el)) renderShape(ctx, el as any);
-  }
-  ctx.restore();
   return finish();
 }
 

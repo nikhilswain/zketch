@@ -5,3 +5,5 @@ export * from "./renderImage";
 export * from "./shapePaths";
 export * from "./seededRandom";
 export * from "./smooth";
+export * from "./lookup";
+export * from "./renderDrawLayer";

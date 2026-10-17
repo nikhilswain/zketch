@@ -5,6 +5,8 @@ import { transformController } from "./TransformController";
 import { brushRegistry, registerDefaultBrushes } from "./render/BrushRegistry";
 import { renderStroke } from "./render/renderStroke";
 import { renderShape } from "./render/renderShape";
+import { renderDrawLayer } from "./render/renderDrawLayer";
+import { buildElementLookup, type ElementLookup } from "./render/lookup";
 import { drawImageLayer } from "./render/renderImage";
 import {
   installBrushAssetLoader,
@@ -30,6 +32,7 @@ export class CanvasEngine {
   private bg: HTMLCanvasElement; // Background (white/grid/transparent)
   private display: HTMLCanvasElement; // Final composited result (renamed from fg)
   private ui: HTMLCanvasElement;
+  private lookup: ElementLookup = new Map();
 
   private bgCtx: CanvasRenderingContext2D;
   private displayCtx: CanvasRenderingContext2D;
@@ -389,6 +392,7 @@ export class CanvasEngine {
 
   private renderStrokes() {
     const layers = this.config.getLayers?.() || [];
+    this.lookup = buildElementLookup(layers as any);
 
     // Clear the display canvas
     this.displayCtx.clearRect(0, 0, this.display.width, this.display.height);
@@ -567,9 +571,7 @@ export class CanvasEngine {
     for (let i = 0; i < prev.length; i++) {
       if (next[i] !== prev[i]) return null;
     }
-    const added = next[next.length - 1];
-    if (!isShapeElement(added) && prev.some(isShapeElement)) return null;
-    return added;
+    return next[next.length - 1];
   }
 
   private renderElement(
@@ -577,14 +579,7 @@ export class CanvasEngine {
     el: ElementLike,
     pending: Set<string> | undefined,
   ) {
-    const faded = pending?.has(el.id);
-    if (faded) ctx.save(), (ctx.globalAlpha *= 0.25);
-    if (isShapeElement(el)) {
-      renderShape(ctx, el);
-    } else {
-      renderStroke(ctx, el, brushRegistry, this.config.getBrushOptions);
-    }
-    if (faded) ctx.restore();
+    renderDrawLayer(ctx, [el], { getBrushOptions: this.config.getBrushOptions, pending, lookup: this.lookup });
   }
 
   private renderLayer(
@@ -597,14 +592,11 @@ export class CanvasEngine {
       return;
     }
     if (layer.type === "draw") {
-      // Two-pass within a draw layer: bake strokes first (raster, with destination-out
-      // for eraser strokes), then render shape elements as vectors on top.
-      for (const el of layer.elements) {
-        if (!isShapeElement(el)) this.renderElement(ctx, el, pending);
-      }
-      for (const el of layer.elements) {
-        if (isShapeElement(el)) this.renderElement(ctx, el, pending);
-      }
+      renderDrawLayer(ctx, layer.elements, {
+        getBrushOptions: this.config.getBrushOptions,
+        pending,
+        lookup: this.lookup,
+      });
     }
   }
 
