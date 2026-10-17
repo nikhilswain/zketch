@@ -29,7 +29,7 @@ import { toast } from "sonner";
 import type { StrokeLike } from "@/engine";
 import type { PlaybackState } from "@/engine/AnimationPlaybackEngine";
 import { reaction } from "mobx";
-import { newPage } from "@/utils/page";
+import { effectiveExportScale, newPage } from "@/utils/page";
 import { fitViewToPage } from "@/utils/viewport";
 
 interface CanvasViewProps {
@@ -406,6 +406,21 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         const allStrokes = canvasStore.flattenedStrokes;
         // Get all layers for export (includes images)
         const exportLayers = canvasStore.exportLayers;
+        const page = canvasStore.page;
+
+        if (page && (format === "png" || format === "jpg")) {
+          dataUrl = await ExportService.exportPage(
+            exportLayers as any,
+            { x: page.x, y: page.y, width: page.width, height: page.height },
+            effectiveExportScale(settingsStore.exportSettings.scale, page),
+            canvasStore.background as BackgroundType,
+            format,
+            settingsStore.exportSettings,
+          );
+          const name = `${drawingName.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.${format}`;
+          ExportService.downloadFile(dataUrl, name);
+          return;
+        }
 
         switch (format) {
           case "png":
@@ -537,6 +552,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           layerCount={canvasStore.layerCount}
           onFlattenLayers={() => canvasStore.flattenAllLayers()}
           layers={canvasStore.exportLayers as any}
+          page={canvasStore.page ? { ...canvasStore.page } : null}
         />
 
         {showSettings && <SettingsPage onClose={() => setShowSettings(false)} />}

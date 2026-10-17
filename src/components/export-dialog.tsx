@@ -18,6 +18,7 @@ import type { ExportFormat } from "@/models/SettingsModel";
 import type { IStroke, BackgroundType } from "@/models/CanvasModel";
 import { ExportService, type IExportLayer } from "@/services/ExportService";
 import { ShareService } from "@/services/ShareService";
+import { effectiveExportScale, exportScaleCap, type Page } from "@/utils/page";
 
 interface ExportDialogProps {
   isOpen: boolean;
@@ -29,6 +30,7 @@ interface ExportDialogProps {
   layerCount?: number;
   onFlattenLayers?: () => void;
   layers?: IExportLayer[];
+  page?: Page | null;
 }
 
 const EXPORT_W = 1920;
@@ -46,7 +48,7 @@ const SectionLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 );
 
 const ExportDialog: React.FC<ExportDialogProps> = observer(
-  ({ isOpen, onClose, onExport, strokes, background, drawingName, layerCount = 1, onFlattenLayers, layers }) => {
+  ({ isOpen, onClose, onExport, strokes, background, drawingName, layerCount = 1, onFlattenLayers, layers, page = null }) => {
     const settingsStore = useSettingsStore();
     const { scale, quality, transparentBackground } = settingsStore.exportSettings;
     const format: "png" | "jpg" = settingsStore.exportSettings.format === "jpg" ? "jpg" : "png";
@@ -76,14 +78,24 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
       if (!isOpen || !hasContent) return;
       let cancelled = false;
       setRendering(true);
-      ExportService.exportToPNG(
-        strokes,
-        format === "jpg" && canvasTransparent ? "white" : background,
-        1280,
-        720,
-        { ...settingsStore.exportSettings, scale: 1, transparentBackground: format === "png" && transparentBackground },
-        layers,
-      )
+      const render = page
+        ? ExportService.exportPage(
+            layers ?? [],
+            page,
+            Math.min(1, 1280 / Math.max(page.width, page.height)),
+            format === "jpg" && canvasTransparent ? "white" : background,
+            "png",
+            { transparentBackground: format === "png" && transparentBackground, quality: 1 },
+          )
+        : ExportService.exportToPNG(
+            strokes,
+            format === "jpg" && canvasTransparent ? "white" : background,
+            1280,
+            720,
+            { ...settingsStore.exportSettings, scale: 1, transparentBackground: format === "png" && transparentBackground },
+            layers,
+          );
+      render
         .then((url) => {
           if (!cancelled) setPreview(url);
         })
@@ -116,14 +128,23 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
       if (sharing || !hasContent) return;
       setSharing(true);
       try {
-        const dataUrl = await ExportService.exportToJPG(
-          strokes,
-          background,
-          800,
-          600,
-          { ...settingsStore.exportSettings, scale: 1, quality: 0.8, transparentBackground: false },
-          layers,
-        );
+        const dataUrl = page
+          ? await ExportService.exportPage(
+              layers ?? [],
+              page,
+              Math.min(1, 1200 / Math.max(page.width, page.height)),
+              background,
+              "jpg",
+              { transparentBackground: false, quality: 0.8 },
+            )
+          : await ExportService.exportToJPG(
+              strokes,
+              background,
+              800,
+              600,
+              { ...settingsStore.exportSettings, scale: 1, quality: 0.8, transparentBackground: false },
+              layers,
+            );
         const shareData = ShareService.createShareData(drawingName, dataUrl);
         const sizeCheck = ShareService.checkSizeLimit(shareData);
         if (!sizeCheck.valid) {
@@ -160,8 +181,11 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
       }
     };
 
-    const outW = Math.round(EXPORT_W * scale);
-    const outH = Math.round(EXPORT_H * scale);
+    const scaleCap = page ? Math.max(0.5, Math.floor(exportScaleCap(page.width, page.height) * 4) / 4) : 4;
+    const shownScale = page ? Math.min(scale, scaleCap) : scale;
+    const realScale = effectiveExportScale(scale, page);
+    const outW = Math.round((page ? page.width : EXPORT_W) * realScale);
+    const outH = Math.round((page ? page.height : EXPORT_H) * realScale);
 
     return (
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -237,11 +261,11 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
                   compact
                   kind="flat"
                   label="Scale"
-                  value={scale}
-                  display={`${scale}×`}
+                  value={shownScale}
+                  display={`${Math.round(realScale * 100) / 100}×`}
                   min={0.5}
-                  max={4}
-                  step={0.5}
+                  max={scaleCap}
+                  step={page ? 0.25 : 0.5}
                   onChange={(v) => settingsStore.setExportSettings({ scale: v })}
                 />
                 {format === "jpg" ? (

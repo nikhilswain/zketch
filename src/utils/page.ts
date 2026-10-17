@@ -65,3 +65,6 @@ export function fitPage(page: Page, viewW: number, viewH: number, margin = 48) {
 }
 
 export const pageAspect = (page: Page | null | undefined) => (page ? page.width / page.height : 4 / 3);
+
+export const effectiveExportScale = (scale: number, page: Page | null | undefined) =>
+  page ? Math.min(scale, exportScaleCap(page.width, page.height)) : scale;

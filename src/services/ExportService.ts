@@ -6,6 +6,7 @@ import { brushRegistry } from "@/engine/render/BrushRegistry";
 import { renderStroke } from "@/engine/render/renderStroke";
 import { renderShape } from "@/engine/render/renderShape";
 import { easingFn } from "@/engine/easing";
+import type { Page } from "@/utils/page";
 
 // Image layer data needed for export
 export interface IExportImageLayer {
@@ -199,6 +200,83 @@ export class ExportService {
     const jpgUrl = canvas.toDataURL("image/jpeg", settings.quality);
     this.imageCache.clear();
     return jpgUrl;
+  }
+
+  static async exportPage(
+    layers: IExportLayer[],
+    page: Page,
+    scale: number,
+    background: BackgroundType,
+    format: "png" | "jpg",
+    options: { transparentBackground: boolean; quality: number },
+  ): Promise<string> {
+    const transparent =
+      format === "png" && (options.transparentBackground || background === "transparent");
+    const canvas = await this.renderPageToCanvas(layers, page, scale, background, transparent);
+    const url =
+      format === "png" ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", options.quality);
+    this.imageCache.clear();
+    return url;
+  }
+
+  static async renderPageToCanvas(
+    layers: IExportLayer[],
+    page: Page,
+    scale: number,
+    background: BackgroundType,
+    transparent: boolean,
+  ): Promise<HTMLCanvasElement> {
+    const outW = Math.max(1, Math.round(page.width * scale));
+    const outH = Math.max(1, Math.round(page.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = outW;
+    canvas.height = outH;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Could not get canvas context");
+
+    ctx.scale(outW / page.width, outH / page.height);
+    if (!transparent) {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, page.width, page.height);
+      if (background === "grid") this.drawGrid(ctx, page.width, page.height);
+    }
+    ctx.beginPath();
+    ctx.rect(0, 0, page.width, page.height);
+    ctx.clip();
+    ctx.translate(-page.x, -page.y);
+
+    await this.preloadImages(layers);
+    const kx = outW / page.width;
+    const ky = outH / page.height;
+    for (const layer of layers) {
+      if (!layer.visible) continue;
+      const prevAlpha = ctx.globalAlpha;
+      ctx.globalAlpha = layer.opacity * prevAlpha;
+      if (layer.type === "draw" && layer.elements) {
+        const strokeOnly = layer.elements.filter((e) => !(e as any).shapeType) as IStroke[];
+        if (strokeOnly.length > 0) {
+          const strokeCanvas = document.createElement("canvas");
+          strokeCanvas.width = outW;
+          strokeCanvas.height = outH;
+          const strokeCtx = strokeCanvas.getContext("2d");
+          if (strokeCtx) {
+            strokeCtx.setTransform(kx, 0, 0, ky, -page.x * kx, -page.y * ky);
+            this.renderStrokesToCanvas(strokeCtx, strokeOnly);
+            ctx.save();
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.drawImage(strokeCanvas, 0, 0);
+            ctx.restore();
+          }
+        }
+        for (const el of layer.elements) {
+          if ((el as any).shapeType) renderShape(ctx, el as any);
+        }
+      } else if (layer.type === "image" && layer.imageData) {
+        await this.renderImageLayer(ctx, layer.imageData);
+      }
+      ctx.globalAlpha = prevAlpha;
+    }
+    return canvas;
   }
 
   static async exportToSVG(
