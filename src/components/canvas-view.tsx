@@ -329,7 +329,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
       const disposer = reaction(
         () => canvasStore.renderVersion,
         () => {
-          isDirtyRef.current = true;
+          isDirtyRef.current = !canvasStore.isEmpty;
 
           // Reset debounce timer
           if (autosaveTimerRef.current !== null) {
