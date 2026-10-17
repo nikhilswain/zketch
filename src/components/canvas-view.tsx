@@ -17,7 +17,7 @@ import { ThumbnailService } from "@/services/ThumbnailService";
 import { BlobStorageService } from "@/services/BlobStorageService";
 import { serializeLayers } from "@/utils/serializeLayers";
 import { Button } from "./ui/button";
-import { Lock } from "lucide-react";
+import { LockIcon } from "@/components/icons";
 import StudioShell from "./studio/StudioShell";
 import TopLeftBlock from "./studio/TopLeftBlock";
 import TopRightBlock from "./studio/TopRightBlock";
@@ -485,7 +485,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           />
           {canvasLocked && (
             <div className="pointer-events-none absolute top-16 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-[4px] bg-zk-surface px-3 py-1.5 text-[12px] text-zk-text">
-              <Lock className="h-3 w-3 text-zk-accent" />
+              <LockIcon className="h-3 w-3 text-zk-accent" />
               Animation playing — stop it to edit
             </div>
           )}

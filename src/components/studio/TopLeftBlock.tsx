@@ -1,7 +1,7 @@
 import type React from "react";
 import { useRef } from "react";
 import { observer } from "mobx-react-lite";
-import { Check, ChevronDown, Loader2 } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, LoaderIcon } from "@/components/icons";
 import { useCanvasStore, useSettingsStore } from "@/hooks/useStores";
 import { applyLayout, dockLayout } from "@/utils/dockLayout";
 import {
@@ -47,7 +47,7 @@ const LAYOUTS = [
 
 const Tick: React.FC<{ on: boolean }> = ({ on }) => (
   <span className="mr-2 inline-flex w-3 justify-center">
-    {on && <Check className="h-3 w-3 text-zk-accent" />}
+    {on && <CheckIcon className="h-3 w-3 text-zk-accent" />}
   </span>
 );
 
@@ -69,7 +69,7 @@ const TopLeftBlock: React.FC<TopLeftBlockProps> = observer(
               <span className="flex h-7 w-7 items-center justify-center rounded-[4px] bg-zk-accent font-display text-[16px] font-semibold text-zk-on-accent">
                 Z
               </span>
-              <ChevronDown className="h-3 w-3 text-zk-muted" />
+              <ChevronDownIcon className="h-3 w-3 text-zk-muted" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-60">
@@ -149,8 +149,8 @@ const TopLeftBlock: React.FC<TopLeftBlockProps> = observer(
           className="w-44 rounded-[4px] bg-transparent px-1.5 py-1 text-[13px] font-medium outline-none focus:bg-zk-raised"
         />
         <span className="flex h-4 w-4 items-center justify-center" aria-live="polite">
-          {saveStatus === "saving" && <Loader2 aria-label="Saving" className="h-3.5 w-3.5 animate-spin text-zk-muted" />}
-          {saveStatus === "saved" && <Check aria-label="Saved" className="h-3.5 w-3.5 text-zk-muted" />}
+          {saveStatus === "saving" && <LoaderIcon aria-label="Saving" className="h-3.5 w-3.5 animate-spin text-zk-muted" />}
+          {saveStatus === "saved" && <CheckIcon aria-label="Saved" className="h-3.5 w-3.5 text-zk-muted" />}
         </span>
       </div>
     );

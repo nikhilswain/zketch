@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Play, Pause, Square, ChevronDown, Repeat } from "lucide-react";
+import { ChevronDownIcon, PauseIcon, PlayIcon, RepeatIcon, StopIcon } from "@/components/icons";
 import {
   AnimationPlaybackEngine,
   type PlaybackSpeed,
@@ -178,7 +178,7 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
               onClick={handlePause}
               title="Pause"
             >
-              <Pause className="h-3.5 w-3.5" />
+              <PauseIcon className="h-3.5 w-3.5" />
             </Button>
           ) : (
             <Button
@@ -188,7 +188,7 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
               onClick={handlePlay}
               title="Play"
             >
-              <Play className="h-3.5 w-3.5" />
+              <PlayIcon className="h-3.5 w-3.5" />
             </Button>
           )}
 
@@ -201,7 +201,7 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
             title="Stop"
             disabled={playbackState === "stopped"}
           >
-            <Square className="h-3 w-3" />
+            <StopIcon className="h-3 w-3" />
           </Button>
 
           {/* Loop Toggle */}
@@ -212,7 +212,7 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
             onClick={handleToggleLoop}
             title={loop ? "Loop: On" : "Loop: Off"}
           >
-            <Repeat className="h-3 w-3" />
+            <RepeatIcon className="h-3 w-3" />
           </Button>
 
           {/* Spacer */}
@@ -223,7 +223,7 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="h-6 px-2 text-xs">
                 {speed}x
-                <ChevronDown className="h-3 w-3 ml-1" />
+                <ChevronDownIcon className="h-3 w-3 ml-1" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[60px]">

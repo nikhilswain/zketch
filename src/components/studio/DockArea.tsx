@@ -1,7 +1,7 @@
 import type React from "react";
 import { useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 import {
   dockLayout,
   movePanel,
@@ -91,7 +91,7 @@ const DockArea: React.FC<{ dock: DockId; overlay?: boolean }> = observer(({ dock
               onClick={() => setSideOpen(dock as "left" | "right", false)}
               className="flex h-6 w-6 items-center justify-center rounded-[3px] text-zk-muted hover:bg-zk-hover hover:text-zk-text"
             >
-              {dock === "left" ? <ChevronLeft className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+              {dock === "left" ? <ChevronLeftIcon className="h-3.5 w-3.5" /> : <ChevronRightIcon className="h-3.5 w-3.5" />}
             </button>
           </div>
         )}

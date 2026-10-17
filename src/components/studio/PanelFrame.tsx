@@ -2,6 +2,14 @@ import type React from "react";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import {
+  ChevronRightIcon,
+  DockBottomIcon,
+  DockLeftIcon,
+  DockRightIcon,
+  GripIcon,
+  type IconProps,
+} from "@/components/icons";
+import {
   dockLayout,
   movePanel,
   setDraggingPanel,
@@ -51,10 +59,10 @@ const Reveal: React.FC<{ open: boolean; children: React.ReactNode }> = ({ open, 
   );
 };
 
-const DOCK_BUTTONS: { dock: DockId; label: string; rect: [number, number, number, number] }[] = [
-  { dock: "left", label: "Dock left", rect: [1.5, 2.5, 4, 11] },
-  { dock: "bottom", label: "Dock bottom", rect: [1.5, 9.5, 13, 4] },
-  { dock: "right", label: "Dock right", rect: [10.5, 2.5, 4, 11] },
+const DOCK_BUTTONS: { dock: DockId; label: string; Icon: (props: IconProps) => React.ReactElement }[] = [
+  { dock: "left", label: "Dock left", Icon: DockLeftIcon },
+  { dock: "bottom", label: "Dock bottom", Icon: DockBottomIcon },
+  { dock: "right", label: "Dock right", Icon: DockRightIcon },
 ];
 
 interface PanelFrameProps {
@@ -88,29 +96,14 @@ const PanelFrame: React.FC<PanelFrameProps> = observer(
             title="Drag to move this panel to another dock"
             className="flex h-9 shrink-0 cursor-grab items-center gap-1.5 pl-1.5 pr-2 active:cursor-grabbing"
           >
-            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="#5C5B60">
-              <circle cx="3" cy="3" r="1.1" />
-              <circle cx="3" cy="6" r="1.1" />
-              <circle cx="3" cy="9" r="1.1" />
-              <circle cx="7" cy="3" r="1.1" />
-              <circle cx="7" cy="6" r="1.1" />
-              <circle cx="7" cy="9" r="1.1" />
-            </svg>
+            <GripIcon size={12} className="text-[#5C5B60]" />
             <button
               onClick={() => toggleCollapsed(id)}
               aria-expanded={!collapsed}
               className="flex flex-1 items-center gap-1.5 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-zk-muted hover:text-zk-text"
             >
               {title}
-              <svg
-                aria-hidden="true"
-                width="9"
-                height="9"
-                viewBox="0 0 10 10"
-                className={`transition-transform ${collapsed ? "" : "rotate-90"}`}
-              >
-                <path d="M3 1.5 6.5 5 3 8.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              <ChevronRightIcon size={10} className={`transition-transform ${collapsed ? "" : "rotate-90"}`} />
             </button>
             {actions}
             <div className="ml-1 flex gap-0.5">
@@ -128,10 +121,7 @@ const PanelFrame: React.FC<PanelFrameProps> = observer(
                       current ? "bg-zk-selected text-zk-accent" : "text-zk-disabled hover:text-zk-text"
                     }`}
                   >
-                    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-                      <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" />
-                      <rect x={b.rect[0]} y={b.rect[1]} width={b.rect[2]} height={b.rect[3]} fill="currentColor" />
-                    </svg>
+                    <b.Icon size={14} />
                   </button>
                 );
               })}

@@ -2,7 +2,7 @@ import type React from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useCanvasStore } from "@/hooks/useStores";
-import { PanelLeftOpen, PanelRightOpen } from "lucide-react";
+import { PanelLeftOpenIcon, PanelRightOpenIcon } from "@/components/icons";
 import {
   dockLayout,
   hideOverlayDocks,
@@ -36,9 +36,9 @@ const ReopenTab: React.FC<{ side: "left" | "right" }> = ({ side }) => (
     className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-[6px] bg-zk-surface text-zk-text hover:bg-zk-hover"
   >
     {side === "left" ? (
-      <PanelLeftOpen className="h-4 w-4" strokeWidth={1.5} />
+      <PanelLeftOpenIcon className="h-4 w-4" />
     ) : (
-      <PanelRightOpen className="h-4 w-4" strokeWidth={1.5} />
+      <PanelRightOpenIcon className="h-4 w-4" />
     )}
   </button>
 );

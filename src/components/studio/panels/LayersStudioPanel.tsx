@@ -1,5 +1,6 @@
 import type React from "react";
 import { observer } from "mobx-react-lite";
+import { LayersIcon } from "@/components/icons";
 import { useCanvasStore } from "@/hooks/useStores";
 import LayersPanel, { LayersActions, useLayerThumbnail } from "@/components/layers-panel";
 import PanelFrame from "../PanelFrame";
@@ -40,10 +41,7 @@ export const LayersStrip: React.FC<{ onExpand: () => void }> = observer(({ onExp
         aria-label="Show layers"
         className="flex h-7 w-9 items-center justify-center rounded-[4px] text-zk-text hover:bg-zk-hover"
       >
-        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
-          <path d="M12 3l9 5-9 5-9-5z" />
-          <path d="M3 13l9 5 9-5" />
-        </svg>
+        <LayersIcon size={16} />
       </button>
       {layers.slice(0, 8).map((layer) => (
         <StripThumb

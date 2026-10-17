@@ -1,6 +1,7 @@
 import type React from "react";
 import { useState } from "react";
 import { observer } from "mobx-react-lite";
+import { SearchIcon } from "@/components/icons";
 import { useCanvasStore } from "@/hooks/useStores";
 import { pickerBrushGroups } from "@/utils/brushCategories";
 import { selectBrush } from "@/utils/brushMemory";
@@ -29,10 +30,7 @@ export const BrushLibrary: React.FC<{ onPicked?: () => void }> = observer(({ onP
 
   const search = (
     <label className="flex h-7 items-center gap-1.5 rounded-[4px] bg-zk-raised px-2 text-zk-muted">
-      <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-        <circle cx="11" cy="11" r="7" />
-        <path d="M20 20l-4-4" />
-      </svg>
+      <SearchIcon size={12} />
       <input
         value={query}
         onChange={(e) => setQuery(e.target.value)}

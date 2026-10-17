@@ -14,23 +14,23 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Eye,
-  EyeOff,
-  Lock,
-  Unlock,
-  Plus,
-  Trash2,
-  ChevronUp,
-  ChevronDown,
-  Copy,
-  MoreHorizontal,
-  Layers,
-  Merge,
-  Focus,
-  Eraser,
-  Image as ImageIcon,
-  Shapes as ShapesIcon,
-} from "lucide-react";
+  ChevronDownIcon,
+  ChevronUpIcon,
+  CopyIcon,
+  EraserIcon,
+  EyeIcon,
+  EyeOffIcon,
+  FocusIcon,
+  ImageIcon,
+  LayersIcon,
+  LockIcon,
+  MergeIcon,
+  MoreIcon,
+  PlusIcon,
+  ShapesIcon,
+  TrashIcon,
+  UnlockIcon,
+} from "@/components/icons";
 import type { ILayer, IStrokeLayer } from "@/models/LayerModel";
 import { getSnapshot } from "mobx-state-tree";
 import { BlobStorageService } from "@/services/BlobStorageService";
@@ -356,7 +356,7 @@ const LayerItem: React.FC<LayerItemProps> = observer(
               }}
               title={isFocused ? "Exit Focus Mode" : "Focus (Solo)"}
             >
-              <Focus
+              <FocusIcon
                 className={`h-3.5 w-3.5 ${
                   isFocused ? "text-primary" : "text-muted-foreground"
                 }`}
@@ -375,9 +375,9 @@ const LayerItem: React.FC<LayerItemProps> = observer(
               title={layer.visible ? "Hide Layer" : "Show Layer"}
             >
               {layer.visible ? (
-                <Eye className="h-3.5 w-3.5" />
+                <EyeIcon className="h-3.5 w-3.5" />
               ) : (
-                <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                <EyeOffIcon className="h-3.5 w-3.5 text-muted-foreground" />
               )}
             </Button>
 
@@ -393,9 +393,9 @@ const LayerItem: React.FC<LayerItemProps> = observer(
               title={layer.locked ? "Unlock Layer" : "Lock Layer"}
             >
               {layer.locked ? (
-                <Lock className="h-3.5 w-3.5 text-yellow-500" />
+                <LockIcon className="h-3.5 w-3.5 text-yellow-500" />
               ) : (
-                <Unlock className="h-3.5 w-3.5 text-muted-foreground" />
+                <UnlockIcon className="h-3.5 w-3.5 text-muted-foreground" />
               )}
             </Button>
 
@@ -408,7 +408,7 @@ const LayerItem: React.FC<LayerItemProps> = observer(
                   className="h-6 w-6"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <MoreHorizontal className="h-3.5 w-3.5" />
+                  <MoreIcon className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-36">
@@ -416,16 +416,16 @@ const LayerItem: React.FC<LayerItemProps> = observer(
                   Rename
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onDuplicate}>
-                  <Copy className="h-3.5 w-3.5 mr-2" />
+                  <CopyIcon className="h-3.5 w-3.5 mr-2" />
                   Duplicate
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={onMoveUp} disabled={isLast}>
-                  <ChevronUp className="h-3.5 w-3.5 mr-2" />
+                  <ChevronUpIcon className="h-3.5 w-3.5 mr-2" />
                   Move Up
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onMoveDown} disabled={isFirst}>
-                  <ChevronDown className="h-3.5 w-3.5 mr-2" />
+                  <ChevronDownIcon className="h-3.5 w-3.5 mr-2" />
                   Move Down
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -449,7 +449,7 @@ const LayerItem: React.FC<LayerItemProps> = observer(
                   }
                   className="text-orange-600 focus:text-orange-600"
                 >
-                  <Eraser className="h-3.5 w-3.5 mr-2" />
+                  <EraserIcon className="h-3.5 w-3.5 mr-2" />
                   Clear Strokes
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -457,7 +457,7 @@ const LayerItem: React.FC<LayerItemProps> = observer(
                   disabled={!canDelete}
                   className="text-destructive focus:text-destructive"
                 >
-                  <Trash2 className="h-3.5 w-3.5 mr-2" />
+                  <TrashIcon className="h-3.5 w-3.5 mr-2" />
                   Delete
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -523,12 +523,12 @@ export const LayersActions: React.FC = observer(() => {
         onClick={() => canvasStore.addLayer()}
         title="Add Layer"
       >
-        <Plus className="h-4 w-4" />
+        <PlusIcon className="h-4 w-4" />
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="h-7 w-7" title="Merge Options">
-            <Merge className="h-4 w-4" />
+            <MergeIcon className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
@@ -570,7 +570,7 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
     if (collapsed) {
       return (
         <div className={`flex items-center justify-center p-2 ${className}`}>
-          <Layers className="h-5 w-5 text-muted-foreground" />
+          <LayersIcon className="h-5 w-5 text-muted-foreground" />
         </div>
       );
     }
@@ -621,7 +621,7 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
         {!embedded && (
           <div className="flex items-center justify-between p-2 border-b border-border/50">
             <div className="flex items-center gap-2">
-              <Layers className="h-4 w-4" />
+              <LayersIcon className="h-4 w-4" />
               <span className="text-sm font-medium">Layers</span>
             </div>
             <LayersActions />
@@ -637,7 +637,7 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
               className="w-full text-xs"
               onClick={() => canvasStore.unfocusLayer()}
             >
-              <Focus className="h-3 w-3 mr-1" />
+              <FocusIcon className="h-3 w-3 mr-1" />
               Exit Focus Mode
             </Button>
           </div>

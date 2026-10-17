@@ -1,6 +1,6 @@
 import type React from "react";
 import { useState } from "react";
-import { Check, Download, Link2, Loader2 } from "lucide-react";
+import { CheckIcon, DownloadIcon, LinkIcon, LoaderIcon } from "@/components/icons";
 import { toast } from "sonner";
 import type { ShareData } from "@/services/ShareService";
 
@@ -64,7 +64,7 @@ const ShareViewer: React.FC<ShareViewerProps> = ({ loading, error, drawing, onRe
       <main className="flex flex-1 flex-col items-center justify-center px-6 py-10">
         {loading ? (
           <div className="flex flex-col items-center gap-3 text-zk-muted">
-            <Loader2 className="h-6 w-6 animate-spin" />
+            <LoaderIcon className="h-6 w-6 animate-spin" />
             <p className="text-[13px]">Loading the drawing…</p>
           </div>
         ) : error || !drawing ? (
@@ -115,14 +115,14 @@ const ShareViewer: React.FC<ShareViewerProps> = ({ loading, error, drawing, onRe
                 onClick={download}
                 className="flex h-10 items-center gap-2 rounded-[4px] bg-zk-accent px-5 text-[14px] font-semibold text-zk-on-accent hover:brightness-110"
               >
-                <Download className="h-4 w-4" />
+                <DownloadIcon className="h-4 w-4" />
                 Download
               </button>
               <button
                 onClick={copyLink}
                 className="flex h-10 items-center gap-2 rounded-[4px] bg-zk-raised px-4 text-[14px] font-medium text-zk-text hover:bg-zk-hover"
               >
-                {copied ? <Check className="h-4 w-4 text-zk-accent" /> : <Link2 className="h-4 w-4" />}
+                {copied ? <CheckIcon className="h-4 w-4 text-zk-accent" /> : <LinkIcon className="h-4 w-4" />}
                 {copied ? "Copied" : "Copy link"}
               </button>
             </div>

@@ -10,7 +10,17 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
-import { Plus, Pencil, Trash2, MoreHorizontal, Search, LayoutGrid, List, Settings, X } from "lucide-react";
+import {
+  CloseIcon,
+  LayoutGridIcon,
+  ListIcon,
+  MoreIcon,
+  PencilIcon,
+  PlusIcon,
+  SearchIcon,
+  SettingsIcon,
+  TrashIcon,
+} from "@/components/icons";
 import { DexieService } from "@/services/DexieService";
 import { BlobStorageService } from "@/services/BlobStorageService";
 import type { ISavedDrawing } from "@/models/VaultModel";
@@ -199,18 +209,18 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
           onClick={(e) => e.stopPropagation()}
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[4px] text-zk-muted opacity-0 transition-opacity group-hover:opacity-100 hover:bg-zk-hover hover:text-zk-text focus-visible:opacity-100 data-[state=open]:opacity-100"
         >
-          <MoreHorizontal className="h-4 w-4" />
+          <MoreIcon className="h-4 w-4" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()} onCloseAutoFocus={(e) => e.preventDefault()}>
         <DropdownMenuItem onClick={() => onEditDrawing(drawing.id)}>Open</DropdownMenuItem>
         <DropdownMenuItem onClick={() => startRename(drawing)}>
-          <Pencil className="h-4 w-4" />
+          <PencilIcon className="h-4 w-4" />
           Rename
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => setPendingDelete(drawing)} className="text-[#ff8a7a] focus:text-[#ff8a7a]">
-          <Trash2 className="h-4 w-4" />
+          <TrashIcon className="h-4 w-4" />
           Delete…
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -236,13 +246,13 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
             aria-label="Settings"
             className="flex h-9 w-9 items-center justify-center rounded-[4px] text-zk-text-2 hover:bg-zk-raised hover:text-zk-text"
           >
-            <Settings className="h-[18px] w-[18px]" />
+            <SettingsIcon className="h-[18px] w-[18px]" />
           </button>
           <button
             onClick={onNewDrawing}
             className="flex h-9 items-center gap-2 rounded-[4px] bg-zk-accent px-4 text-[14px] font-semibold text-zk-on-accent hover:brightness-110"
           >
-            <Plus className="h-4 w-4" />
+            <PlusIcon className="h-4 w-4" />
             New drawing
           </button>
         </div>
@@ -266,7 +276,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
           {!vaultStore.isEmpty && (
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
-                <Search className="pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-zk-muted" />
+                <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-zk-muted" />
                 <input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -280,7 +290,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
                     aria-label="Clear search"
                     className="absolute top-1/2 right-1.5 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-[3px] text-zk-muted hover:text-zk-text"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <CloseIcon className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>
@@ -301,8 +311,8 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
               </div>
               <div className="flex h-9 items-center gap-0.5 rounded-[4px] bg-zk-raised/60 p-0.5" role="radiogroup" aria-label="View">
                 {([
-                  { id: "grid", label: "Grid", icon: LayoutGrid },
-                  { id: "list", label: "List", icon: List },
+                  { id: "grid", label: "Grid", icon: LayoutGridIcon },
+                  { id: "list", label: "List", icon: ListIcon },
                 ] as const).map((v) => (
                   <button
                     key={v.id}
@@ -335,7 +345,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
               className="mb-8 flex aspect-[4/3] w-64 items-center justify-center rounded-[6px] bg-[#FBFAF6] text-[#b5b2aa] transition-transform hover:-translate-y-0.5"
               aria-label="Start your first drawing"
             >
-              <Plus className="h-10 w-10" />
+              <PlusIcon className="h-10 w-10" />
             </button>
             <h2 className="font-display text-[28px] font-semibold">Nothing here yet</h2>
             <p className="mt-2 max-w-sm text-[14px] text-zk-muted">
@@ -345,7 +355,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
               onClick={onNewDrawing}
               className="mt-6 flex h-10 items-center gap-2 rounded-[4px] bg-zk-accent px-5 text-[14px] font-semibold text-zk-on-accent hover:brightness-110"
             >
-              <Plus className="h-4 w-4" />
+              <PlusIcon className="h-4 w-4" />
               Start drawing
             </button>
           </div>
@@ -365,7 +375,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
                   className="group flex h-full w-full flex-col rounded-[6px] p-2 text-left transition-colors hover:bg-zk-raised"
                 >
                   <span className="flex aspect-[4/3] w-full items-center justify-center rounded-[4px] border border-dashed border-zk-divider text-zk-muted transition-colors group-hover:border-zk-accent group-hover:text-zk-accent">
-                    <Plus className="h-7 w-7" />
+                    <PlusIcon className="h-7 w-7" />
                   </span>
                   <span className="px-1 pt-3 font-display text-[16px] font-semibold text-zk-text-2 group-hover:text-zk-text">
                     New drawing

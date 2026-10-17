@@ -5,13 +5,13 @@ import { useState, useCallback, useRef } from "react";
 import { observer } from "mobx-react-lite";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "./ui/dialog";
 import {
-  Upload,
-  Link,
-  Image as ImageIcon,
-  Loader2,
-  AlertCircle,
-  CheckCircle,
-} from "lucide-react";
+  AlertCircleIcon,
+  CheckCircleIcon,
+  ImageIcon,
+  LinkIcon,
+  LoaderIcon,
+  UploadIcon,
+} from "@/components/icons";
 import { ImportService, type ImportResult } from "@/services/ImportService";
 import { useCanvasStore } from "@/hooks/useStores";
 
@@ -172,8 +172,8 @@ const ImportDialog: React.FC<ImportDialogProps> = observer(
 
           <div className="grid grid-cols-2 gap-1 rounded-[4px] bg-zk-raised/50 p-1" role="tablist" aria-label="Import from">
             {([
-              { id: "file", label: "From file", icon: Upload },
-              { id: "url", label: "From link", icon: Link },
+              { id: "file", label: "From file", icon: UploadIcon },
+              { id: "url", label: "From link", icon: LinkIcon },
             ] as const).map((t) => (
               <button
                 key={t.id}
@@ -224,7 +224,7 @@ const ImportDialog: React.FC<ImportDialogProps> = observer(
               />
               {isLoading ? (
                 <>
-                  <Loader2 className="h-6 w-6 animate-spin text-zk-muted" />
+                  <LoaderIcon className="h-6 w-6 animate-spin text-zk-muted" />
                   <p className="text-[13px] text-zk-text-2">Importing…</p>
                 </>
               ) : (
@@ -266,7 +266,7 @@ const ImportDialog: React.FC<ImportDialogProps> = observer(
                   disabled={isLoading || !url.trim()}
                   className="flex h-10 w-24 items-center justify-center rounded-[4px] bg-zk-accent text-[13px] font-semibold text-zk-on-accent hover:brightness-110 disabled:opacity-40"
                 >
-                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Import"}
+                  {isLoading ? <LoaderIcon className="h-4 w-4 animate-spin" /> : "Import"}
                 </button>
               </div>
               <p className="text-[12px] text-zk-muted">Some sites block other apps from loading their images.</p>
@@ -275,14 +275,14 @@ const ImportDialog: React.FC<ImportDialogProps> = observer(
 
           {error && (
             <div role="alert" className="flex items-start gap-2 rounded-[4px] bg-[#3a1f1f] px-3 py-2.5 text-[12px] text-[#ffb4a8]">
-              <AlertCircle className="mt-px h-4 w-4 shrink-0" />
+              <AlertCircleIcon className="mt-px h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           {importResults.length > 0 && importResults.every((r) => r.success) && (
             <div role="status" className="flex items-center gap-2 rounded-[4px] bg-zk-selected px-3 py-2.5 text-[12px] text-zk-text">
-              <CheckCircle className="h-4 w-4 shrink-0 text-zk-accent" />
+              <CheckCircleIcon className="h-4 w-4 shrink-0 text-zk-accent" />
               <span>{importResults.length === 1 ? "Image added to the canvas." : `${importResults.length} images added to the canvas.`}</span>
             </div>
           )}

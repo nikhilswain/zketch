@@ -2,19 +2,19 @@ import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import {
-  ChevronDown,
-  ChevronUp,
-  Circle,
-  Diamond,
-  Eraser,
-  Hand,
-  Maximize2,
-  MousePointer2,
-  Pencil,
-  Shapes,
-  Square,
-  Triangle,
-} from "lucide-react";
+  ChevronDownIcon,
+  ChevronUpIcon,
+  CircleIcon,
+  DiamondIcon,
+  EraserIcon,
+  FitIcon,
+  HandIcon,
+  PencilIcon,
+  SelectIcon,
+  ShapesIcon,
+  SquareIcon,
+  TriangleIcon,
+} from "@/components/icons";
 import { useCanvasStore, useSettingsStore } from "@/hooks/useStores";
 import { brushRegistry } from "@/engine/render/BrushRegistry";
 import { lastBrush, selectBrush } from "@/utils/brushMemory";
@@ -33,11 +33,11 @@ import { PresetsBody } from "./panels/PresetsPanel";
 import { SWATCHES } from "./panels/ColourPanel";
 import { PANELS } from "./panels";
 
-const SHAPES: { kind: ShapeKind; label: string; Icon: typeof Square }[] = [
-  { kind: "rectangle", label: "Rectangle", Icon: Square },
-  { kind: "circle", label: "Circle", Icon: Circle },
-  { kind: "diamond", label: "Diamond", Icon: Diamond },
-  { kind: "triangle", label: "Triangle", Icon: Triangle },
+const SHAPES: { kind: ShapeKind; label: string; Icon: typeof SquareIcon }[] = [
+  { kind: "rectangle", label: "Rectangle", Icon: SquareIcon },
+  { kind: "circle", label: "Circle", Icon: CircleIcon },
+  { kind: "diamond", label: "Diamond", Icon: DiamondIcon },
+  { kind: "triangle", label: "Triangle", Icon: TriangleIcon },
 ];
 
 const Divider = () => <span className="h-7 w-px shrink-0 bg-zk-divider" />;
@@ -132,14 +132,14 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
     >
       <div className="flex gap-0.5">
         <ToolButton label="Select (V)" active={tool === "select"} onClick={() => canvasStore.setActiveTool("select")}>
-          <MousePointer2 className="h-[18px] w-[18px]" strokeWidth={1.5} />
+          <SelectIcon className="h-[18px] w-[18px]" />
         </ToolButton>
         <ToolButton
           label="Draw (2)"
           active={drawing}
           onClick={() => selectBrush(canvasStore, style === "eraser" ? lastBrush() : style)}
         >
-          <Pencil className="h-[18px] w-[18px]" strokeWidth={1.5} />
+          <PencilIcon className="h-[18px] w-[18px]" />
         </ToolButton>
         <ToolButton
           label="Erase (3)"
@@ -149,13 +149,13 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
             canvasStore.setActiveTool("brush");
           }}
         >
-          <Eraser className="h-[18px] w-[18px]" strokeWidth={1.5} />
+          <EraserIcon className="h-[18px] w-[18px]" />
         </ToolButton>
         <ToolButton label="Shapes (5)" active={tool === "shape"} onClick={() => canvasStore.setActiveTool("shape")}>
-          <Shapes className="h-[18px] w-[18px]" strokeWidth={1.5} />
+          <ShapesIcon className="h-[18px] w-[18px]" />
         </ToolButton>
         <ToolButton label="Pan (or hold Space)" active={tool === "pan"} onClick={() => canvasStore.setActiveTool("pan")}>
-          <Hand className="h-[18px] w-[18px]" strokeWidth={1.5} />
+          <HandIcon className="h-[18px] w-[18px]" />
         </ToolButton>
       </div>
       <Divider />
@@ -177,7 +177,7 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
               style={{ filter: "invert(0.92)" }}
             />
             <span className="hidden max-w-[110px] truncate text-[13px] font-medium min-[900px]:inline">{brush?.label ?? brushKey}</span>
-            <ChevronUp className="h-3 w-3 text-zk-muted" />
+            <ChevronUpIcon className="h-3 w-3 text-zk-muted" />
           </button>
           {popover && <BrushPopover onClose={() => setPopover(false)} />}
           <div className="w-[112px] min-[900px]:w-[136px]">
@@ -250,7 +250,7 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
                 active={canvasStore.currentShapeType === kind}
                 onClick={() => canvasStore.setCurrentShapeType(kind)}
               >
-                <Icon className="h-[17px] w-[17px]" strokeWidth={1.5} />
+                <Icon className="h-[17px] w-[17px]" />
               </ToolButton>
             ))}
           </div>
@@ -305,7 +305,7 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
           +
         </button>
         <button aria-label="Fit to screen" title="Fit to screen" onClick={onFit} className="flex h-8 w-8 items-center justify-center rounded-[4px] hover:bg-zk-raised">
-          <Maximize2 className="h-[15px] w-[15px]" strokeWidth={1.5} />
+          <FitIcon className="h-[15px] w-[15px]" />
         </button>
       </div>
 
@@ -322,7 +322,7 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
             }`}
           >
             <span className="hidden min-[1100px]:inline">Panels</span>
-            {deckOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+            {deckOpen ? <ChevronDownIcon className="h-3.5 w-3.5" /> : <ChevronUpIcon className="h-3.5 w-3.5" />}
           </button>
         </>
       )}

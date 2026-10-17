@@ -1,7 +1,7 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
-import { Check, X } from "lucide-react";
+import { CheckIcon, CloseIcon } from "@/components/icons";
 import { useSettingsStore } from "@/hooks/useStores";
 import { ACCENTS } from "@/utils/accent";
 import { applyLayout, dockLayout, type LayoutId } from "@/utils/dockLayout";
@@ -89,7 +89,7 @@ const Option: React.FC<{
     {children}
     <span className="flex items-center gap-2 text-[14px] font-semibold text-zk-text">
       {label}
-      {selected && <Check className="h-3.5 w-3.5 text-zk-accent" />}
+      {selected && <CheckIcon className="h-3.5 w-3.5 text-zk-accent" />}
     </span>
     {hint && <span className="text-[12px] leading-relaxed text-zk-muted">{hint}</span>}
   </button>
@@ -162,7 +162,7 @@ const SettingsPage: React.FC<{ onClose: () => void }> = observer(({ onClose }) =
           aria-label="Close settings"
           className="sticky top-4 float-right mr-4 flex h-9 w-9 items-center justify-center rounded-[6px] bg-zk-raised text-zk-text hover:bg-zk-hover"
         >
-          <X className="h-4 w-4" />
+          <CloseIcon className="h-4 w-4" />
         </button>
         <div className="mx-auto flex max-w-3xl flex-col gap-10 px-8 py-8">
           <Section id="appearance" title="Appearance" lead="Your accent colour marks the active tool, primary buttons, the slider you drag, the active layer and selections on the canvas.">

@@ -1,7 +1,15 @@
 import type React from "react";
 import { useEffect, useState } from "react";
 import { observer } from "mobx-react-lite";
-import { Check, Copy, Download, ExternalLink, Link2, Loader2, Share2 } from "lucide-react";
+import {
+  CheckIcon,
+  CopyIcon,
+  DownloadIcon,
+  ExternalLinkIcon,
+  LinkIcon,
+  LoaderIcon,
+  ShareIcon,
+} from "@/components/icons";
 import { toast } from "sonner";
 import { useSettingsStore } from "../hooks/useStores";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
@@ -175,7 +183,7 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
                     style={transparent ? { background: CHECKER } : undefined}
                   />
                 ) : (
-                  <Loader2 className="h-6 w-6 animate-spin text-zk-muted" />
+                  <LoaderIcon className="h-6 w-6 animate-spin text-zk-muted" />
                 )
               ) : (
                 <p className="max-w-[240px] text-center text-[13px] text-zk-muted">
@@ -215,7 +223,7 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
                       >
                         <span className="flex items-center gap-1.5 text-[14px] font-semibold text-zk-text">
                           {f.label}
-                          {selected && <Check className="h-3.5 w-3.5 text-zk-accent" />}
+                          {selected && <CheckIcon className="h-3.5 w-3.5 text-zk-accent" />}
                         </span>
                         <span className="text-[11px] leading-snug text-zk-muted">{f.hint}</span>
                       </button>
@@ -296,7 +304,7 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
                         aria-label="Copy link"
                         className="flex h-9 w-9 items-center justify-center rounded-[4px] bg-zk-raised text-zk-text hover:bg-zk-hover"
                       >
-                        {copied ? <Check className="h-4 w-4 text-zk-accent" /> : <Copy className="h-4 w-4" />}
+                        {copied ? <CheckIcon className="h-4 w-4 text-zk-accent" /> : <CopyIcon className="h-4 w-4" />}
                       </button>
                       <a
                         href={shareUrl}
@@ -305,7 +313,7 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
                         aria-label="Open link"
                         className="flex h-9 w-9 items-center justify-center rounded-[4px] bg-zk-raised text-zk-text hover:bg-zk-hover"
                       >
-                        <ExternalLink className="h-4 w-4" />
+                        <ExternalLinkIcon className="h-4 w-4" />
                       </a>
                       {typeof navigator !== "undefined" && "share" in navigator && (
                         <button
@@ -313,7 +321,7 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
                           aria-label="Share via…"
                           className="flex h-9 w-9 items-center justify-center rounded-[4px] bg-zk-raised text-zk-text hover:bg-zk-hover"
                         >
-                          <Share2 className="h-4 w-4" />
+                          <ShareIcon className="h-4 w-4" />
                         </button>
                       )}
                     </div>
@@ -326,7 +334,7 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
                       disabled={sharing || !hasContent}
                       className="flex h-9 items-center justify-center gap-2 rounded-[4px] bg-zk-raised text-[13px] font-medium text-zk-text transition-colors hover:bg-zk-hover disabled:opacity-50"
                     >
-                      {sharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+                      {sharing ? <LoaderIcon className="h-4 w-4 animate-spin" /> : <LinkIcon className="h-4 w-4" />}
                       {sharing ? "Creating link…" : "Create share link"}
                     </button>
                     <p className="text-[11px] text-zk-muted">Anyone with the link can view the image for 30 days.</p>
@@ -347,7 +355,7 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
                 disabled={!hasContent}
                 className="flex h-10 flex-1 items-center justify-center gap-2 rounded-[4px] bg-zk-accent text-[14px] font-semibold text-zk-on-accent transition-[filter] hover:brightness-110 disabled:opacity-40"
               >
-                <Download className="h-4 w-4" />
+                <DownloadIcon className="h-4 w-4" />
                 Download {format.toUpperCase()}
               </button>
             </div>
