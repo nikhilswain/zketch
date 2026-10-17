@@ -9,27 +9,19 @@ import {
   useSettingsStore,
 } from "@/hooks/useStores";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
-import IconBar from "./sidebar";
-import FloatingPanel from "./sidebar/FloatingPanel";
-import ToolSettingsPanel from "./sidebar/ToolSettingsPanel";
-import ShapeSettingsPanel from "./sidebar/ShapeSettingsPanel";
-import ColorPanel from "./sidebar/ColorPanel";
-import BackgroundPanel from "./sidebar/BackgroundPanel";
-import TouchModePanel from "./sidebar/TouchModePanel";
-import UndoIcon from "@/icons/UndoIcon";
-import RedoIcon from "@/icons/RedoIcon";
-import TrashIcon from "@/icons/TrashIcon";
 import DrawingCanvas from "./drawing-canvas";
-import FloatingDock from "./floating-dock";
 import ExportDialog from "./export-dialog";
 import ImportDialog from "./import-dialog";
-import LayersPanel from "./layers-panel";
 import { ExportService } from "@/services/ExportService";
 import { ThumbnailService } from "@/services/ThumbnailService";
 import { BlobStorageService } from "@/services/BlobStorageService";
 import { serializeLayers } from "@/utils/serializeLayers";
 import { Button } from "./ui/button";
-import { ArrowLeft, ChevronRight, ChevronLeft, Layers, Loader2, Check, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
+import StudioShell from "./studio/StudioShell";
+import TopLeftBlock from "./studio/TopLeftBlock";
+import TopRightBlock from "./studio/TopRightBlock";
+import { StudioContext } from "./studio/StudioContext";
 import type { ExportFormat } from "@/models/SettingsModel";
 import type { BackgroundType } from "@/models/CanvasModel";
 import { toast } from "sonner";
@@ -54,15 +46,12 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     const isDrawingMode = canvasStore.activeTool !== "pan";
     const [showExportDialog, setShowExportDialog] = useState(false);
     const [showImportDialog, setShowImportDialog] = useState(false);
-    const [openPanels, setOpenPanels] = useState<Set<string>>(new Set());
     const [showClearModal, setShowClearModal] = useState(false);
-    const [layersPanelCollapsed, setLayersPanelCollapsed] = useState(false);
     // Track the current drawing ID (may differ from prop after first save of new drawing)
     const [currentDrawingId, setCurrentDrawingId] = useState<string | null>(
       editingDrawingId,
     );
     // Track if rename was just done (to prevent double toast from Enter + blur)
-    const justRenamedRef = useRef(false);
     const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
     const isDirtyRef = useRef(false);
     const autosaveTimerRef = useRef<number | null>(null);
@@ -299,17 +288,6 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
       }
     };
 
-    const togglePanel = (panelId: string) => {
-      setOpenPanels((prev) => {
-        const next = new Set(prev);
-        if (next.has(panelId)) {
-          next.delete(panelId);
-        } else {
-          next.add(panelId);
-        }
-        return next;
-      });
-    };
 
     const handleClear = () => {
       setShowClearModal(true);
@@ -462,228 +440,70 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     const canvasLocked = animatingLayerId !== null;
 
     return (
-      <div className="fixed inset-0 bg-gray-100">
-        {/* Icon bar + floating panels */}
-        <IconBar
-          openPanels={openPanels}
-          onTogglePanel={togglePanel}
-          onImport={() => setShowImportDialog(true)}
-          onExport={handleShowExportDialog}
-        />
+      <StudioContext.Provider
+        value={{
+          onAnimationFrame: handleAnimationFrame,
+          onAnimationStateChange: handleAnimationStateChange,
+        }}
+      >
+        <StudioShell
+          onFit={() => {
+            canvasStore.setZoom(1);
+            canvasStore.setPan(0, 0);
+          }}
+          topLeft={
+            <TopLeftBlock
+              drawingName={drawingName}
+              onNameChange={setDrawingName}
+              onNameCommit={(viaEnter) => {
+                if (viaEnter) handleRename(true);
+                else if (currentDrawingId && drawingName.trim()) handleRename(false);
+              }}
+              saveStatus={saveStatus}
+              onBack={onBackToVault}
+              onImport={() => setShowImportDialog(true)}
+              onExport={handleShowExportDialog}
+              onClear={handleClear}
+            />
+          }
+          topRight={<TopRightBlock onShare={handleShowExportDialog} />}
+        >
+          <DrawingCanvas
+            isDrawingMode={isDrawingMode}
+            animatingLayerId={animatingLayerId}
+            animationStrokes={animationStrokes}
+            canvasLocked={canvasLocked}
+          />
+          {canvasLocked && (
+            <div className="pointer-events-none absolute top-16 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-[4px] bg-zk-surface px-3 py-1.5 text-[12px] text-zk-text">
+              <Lock className="h-3 w-3 text-zk-accent" />
+              Animation playing — stop it to edit
+            </div>
+          )}
+        </StudioShell>
 
-        {openPanels.has("tool-settings") && (
-          <FloatingPanel
-            title={
-              canvasStore.currentBrushStyle === "eraser"
-                ? "Eraser Settings"
-                : "Brush Settings"
-            }
-            anchorIconIndex={0}
-            onClose={() => togglePanel("tool-settings")}
-          >
-            <ToolSettingsPanel />
-          </FloatingPanel>
-        )}
-
-        {openPanels.has("shape-settings") && (
-          <FloatingPanel
-            title="Shape Settings"
-            anchorIconIndex={1}
-            onClose={() => togglePanel("shape-settings")}
-          >
-            <ShapeSettingsPanel />
-          </FloatingPanel>
-        )}
-
-        {openPanels.has("color") && (
-          <FloatingPanel
-            title="Color"
-            anchorIconIndex={2}
-            onClose={() => togglePanel("color")}
-          >
-            <ColorPanel />
-          </FloatingPanel>
-        )}
-
-        {openPanels.has("background") && (
-          <FloatingPanel
-            title="Background"
-            anchorIconIndex={3}
-            onClose={() => togglePanel("background")}
-          >
-            <BackgroundPanel />
-          </FloatingPanel>
-        )}
-
-        {openPanels.has("touch-mode") && (
-          <FloatingPanel
-            title="Touch Mode"
-            anchorIconIndex={4}
-            onClose={() => togglePanel("touch-mode")}
-          >
-            <TouchModePanel />
-          </FloatingPanel>
-        )}
-
-        {/* Clear confirmation modal */}
         {showClearModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/20 backdrop-blur-sm">
-            <div className="bg-white rounded shadow-lg p-6 w-80 border border-gray-200">
-              <h3 className="text-lg font-semibold mb-4">
-                Clear Entire Canvas?
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div role="alertdialog" aria-labelledby="clear-title" className="w-[340px] rounded-[6px] bg-zk-surface p-6 text-zk-text shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
+              <h3 id="clear-title" className="mb-3 font-display text-2xl font-semibold">
+                Clear the canvas?
               </h3>
-              <p className="mb-6 text-sm text-gray-700">
-                This will delete <strong>all layers and all strokes</strong>. A
-                new empty layer will be created. This action cannot be undone.
+              <p className="mb-6 text-[13px] leading-relaxed text-zk-text-2">
+                This deletes <strong className="text-zk-text">all layers and strokes</strong> and
+                starts a fresh empty layer. It can&apos;t be undone.
               </p>
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={cancelClear}>
+                <Button variant="ghost" onClick={cancelClear}>
                   Cancel
                 </Button>
                 <Button variant="destructive" onClick={confirmClear}>
-                  Clear All
+                  Clear all
                 </Button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Floating header */}
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-white/90 backdrop-blur-sm border border-gray-200 rounded-lg px-4 py-2 flex items-center gap-4 z-10">
-          <Button
-            variant="ghost"
-            onClick={onBackToVault}
-            className="flex items-center gap-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Vault
-          </Button>
-          <input
-            type="text"
-            value={drawingName}
-            onChange={(e) => {
-              e.stopPropagation();
-              setDrawingName(e.target.value);
-            }}
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === "Enter") {
-                // Just rename on Enter, don't save entire drawing
-                justRenamedRef.current = true;
-                handleRename(true);
-                e.currentTarget.blur();
-              }
-            }}
-            onBlur={() => {
-              // Also rename when losing focus (if drawing exists)
-              // Skip if we just renamed via Enter key
-              if (justRenamedRef.current) {
-                justRenamedRef.current = false;
-                return;
-              }
-              if (currentDrawingId && drawingName.trim()) {
-                handleRename(false); // Silent on blur, just persist
-              }
-            }}
-            className="text-lg font-semibold bg-transparent border-none outline-none focus:bg-gray-50 px-2 py-1 rounded"
-          />
-          <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
-            {saveStatus === "saving" && (
-              <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
-            )}
-            {saveStatus === "saved" && (
-              <Check className="w-4 h-4 text-green-500" />
-            )}
-          </div>
-
-          <div className="w-px h-6 bg-gray-200" />
-
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => canvasStore.undo()}
-              disabled={!canvasStore.canUndo}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-              title="Undo"
-            >
-              <UndoIcon width={16} height={16} />
-            </button>
-            <button
-              onClick={() => canvasStore.redo()}
-              disabled={!canvasStore.canRedo}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-              title="Redo"
-            >
-              <RedoIcon width={16} height={16} />
-            </button>
-            <button
-              onClick={handleClear}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 hover:text-red-600 transition-colors"
-              title="Clear Canvas"
-            >
-              <TrashIcon width={16} height={16} />
-            </button>
-          </div>
-        </div>
-
-        {/* Full-screen canvas */}
-        <DrawingCanvas
-          isDrawingMode={isDrawingMode}
-          animatingLayerId={animatingLayerId}
-          animationStrokes={animationStrokes}
-          canvasLocked={canvasLocked}
-        />
-
-        {canvasLocked && (
-          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-10 pointer-events-none bg-amber-50/95 backdrop-blur-sm border border-amber-200 text-amber-900 text-xs px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1.5">
-            <Lock className="w-3 h-3" />
-            Animation active — stop to edit
-          </div>
-        )}
-
-        {/* Layers Panel - Right side */}
-        <div
-          className={`fixed top-20 right-4 transition-all duration-300 z-10 ${
-            layersPanelCollapsed ? "w-16" : "w-64"
-          }`}
-        >
-          {layersPanelCollapsed ? (
-            <div className="bg-white/90 backdrop-blur-sm border border-gray-200 rounded-lg shadow-lg">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setLayersPanelCollapsed(false)}
-                className="p-2 w-full flex items-center justify-center"
-                title="Show Layers Panel"
-              >
-                <Layers className="w-4 h-4 mr-1" />
-                <ChevronLeft className="w-3 h-3" />
-              </Button>
-            </div>
-          ) : (
-            <div className="bg-white/90 backdrop-blur-sm border border-gray-200 rounded-lg shadow-lg">
-              <div className="flex items-center justify-end p-1 border-b border-gray-200">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setLayersPanelCollapsed(true)}
-                  className="p-1 h-6 w-6"
-                  title="Hide Layers Panel"
-                >
-                  <ChevronRight className="w-3 h-3" />
-                </Button>
-              </div>
-              <LayersPanel
-                onAnimationFrame={handleAnimationFrame}
-                onAnimationStateChange={handleAnimationStateChange}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Floating dock */}
-        <FloatingDock />
-
-        {/* Export Dialog */}
         <ExportDialog
           isOpen={showExportDialog}
           onClose={() => setShowExportDialog(false)}
@@ -696,14 +516,13 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           layers={canvasStore.exportLayers as any}
         />
 
-        {/* Import Dialog */}
         <ImportDialog
           isOpen={showImportDialog}
           onClose={() => setShowImportDialog(false)}
           canvasWidth={1920}
           canvasHeight={1080}
         />
-      </div>
+      </StudioContext.Provider>
     );
   },
 );

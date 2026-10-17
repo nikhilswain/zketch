@@ -18,6 +18,7 @@ interface StrokeTrackProps {
   kind: TrackKind;
   color?: string;
   compact?: boolean;
+  dense?: boolean;
   hint?: string;
   onChange: (value: number) => void;
 }
@@ -37,6 +38,7 @@ const StrokeTrack: React.FC<StrokeTrackProps> = ({
   kind,
   color = "#3F5A4B",
   compact,
+  dense,
   hint,
   onChange,
 }) => {
@@ -50,7 +52,7 @@ const StrokeTrack: React.FC<StrokeTrackProps> = ({
   const t = Math.max(0, Math.min(1, (value - min) / span));
   const fillW = TRACK_PAD + t * (TRACK_W - 2 * TRACK_PAD);
   const pct = (fillW / TRACK_W) * 100;
-  const height = compact ? 30 : 40;
+  const height = dense ? 20 : compact ? 30 : 40;
 
   const commit = (raw: number) => {
     const snapped = Math.round((raw - min) / step) * step + min;
@@ -82,8 +84,8 @@ const StrokeTrack: React.FC<StrokeTrackProps> = ({
   const shape = trackPath(kind);
 
   return (
-    <div className="flex flex-col gap-1 font-ui select-none">
-      <div className="flex items-baseline justify-between text-[13px]">
+    <div className={`flex flex-col font-ui select-none ${dense ? "gap-0.5" : "gap-1"}`}>
+      <div className={`flex items-baseline justify-between ${dense ? "text-[11px]" : "text-[13px]"}`}>
         <span className="text-zk-text-2">{label}</span>
         {editing !== null ? (
           <input

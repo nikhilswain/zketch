@@ -1,3 +1,4 @@
+import { overlayAccent, overlayAccentFill } from "./render/overlayColor";
 import { GridRenderer } from "./GridRenderer";
 import { BlobStorageService } from "@/services/BlobStorageService";
 import { transformController } from "./TransformController";
@@ -56,6 +57,7 @@ export class CanvasEngine {
   private lastViewChange = 0;
   private settleTimer: ReturnType<typeof setTimeout> | null = null;
   private stopAssetListener: () => void = () => {};
+  private resizeObserver: ResizeObserver | null = null;
 
   // Image cache for rendering image layers
   private imageCache: Map<string, HTMLImageElement> = new Map();
@@ -120,6 +122,10 @@ export class CanvasEngine {
     });
     this.resize();
     window.addEventListener("resize", this.resize);
+    if (typeof ResizeObserver !== "undefined") {
+      this.resizeObserver = new ResizeObserver(() => this.resize());
+      this.resizeObserver.observe(this.root);
+    }
     this.loop();
   }
 
@@ -127,6 +133,7 @@ export class CanvasEngine {
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.stopAssetListener();
     window.removeEventListener("resize", this.resize);
+    this.resizeObserver?.disconnect();
     this.bg.remove();
     this.display.remove();
     this.ui.remove();
@@ -622,7 +629,7 @@ export class CanvasEngine {
     if (this.config.getSelectionAnchor?.()) return;
     const layers = this.config.getLayers?.() || [];
     ctx.save();
-    ctx.strokeStyle = "#3b82f6";
+    ctx.strokeStyle = overlayAccent();
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 3]);
     for (const ref of refs) {
@@ -693,8 +700,8 @@ export class CanvasEngine {
     const w = m.width * this.pz.zoom;
     const h = m.height * this.pz.zoom;
     ctx.save();
-    ctx.fillStyle = "rgba(59, 130, 246, 0.08)";
-    ctx.strokeStyle = "#3b82f6";
+    ctx.fillStyle = overlayAccentFill();
+    ctx.strokeStyle = overlayAccent();
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 3]);
     ctx.fillRect(x, y, w, h);

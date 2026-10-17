@@ -1,5 +1,6 @@
 import { reaction } from "mobx";
 import type { ISettingsModel } from "@/models/SettingsModel";
+import { setOverlayAccent } from "@/engine/render/overlayColor";
 
 export const ACCENTS = [
   { id: "signal-blue", name: "Signal Blue", hex: "#4D8BFF" },
@@ -22,7 +23,10 @@ export function currentAccent() {
 export function installAccent(settings: ISettingsModel): () => void {
   return reaction(
     () => settings.accent,
-    (hex) => document.documentElement.style.setProperty("--zk-accent", hex),
+    (hex) => {
+      document.documentElement.style.setProperty("--zk-accent", hex);
+      setOverlayAccent(hex);
+    },
     { fireImmediately: true },
   );
 }

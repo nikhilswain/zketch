@@ -1,0 +1,28 @@
+import type React from "react";
+import { observer } from "mobx-react-lite";
+import { Redo2, Undo2 } from "lucide-react";
+import { useCanvasStore } from "@/hooks/useStores";
+
+const TopRightBlock: React.FC<{ onShare: () => void }> = observer(({ onShare }) => {
+  const canvasStore = useCanvasStore();
+  const icon = "flex h-8 w-9 items-center justify-center rounded-[4px] text-zk-text hover:bg-zk-hover disabled:pointer-events-none disabled:opacity-30";
+  return (
+    <div className="pointer-events-auto flex h-10 items-center gap-0.5 rounded-[6px] bg-zk-surface px-1">
+      <button aria-label="Undo" title="Undo (Ctrl+Z)" onClick={() => canvasStore.undo()} disabled={!canvasStore.canUndo} className={icon}>
+        <Undo2 className="h-[17px] w-[17px]" strokeWidth={1.5} />
+      </button>
+      <button aria-label="Redo" title="Redo (Ctrl+Shift+Z)" onClick={() => canvasStore.redo()} disabled={!canvasStore.canRedo} className={icon}>
+        <Redo2 className="h-[17px] w-[17px]" strokeWidth={1.5} />
+      </button>
+      <span className="mx-1 h-5 w-px bg-zk-divider" />
+      <button
+        onClick={onShare}
+        className="h-8 rounded-[4px] bg-zk-accent px-3.5 text-[13px] font-semibold text-zk-on-accent hover:brightness-110"
+      >
+        Share
+      </button>
+    </div>
+  );
+});
+
+export default TopRightBlock;

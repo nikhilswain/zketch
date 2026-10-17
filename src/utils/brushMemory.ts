@@ -38,6 +38,7 @@ const memory = observable({
   brushes: observable.map<string, BrushState>(),
   strokeOpen: false,
   lastInput: "mouse" as string,
+  lastBrush: "ink" as string,
 });
 
 function isBrushState(value: unknown): value is BrushState {
@@ -200,6 +201,10 @@ export function setStrokeOpen(open: boolean) {
   scheduleSave();
 }
 
+export function lastBrush(): BrushStyle {
+  return memory.lastBrush as BrushStyle;
+}
+
 export function lastInputWasPen() {
   return memory.lastInput === "pen";
 }
@@ -221,7 +226,12 @@ export function installBrushMemory(store: ICanvasModel): () => void {
   };
   window.addEventListener("pointerdown", onPointerDown, true);
   const current = store.currentBrushStyle;
-  if (remembers(current)) apply(store, getBrushState(current));
+  if (remembers(current)) {
+    apply(store, getBrushState(current));
+    runInAction(() => {
+      memory.lastBrush = current;
+    });
+  }
 
   const stopSwitch = reaction(
     () => store.currentBrushStyle,
@@ -232,7 +242,12 @@ export function installBrushMemory(store: ICanvasModel): () => void {
         });
         scheduleSave();
       }
-      if (remembers(next)) apply(store, getBrushState(next));
+      if (remembers(next)) {
+        apply(store, getBrushState(next));
+        runInAction(() => {
+          memory.lastBrush = next;
+        });
+      }
     },
   );
 

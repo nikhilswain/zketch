@@ -1,3 +1,4 @@
+import { overlayAccent } from "./render/overlayColor";
 import type { PanZoom, TransformableLayer, TransformHandleType } from "./types";
 
 /**
@@ -541,7 +542,7 @@ export class TransformController {
     const { nw, ne, se, sw } = corners;
 
     // Draw bounding box
-    ctx.strokeStyle = "#0ea5e9";
+    ctx.strokeStyle = overlayAccent();
     ctx.lineWidth = 2;
     ctx.setLineDash([]);
     ctx.beginPath();
@@ -554,7 +555,7 @@ export class TransformController {
 
     // Draw corner handles
     ctx.fillStyle = "#ffffff";
-    ctx.strokeStyle = "#0ea5e9";
+    ctx.strokeStyle = overlayAccent();
     ctx.lineWidth = 2;
 
     for (const handle of handles) {

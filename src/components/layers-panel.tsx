@@ -269,10 +269,8 @@ const LayerItem: React.FC<LayerItemProps> = observer(
 
     return (
       <div
-        className={`group relative flex flex-col border-b border-border transition-colors ${
-          isActive
-            ? "bg-primary/10 border-l-2 border-l-primary"
-            : "hover:bg-muted/50"
+        className={`group relative mx-1.5 mb-0.5 flex flex-col rounded-[4px] transition-colors ${
+          isActive ? "bg-zk-selected" : "hover:bg-zk-raised"
         } ${!layer.visible ? "opacity-50" : ""}`}
       >
         {/* Main Layer Row */}
@@ -351,7 +349,7 @@ const LayerItem: React.FC<LayerItemProps> = observer(
             <Button
               variant="ghost"
               size="icon"
-              className={`h-6 w-6 ${isFocused ? "bg-primary/20" : ""}`}
+              className={`h-6 w-6 ${isFocused ? "bg-zk-hover text-zk-accent" : ""}`}
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleFocus();

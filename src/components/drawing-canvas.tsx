@@ -1616,7 +1616,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     return (
       <div
         ref={rootRef}
-        className={`fixed inset-0 touch-none ${getCursorStyle()} ${className}`}
+        className={`absolute inset-0 touch-none ${getCursorStyle()} ${className}`}
         tabIndex={0}
         onPointerMove={isTransforming ? handleTransformMove : undefined}
         onPointerUp={isTransforming ? handleTransformUp : undefined}
@@ -1630,7 +1630,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           msUserSelect: "none",
           WebkitTouchCallout: "none",
           WebkitTapHighlightColor: "transparent",
-          position: "fixed",
+          position: "absolute",
           inset: 0,
           msContentZooming: "none",
           overscrollBehavior: "none",
