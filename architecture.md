@@ -315,9 +315,10 @@ paper `grain` (`{id, scale, depth}`).
   `streamline`, Smoothing = `smoothing`, Taper = `taperStart`/`taperEnd` (px).
 - `engine/render/dynamics.ts`: `stabilize` (prefix-stable lag filter, so live
   preview and commit match), `speedPressure` (perfect-freehand's simulation),
-  `strokePressures` (pen → real pressure; mouse/touch → constant 0.5 at default,
-  speed-based above 50% width variation), `pressureGain` (= 2 × thinning,
-  multiplies a brush's built-in pressure response; 1 at the default 0.5),
+  `strokePressures` (pen → real pressure; mouse/touch → speed-based,
+  `0.5 + (speed − 0.5)·(2·thinning − 1)`: constant at the default 0.5, faster =
+  thinner above it, faster = thicker below), `pressureGain` (pen only: 2 ×
+  thinning, multiplies a brush's built-in pressure response; 1 otherwise),
   `taperFactor`, `strokeDefaultsFor(brush)`.
 - Pen and Marker use perfect-freehand with `simulatePressure: input !== "pen"`.
   Stamp brushes apply stabilizer/pressure/taper before `stampSmooth`; a stamp
@@ -335,6 +336,9 @@ paper `grain` (`{id, scale, depth}`).
   eraser is skipped. Persisted in localStorage `zketch-brush-memory-v1`.
   `applyPreset`/`resetPreset`/`resetStroke`; "edited" is computed against the
   base preset. Drawing code keeps reading `currentSize`/`brushSettings`.
+- Saving keeps the exact points of strokes with `input` (only the 2-decimal
+  trim in `StrokeOptimizer`); RDP simplification would change the point-indexed
+  stabilizer/speed pressure on reload. Older strokes are still simplified.
 - Picker previews: `npm run brushes:previews` (`tools/render-brush-previews.ts`,
   runs via vite-node; also chained after `npm run brushes`). Re-run after adding
   or retuning a brush.
