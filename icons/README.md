@@ -7,6 +7,7 @@ This folder is self-contained; it can be copied anywhere and used on its own.
 
 - `svg/<name>.svg`: one standalone SVG per icon.
 - `sprite.svg`: every icon as a `<symbol id="<name>">`.
+- `gallery.html`: a contact sheet of every icon at 14, 18, 24 and 56 px.
 - `defs/`: the drawings, written as centrelines (rounded polygons, paths, circles, arcs, dots).
 - `lib/`, `build.mjs`: the generator that turns the drawings into SVG.
 
@@ -34,5 +35,4 @@ because `currentColor` only works for inline SVG.
 
 ## Building
 
-`node build.mjs` regenerates `svg/` and `sprite.svg`. Add `--gallery <file.html>` to also write
-a contact sheet of every icon at 14, 18, 24 and 56 px.
+`node build.mjs` regenerates `svg/`, `sprite.svg` and `gallery.html`.

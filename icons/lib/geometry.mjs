@@ -347,3 +347,38 @@ export function rect(cx, cy, w, h, radius, deg = 0) {
   const corner = (dx, dy) => [cx + dx * c - dy * s, cy + dx * s + dy * c];
   return poly([corner(-w / 2, -h / 2), corner(w / 2, -h / 2), corner(w / 2, h / 2), corner(-w / 2, h / 2)], radius);
 }
+
+export function arrowHead(x, y, deg, len = 3.2, spread = 3) {
+  const t = (deg * Math.PI) / 180;
+  const d = [Math.cos(t), Math.sin(t)];
+  const p = [-d[1], d[0]];
+  const back = [x - len * d[0], y - len * d[1]];
+  return poly(
+    [[back[0] + spread * p[0], back[1] + spread * p[1]], [x, y], [back[0] - spread * p[0], back[1] - spread * p[1]]],
+    [0, 1.2, 0],
+    { closed: false },
+  );
+}
+
+export function regular(cx, cy, sides, r, radius, startDeg = -90) {
+  const pts = [];
+  for (let i = 0; i < sides; i++) {
+    const t = ((startDeg + (i * 360) / sides) * Math.PI) / 180;
+    pts.push([cx + r * Math.cos(t), cy + r * Math.sin(t)]);
+  }
+  return poly(pts, radius);
+}
+
+export function star(cx, cy, points, rOut, rIn, radii = [1.2, 0.8]) {
+  const pts = [];
+  const rs = [];
+  for (let i = 0; i < points * 2; i++) {
+    const t = ((-90 + (i * 180) / points) * Math.PI) / 180;
+    const r = i % 2 ? rIn : rOut;
+    pts.push([cx + r * Math.cos(t), cy + r * Math.sin(t)]);
+    rs.push(i % 2 ? radii[1] : radii[0]);
+  }
+  return poly(pts, rs);
+}
+
+export const combine = (...defs) => ({ strokes: defs.flatMap((d) => d.strokes) });

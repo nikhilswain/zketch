@@ -7,12 +7,18 @@ import { STYLE, iconSvg, spriteSvg, toPathData } from "./lib/svg.mjs";
 const root = dirname(fileURLToPath(import.meta.url));
 const appOut = join(root, "..", "src", "components", "icons", "index.tsx");
 
-const args = process.argv.slice(2);
-const galleryAt = args.includes("--gallery") ? args[args.indexOf("--gallery") + 1] : null;
+const galleryAt = join(root, "gallery.html");
+const GROUP_TITLES = { core: "Tools", canvas: "Canvas", ui: "Interface", common: "General", art: "Art" };
+const order = Object.keys(GROUP_TITLES);
+const rank = (f) => {
+  const i = order.indexOf(f.replace(/\.mjs$/, ""));
+  return i < 0 ? order.length : i;
+};
+const byGroup = (a, b) => rank(a) - rank(b) || a.localeCompare(b);
 
 const groups = [];
 const defs = new Map();
-for (const file of readdirSync(join(root, "defs")).filter((f) => f.endsWith(".mjs")).sort()) {
+for (const file of readdirSync(join(root, "defs")).filter((f) => f.endsWith(".mjs")).sort(byGroup)) {
   const mod = (await import(pathToFileURL(join(root, "defs", file)).href)).default;
   const group = file.replace(/\.mjs$/, "");
   const names = Object.keys(mod);
@@ -71,9 +77,9 @@ ${[...appNames].sort().map((n) => `export const ${pascal(n)}Icon = icon("${paths
 mkdirSync(dirname(appOut), { recursive: true });
 writeFileSync(appOut, app);
 
-if (galleryAt) {
+{
   const svg = (d, px) => `<svg width="${px}" height="${px}" viewBox="${STYLE.viewBox}" fill="none" stroke="currentColor" stroke-width="${STYLE.strokeWidth}" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
-  const cell = (name) => `<figure><div class="sizes">${[14, 18, 24, 56].map((px) => svg(paths.get(name), px)).join("")}</div><figcaption>${name}${appNames.includes(name) ? ' <span class="app">app</span>' : ""}</figcaption></figure>`;
+  const cell = (name) => `<figure><div class="sizes">${[14, 18, 24, 56].map((px) => svg(paths.get(name), px)).join("")}</div><figcaption>${name}</figcaption></figure>`;
   const bar = appNames.slice(0, 14).map((n, i) => `<span class="tile${i === 1 ? " on" : ""}">${svg(paths.get(n), 18)}</span>`).join("");
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Zketch icons</title><style>
 body{margin:0;background:#0E0E10;color:#ECEBE7;font:13px/1.4 system-ui,sans-serif;padding:32px}
@@ -84,11 +90,10 @@ h1{font-size:20px;margin:0 0 4px}h2{font-size:12px;letter-spacing:1.2px;text-tra
 figure{margin:0;background:#141416;border-radius:6px;padding:14px}
 .sizes{display:flex;align-items:flex-end;gap:14px}
 figcaption{margin-top:10px;color:#C4C2BC;font-size:12px}.app{color:#FF6B5B;font-size:10px;margin-left:4px}
-</style></head><body><h1>Zketch icons</h1><p style="color:#9C9A94;margin:0">${paths.size} icons, ${appNames.length} used by the app. Sizes 14 / 18 / 24 / 56 px.</p>
+</style></head><body><h1>Zketch icons</h1><p style="color:#9C9A94;margin:0">${paths.size} brush-drawn icons. Sizes 14 / 18 / 24 / 56 px.</p>
 <h2>In a bar</h2><div class="bar">${bar}</div>
-${groups.map(([g, names]) => `<h2>${g}</h2><div class="grid">${names.map(cell).join("")}</div>`).join("\n")}
+${groups.map(([g, names]) => `<h2>${GROUP_TITLES[g] ?? g}</h2><div class="grid">${names.map(cell).join("")}</div>`).join("\n")}
 </body></html>`;
-  mkdirSync(dirname(galleryAt), { recursive: true });
   writeFileSync(galleryAt, html);
 }
 
