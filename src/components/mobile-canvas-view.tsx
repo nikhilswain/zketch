@@ -116,6 +116,7 @@ const MobileCanvasView: React.FC<MobileCanvasViewProps> = observer(
                   easing: stroke.easing,
                   angle: stroke.angle,
                   softness: stroke.softness,
+                  input: stroke.input ?? null,
                 })),
               };
             });

@@ -31,6 +31,7 @@ export interface StrokeData {
   easing?: string;
   angle?: number;
   softness?: number;
+  input?: "pen" | "mouse" | "touch" | null;
 }
 
 /**

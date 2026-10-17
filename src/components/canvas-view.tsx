@@ -193,6 +193,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
                   easing: stroke.easing,
                   angle: stroke.angle,
                   softness: stroke.softness,
+                  input: stroke.input ?? null,
                 })),
               };
             });

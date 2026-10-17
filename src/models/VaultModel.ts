@@ -25,6 +25,7 @@ export interface IStrokeData {
   easing?: string;
   angle?: number;
   softness?: number;
+  input?: "pen" | "mouse" | "touch" | null;
 }
 
 // Legacy stroke-only layer (pre-refactor).

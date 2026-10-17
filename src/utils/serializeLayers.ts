@@ -42,6 +42,7 @@ function serializeElement(el: any) {
     easing: el.easing,
     angle: el.angle,
     softness: el.softness,
+    input: el.input ?? null,
   } as StrokeData);
 }
 

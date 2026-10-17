@@ -44,6 +44,10 @@ export const Stroke = types
     easing: types.optional(types.string, "linear"),
     angle: types.optional(types.number, 45),
     softness: types.optional(types.number, 0.5),
+    input: types.optional(
+      types.maybeNull(types.enumeration("StrokeInput", ["pen", "mouse", "touch"])),
+      null,
+    ),
   })
   .actions((self) => ({
     setColor(c: string) {

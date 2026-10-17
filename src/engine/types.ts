@@ -76,7 +76,20 @@ export interface StrokeLike {
   easing?: string;
   angle?: number;
   softness?: number;
+  input?: StrokeInput | null;
   live?: boolean;
+}
+
+export type StrokeInput = "pen" | "mouse" | "touch";
+
+export type StrokeSettingKey = "variation" | "smoothing" | "stabilizer" | "taper";
+
+export interface StrokeDefaults {
+  thinning: number;
+  smoothing: number;
+  streamline: number;
+  taperStart: number;
+  taperEnd: number;
 }
 
 // Base layer interface (shared properties)
@@ -190,6 +203,8 @@ export interface Brush {
   label?: string;
   category?: BrushCategory;
   maxSize?: number;
+  strokeSettings?: StrokeSettingKey[];
+  strokeDefaults?: Partial<StrokeDefaults>;
   legacy?: boolean;
   defaults?: Partial<BrushOptions>;
   presets?: BrushPreset[];

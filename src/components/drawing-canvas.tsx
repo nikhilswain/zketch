@@ -14,6 +14,7 @@ import type {
   TransformableLayer,
 } from "@/engine";
 import type { TransformStartState } from "@/engine/TransformController";
+import type { StrokeInput } from "@/engine/types";
 import { createGetBrushOptions } from "@/engine/brushOptions";
 import { ImportService } from "@/services/ImportService";
 import { toast } from "sonner";
@@ -68,6 +69,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     // Stroke timing for animation playback
     const strokeStartTimeRef = useRef<number | null>(null);
     const strokeIdRef = useRef("");
+    const strokeInputRef = useRef<StrokeInput>("mouse");
     // Distinguishes a real draw from onDrawStart that early-returned (image select / transform).
     const drawingStartedRef = useRef(false);
     // Active shape creation drag (start + current canvas-space coords).
@@ -470,6 +472,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             easing: canvasStore.brushSettings.easing,
             angle: canvasStore.brushSettings.angle,
             softness: canvasStore.brushSettings.softness,
+            input: strokeInputRef.current,
           };
           engineRef.current.setPreviewStroke(temp);
         } else {
@@ -842,6 +845,10 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
           strokeStartTimeRef.current = Date.now();
           strokeIdRef.current = crypto.randomUUID();
+          strokeInputRef.current =
+            pointerType === "pen" || pointerType === "touch"
+              ? pointerType
+              : "mouse";
           drawingStartedRef.current = true;
           setIsDrawing(true);
           setCurrentPoints([canvasPoint]);
@@ -1179,6 +1186,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             easing: canvasStore.brushSettings.easing,
             angle: canvasStore.brushSettings.angle,
             softness: canvasStore.brushSettings.softness,
+            input: strokeInputRef.current,
           };
           strokeIdRef.current = "";
 
