@@ -911,16 +911,23 @@ export const CanvasModel = types
         centerX?: number,
         centerY?: number,
       ) {
+        const page = self.page;
+        const basisW = page ? page.width : canvasWidth / self.zoom;
+        const basisH = page ? page.height : canvasHeight / self.zoom;
+        const cx =
+          centerX ?? (page ? page.x + page.width / 2 : (canvasWidth / 2 - self.panX) / self.zoom);
+        const cy =
+          centerY ?? (page ? page.y + page.height / 2 : (canvasHeight / 2 - self.panY) / self.zoom);
         const newLayer = createImageLayer(
           blobId,
           naturalWidth,
           naturalHeight,
-          canvasWidth,
-          canvasHeight,
+          basisW,
+          basisH,
           name ||
             `Image ${self.layers.filter((l) => l.type === "image").length + 1}`,
-          centerX,
-          centerY,
+          cx,
+          cy,
         );
         self.layers.push(Layer.create(newLayer as any));
         self.activeLayerId = newLayer.id;
