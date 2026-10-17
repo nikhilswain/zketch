@@ -671,6 +671,13 @@ export const CanvasModel = types
       loadPage(page: Page | null) {
         self.page = page ? { ...page } : null;
       },
+      syncViewToHistory() {
+        const entry = self.history[self.historyIndex];
+        if (!entry) return;
+        const next = self.history.slice();
+        next[self.historyIndex] = { ...entry, zoom: self.zoom, panX: self.panX, panY: self.panY };
+        self.history = next;
+      },
       setPage(page: Page | null) {
         self.page = page ? { ...page } : null;
         self.saveToHistory();

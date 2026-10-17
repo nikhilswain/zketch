@@ -201,7 +201,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               };
             });
             canvasStore.loadLayers(layersData as any, drawing.activeLayerId);
-            requestAnimationFrame(() => fitViewToPage(canvasStore));
+            requestAnimationFrame(() => fitViewToPage(canvasStore) && canvasStore.syncViewToHistory());
           } else {
             // No layers - start fresh
             canvasStore.clear();
@@ -212,7 +212,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         canvasStore.clear();
         canvasStore.setBackground(settingsStore.defaultBackground as BackgroundType);
         setDrawingName("Untitled Drawing");
-        requestAnimationFrame(() => fitViewToPage(canvasStore));
+        requestAnimationFrame(() => fitViewToPage(canvasStore) && canvasStore.syncViewToHistory());
       }
     }, [editingDrawingId, canvasStore, vaultStore]);
 
@@ -570,7 +570,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               const p = canvasStore.page;
               if (!p) return;
               canvasStore.setPage(resizePage({ x: p.x, y: p.y, width: p.width, height: p.height }, width, height));
-              requestAnimationFrame(() => fitViewToPage(canvasStore));
+              requestAnimationFrame(() => fitViewToPage(canvasStore) && canvasStore.syncViewToHistory());
             }}
           />
         )}

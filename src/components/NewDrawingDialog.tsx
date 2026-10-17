@@ -122,7 +122,7 @@ const NewDrawingDialog: React.FC<NewDrawingDialogProps> = ({ open, onOpenChange,
           }
         }}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && view === "choices" && (e.target as HTMLElement).tagName !== "INPUT") {
+          if (e.key === "Enter" && view === "choices" && e.target === e.currentTarget) {
             e.preventDefault();
             create();
           }

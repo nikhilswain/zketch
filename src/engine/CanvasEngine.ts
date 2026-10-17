@@ -359,6 +359,7 @@ export class CanvasEngine {
     const r = this.pageOnScreen();
     const ctx = this.displayCtx;
     ctx.save();
+    ctx.globalCompositeOperation = "source-atop";
     ctx.globalAlpha = 0.72;
     ctx.fillStyle = this.surround;
     ctx.beginPath();
