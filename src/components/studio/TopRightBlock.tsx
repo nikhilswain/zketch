@@ -1,9 +1,9 @@
 import type React from "react";
 import { observer } from "mobx-react-lite";
-import { RedoIcon, UndoIcon } from "@/components/icons";
+import { RedoIcon, TrashIcon, UndoIcon } from "@/components/icons";
 import { useCanvasStore } from "@/hooks/useStores";
 
-const TopRightBlock: React.FC<{ onShare: () => void }> = observer(({ onShare }) => {
+const TopRightBlock: React.FC<{ onShare: () => void; onClear: () => void }> = observer(({ onShare, onClear }) => {
   const canvasStore = useCanvasStore();
   const icon = "flex h-8 w-9 items-center justify-center rounded-[4px] text-zk-text hover:bg-zk-hover disabled:pointer-events-none disabled:opacity-30";
   return (
@@ -13,6 +13,9 @@ const TopRightBlock: React.FC<{ onShare: () => void }> = observer(({ onShare }) 
       </button>
       <button aria-label="Redo" title="Redo (Ctrl+Shift+Z)" onClick={() => canvasStore.redo()} disabled={!canvasStore.canRedo} className={icon}>
         <RedoIcon className="h-[17px] w-[17px]" />
+      </button>
+      <button aria-label="Clear canvas" title="Clear canvas" onClick={onClear} disabled={canvasStore.isEmpty} className={icon}>
+        <TrashIcon className="h-[17px] w-[17px]" />
       </button>
       <span className="mx-1 h-5 w-px bg-zk-divider" />
       <button

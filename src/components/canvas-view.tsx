@@ -505,12 +505,11 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               onBack={onBackToVault}
               onImport={() => setShowImportDialog(true)}
               onExport={handleShowExportDialog}
-              onClear={handleClear}
               onOpenSettings={() => setShowSettings(true)}
               onPageSize={() => setShowPageSize(true)}
             />
           }
-          topRight={<TopRightBlock onShare={handleShowExportDialog} />}
+          topRight={<TopRightBlock onShare={handleShowExportDialog} onClear={handleClear} />}
         >
           <DrawingCanvas
             isDrawingMode={isDrawingMode}

@@ -23,7 +23,6 @@ interface TopLeftBlockProps {
   onBack: () => void;
   onImport: () => void;
   onExport: () => void;
-  onClear: () => void;
   onOpenSettings: () => void;
   onPageSize?: () => void;
 }
@@ -53,7 +52,7 @@ const Tick: React.FC<{ on: boolean }> = ({ on }) => (
 );
 
 const TopLeftBlock: React.FC<TopLeftBlockProps> = observer(
-  ({ drawingName, onNameChange, onNameCommit, saveStatus, onBack, onImport, onExport, onClear, onOpenSettings, onPageSize }) => {
+  ({ drawingName, onNameChange, onNameCommit, saveStatus, onBack, onImport, onExport, onOpenSettings, onPageSize }) => {
     const canvasStore = useCanvasStore();
     const settingsStore = useSettingsStore();
     const inputRef = useRef<HTMLInputElement>(null);
@@ -130,9 +129,6 @@ const TopLeftBlock: React.FC<TopLeftBlockProps> = observer(
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onClear} className="text-red-400 focus:text-red-300">
-              Clear canvas…
-            </DropdownMenuItem>
             <DropdownMenuItem onClick={onOpenSettings}>Settings</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
