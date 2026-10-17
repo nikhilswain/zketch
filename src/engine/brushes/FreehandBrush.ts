@@ -23,6 +23,7 @@ export class FreehandBrush implements Brush {
       easing: easingFn(stroke.easing ?? "linear"),
       start: { taper: stroke.taperStart ?? options?.start?.taper ?? 0 },
       end: { taper: stroke.taperEnd ?? options?.end?.taper ?? 0 },
+      simulatePressure: stroke.input !== "pen",
       last: true,
     } as any);
     if (outline.length < 3) return;

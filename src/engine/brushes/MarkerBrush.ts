@@ -25,13 +25,15 @@ export class MarkerBrush implements Brush {
     options?: BrushOptions,
   ) {
     const pts = stroke.points.map((p) => [p.x, p.y, p.pressure ?? 0.5]);
+    const dynamic = stroke.input != null;
     const outline = getStroke(pts, {
       size: stroke.size,
       thinning: stroke.thinning ?? options?.thinning ?? 0.15,
       smoothing: stroke.smoothing ?? options?.smoothing ?? 0.45,
       streamline: stroke.streamline ?? options?.streamline ?? 0.4,
-      start: { cap: true, taper: 0 },
-      end: { cap: true, taper: 0 },
+      start: { cap: true, taper: dynamic ? (stroke.taperStart ?? 0) : 0 },
+      end: { cap: true, taper: dynamic ? (stroke.taperEnd ?? 0) : 0 },
+      simulatePressure: stroke.input !== "pen",
       last: true,
     } as any);
     if (outline.length < 3) return;

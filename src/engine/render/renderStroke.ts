@@ -16,7 +16,7 @@ export function renderStroke(
   if (!brush) return;
 
   const strokeForRender = isEraser
-    ? { ...stroke, taperStart: 0, taperEnd: 0, opacity: 1 }
+    ? { ...stroke, taperStart: 0, taperEnd: 0, opacity: 1, input: null }
     : stroke;
 
   const opts = getBrushOptions?.(key, stroke.size);
