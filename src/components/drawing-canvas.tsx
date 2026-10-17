@@ -1616,6 +1616,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     return (
       <div
         ref={rootRef}
+        data-canvas-root
         className={`absolute inset-0 touch-none ${getCursorStyle()} ${className}`}
         tabIndex={0}
         onPointerMove={isTransforming ? handleTransformMove : undefined}

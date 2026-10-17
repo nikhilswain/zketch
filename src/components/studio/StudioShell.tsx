@@ -1,7 +1,15 @@
 import type React from "react";
+import { useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
+import { useCanvasStore } from "@/hooks/useStores";
 import { PanelLeftOpen, PanelRightOpen } from "lucide-react";
-import { dockLayout, panelsIn, revealPanel, setSideOpen } from "@/utils/dockLayout";
+import {
+  dockLayout,
+  panelsIn,
+  revealPanel,
+  setDeckOpen,
+  setSideOpen,
+} from "@/utils/dockLayout";
 import DockArea from "./DockArea";
 import BottomBar from "./BottomBar";
 import { LayersStrip } from "./panels/LayersStudioPanel";
@@ -27,7 +35,27 @@ const ReopenTab: React.FC<{ side: "left" | "right" }> = ({ side }) => (
   </button>
 );
 
+const OVERLAY_QUERY = "(max-width: 1099px)";
+
+function useOverlayDocks() {
+  const [overlay, setOverlay] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(OVERLAY_QUERY).matches,
+  );
+  useEffect(() => {
+    const mql = window.matchMedia(OVERLAY_QUERY);
+    const update = () => setOverlay(mql.matches);
+    update();
+    mql.addEventListener("change", update);
+    return () => mql.removeEventListener("change", update);
+  }, []);
+  return overlay;
+}
+
 const StudioShell: React.FC<StudioShellProps> = observer(({ topLeft, topRight, onFit, children }) => {
+  const canvasStore = useCanvasStore();
+  const overlay = useOverlayDocks();
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const lastLeft = useRef<number | null>(null);
   const s = dockLayout.state;
   const leftIds = panelsIn("left");
   const rightIds = panelsIn("right");
@@ -41,12 +69,56 @@ const StudioShell: React.FC<StudioShellProps> = observer(({ topLeft, topRight, o
   const leftClosedOthers = !leftVisible && leftIds.some((id) => id !== "layers");
   const rightClosedOthers = !rightVisible && rightIds.some((id) => id !== "layers");
 
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      const left = el.getBoundingClientRect().left;
+      if (lastLeft.current !== null && left !== lastLeft.current) {
+        canvasStore.setPan(canvasStore.panX - (left - lastLeft.current), canvasStore.panY);
+      }
+      lastLeft.current = left;
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [canvasStore]);
+
+  useEffect(() => {
+    if (!overlay) return;
+    const el = viewportRef.current;
+    if (!el) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Element | null;
+      if (!t || !t.closest("[data-canvas-root]")) return;
+      if (dockLayout.state.leftOpen) setSideOpen("left", false);
+      if (dockLayout.state.rightOpen) setSideOpen("right", false);
+      if (dockLayout.state.deckOpen) setDeckOpen(false);
+    };
+    el.addEventListener("pointerdown", onDown, true);
+    return () => el.removeEventListener("pointerdown", onDown, true);
+  }, [overlay]);
+
   return (
     <div className="fixed inset-0 flex flex-col bg-zk-surface font-ui">
       <div className="flex min-h-0 flex-1">
-        {leftVisible && <DockArea dock="left" />}
-        <div data-canvas-viewport className="relative min-w-0 flex-1 overflow-hidden">
+        {leftVisible && !overlay && <DockArea dock="left" />}
+        <div ref={viewportRef} data-canvas-viewport className="relative min-w-0 flex-1 overflow-hidden">
           {children}
+          {overlay && leftVisible && (
+            <div className="absolute inset-y-0 left-0 z-20">
+              <DockArea dock="left" overlay />
+            </div>
+          )}
+          {overlay && rightVisible && (
+            <div className="absolute inset-y-0 right-0 z-20">
+              <DockArea dock="right" overlay />
+            </div>
+          )}
+          {overlay && deckVisible && (
+            <div className="absolute inset-x-0 bottom-0 z-20 shadow-[0_-12px_40px_rgba(0,0,0,0.35)]">
+              <DockArea dock="bottom" />
+            </div>
+          )}
           <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex items-start justify-between gap-3">
             {topLeft}
             {topRight}
@@ -68,9 +140,9 @@ const StudioShell: React.FC<StudioShellProps> = observer(({ topLeft, topRight, o
             )}
           </div>
         </div>
-        {rightVisible && <DockArea dock="right" />}
+        {rightVisible && !overlay && <DockArea dock="right" />}
       </div>
-      {deckVisible && <DockArea dock="bottom" />}
+      {deckVisible && !overlay && <DockArea dock="bottom" />}
       <BottomBar onFit={onFit} />
     </div>
   );
