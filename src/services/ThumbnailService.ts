@@ -5,6 +5,7 @@ import { GridRenderer } from "@/engine/GridRenderer";
 import { brushRegistry } from "@/engine/render/BrushRegistry";
 import { renderStroke } from "@/engine/render/renderStroke";
 import { renderShape } from "@/engine/render/renderShape";
+import type { Page } from "@/utils/page";
 
 interface ImageLayerData {
   type: "image";
@@ -36,7 +37,13 @@ export class ThumbnailService {
     background: string,
     width = 200,
     height = 150,
+    page: Page | null = null,
   ): Promise<Blob> {
+    if (page) {
+      const long = 300;
+      width = page.width >= page.height ? long : Math.max(1, Math.round((long * page.width) / page.height));
+      height = page.width >= page.height ? Math.max(1, Math.round((long * page.height) / page.width)) : long;
+    }
     const SS = 3;
     const work = document.createElement("canvas");
     work.width = width * SS;
@@ -51,6 +58,7 @@ export class ThumbnailService {
       background,
       width * SS,
       height * SS,
+      page,
     );
 
     const canvas = document.createElement("canvas");
@@ -73,6 +81,7 @@ export class ThumbnailService {
     background: string,
     width: number,
     height: number,
+    page: Page | null = null,
   ): Promise<void> {
     // Set background
     this.drawBackground(ctx, background, width, height);
@@ -81,17 +90,21 @@ export class ThumbnailService {
     const visibleLayers = layers.filter((l) => l.visible !== false);
 
     // Calculate bounds including both strokes and images
-    const bounds = this.calculateBoundsForLayers(visibleLayers);
+    const bounds = page ? null : this.calculateBoundsForLayers(visibleLayers);
 
-    if (!bounds) {
+    if (!page && !bounds) {
       return;
     }
 
-    const { minX, minY, scale, offsetX, offsetY } = this.calculateTransform(
-      bounds,
-      width,
-      height,
-    );
+    const { minX, minY, scale, offsetX, offsetY } = page
+      ? {
+          minX: 0,
+          minY: 0,
+          scale: width / page.width,
+          offsetX: (-page.x * width) / page.width,
+          offsetY: (-page.y * width) / page.width,
+        }
+      : this.calculateTransform(bounds!, width, height);
 
     // Load all images first
     const imageCache = new Map<string, HTMLImageElement>();

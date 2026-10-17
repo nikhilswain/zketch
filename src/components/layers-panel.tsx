@@ -46,6 +46,7 @@ function generateDrawLayerThumbnail(
   layerSnapshot: { elements: readonly any[] },
   width: number = 48,
   height: number = 36,
+  page: { x: number; y: number; width: number; height: number } | null = null,
 ): string {
   const SS = 3;
   const rw = width * SS;
@@ -70,6 +71,19 @@ function generateDrawLayerThumbnail(
   ctx.fillRect(0, 0, rw, rh);
 
   const elements = layerSnapshot.elements;
+  if (page) {
+    const pad = 2 * SS;
+    const k = Math.min((rw - pad * 2) / page.width, (rh - pad * 2) / page.height);
+    const px = (rw - page.width * k) / 2;
+    const py = (rh - page.height * k) / 2;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(px, py, page.width * k, page.height * k);
+    ctx.beginPath();
+    ctx.rect(px, py, page.width * k, page.height * k);
+    ctx.clip();
+    if (!elements || elements.length === 0) return finish();
+    return drawElements(ctx, elements, rw, rh, px - page.x * k, py - page.y * k, k, finish);
+  }
   if (!elements || elements.length === 0) return finish();
 
   // Compute bounds across all elements (sample-capped for perf).
@@ -105,7 +119,19 @@ function generateDrawLayerThumbnail(
   );
   const ox = padding + (rw - padding * 2 - cw * scale) / 2 - minX * scale;
   const oy = padding + (rh - padding * 2 - ch * scale) / 2 - minY * scale;
+  return drawElements(ctx, elements, rw, rh, ox, oy, scale, finish);
+}
 
+function drawElements(
+  ctx: CanvasRenderingContext2D,
+  elements: readonly any[],
+  rw: number,
+  rh: number,
+  ox: number,
+  oy: number,
+  scale: number,
+  finish: () => string,
+): string {
   const off = document.createElement("canvas");
   off.width = rw;
   off.height = rh;
@@ -211,7 +237,13 @@ export function useLayerThumbnail(layer: any): string {
           return;
         }
 
-        const thumb = generateDrawLayerThumbnail(snapshot);
+        const page = canvasStore.page;
+        const thumb = generateDrawLayerThumbnail(
+          snapshot,
+          48,
+          36,
+          page ? { x: page.x, y: page.y, width: page.width, height: page.height } : null,
+        );
         if (layerIdRef.current === layerId) setThumbnail(thumb);
       } catch (e) {
         // Layer may have been detached during reorder, ignore

@@ -225,6 +225,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           canvasStore.background,
           200,
           150,
+          canvasStore.page ? { ...canvasStore.page } : null,
         );
 
         const thumbnailId =

@@ -1,7 +1,7 @@
 import type React from "react";
 import { useState, useEffect } from "react";
 import { observer } from "mobx-react-lite";
-import { useVaultStore } from "../hooks/useStores";
+import { useSettingsStore, useVaultStore } from "../hooks/useStores";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dial
 import {
   CloseIcon,
   LayoutGridIcon,
+  MasonryIcon,
   ListIcon,
   MoreIcon,
   PencilIcon,
@@ -26,6 +27,8 @@ import { BlobStorageService } from "@/services/BlobStorageService";
 import type { ISavedDrawing } from "@/models/VaultModel";
 import SettingsPage from "./studio/SettingsPage";
 import { toast } from "sonner";
+import { SURROUND, type SurroundTone } from "@/utils/page";
+import MasonryColumns from "./MasonryColumns";
 
 type SortOrder = "updated" | "created" | "name";
 
@@ -118,23 +121,98 @@ function formatDate(date: Date) {
   return date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
 
+type ViewMode = "grid" | "masonry" | "list";
+const CHECKER_BG = "bg-[repeating-conic-gradient(#efefef_0%_25%,#ffffff_0%_50%)] bg-[length:14px_14px]";
+
 const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDrawing }) => {
   const vaultStore = useVaultStore();
   const [searchQuery, setSearchQuery] = useState("");
-  const [viewMode, setViewMode] = useState<"grid" | "list">(() => {
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
     try {
-      return localStorage.getItem("zketch-vault-view") === "list" ? "list" : "grid";
+      const v = localStorage.getItem("zketch-vault-view");
+      return v === "list" || v === "masonry" ? v : "grid";
     } catch {
       return "grid";
     }
   });
+  const settingsStore = useSettingsStore();
+  const surround = SURROUND[settingsStore.surround as SurroundTone];
   const [sortBy, setSortBy] = useState<SortOrder>("updated");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const [pendingDelete, setPendingDelete] = useState<ISavedDrawing | null>(null);
   const [showSettings, setShowSettings] = useState(false);
 
-  const chooseView = (mode: "grid" | "list") => {
+  const thumbBox = (drawing: ISavedDrawing, natural: boolean) => {
+    const checker = drawing.background === "transparent";
+    const page = drawing.page;
+    if (page && natural) {
+      return (
+        <div
+          className={`w-full overflow-hidden rounded-[4px] ${checker ? CHECKER_BG : "bg-white"}`}
+          style={{ aspectRatio: `${page.width} / ${page.height}` }}
+        >
+          <ThumbnailImage thumbnailId={drawing.thumbnail} alt={drawing.name} className="h-full w-full object-cover" />
+        </div>
+      );
+    }
+    if (page) {
+      return (
+        <div className="flex aspect-[4/3] w-full items-center justify-center overflow-hidden rounded-[4px] p-2" style={{ backgroundColor: surround }}>
+          <ThumbnailImage
+            thumbnailId={drawing.thumbnail}
+            alt={drawing.name}
+            className={`max-h-full max-w-full shadow-[0_2px_8px_rgba(0,0,0,0.18)] ${checker ? CHECKER_BG : ""}`}
+          />
+        </div>
+      );
+    }
+    return (
+      <div className={`aspect-[4/3] w-full overflow-hidden rounded-[4px] ${checker ? CHECKER_BG : "bg-white"}`}>
+        <ThumbnailImage thumbnailId={drawing.thumbnail} alt={drawing.name} className="h-full w-full object-cover" />
+      </div>
+    );
+  };
+
+  const newTile = (
+    <button
+      onClick={onNewDrawing}
+      className="group flex h-full w-full flex-col rounded-[6px] p-2 text-left transition-colors hover:bg-zk-raised"
+    >
+      <span className="flex aspect-[4/3] w-full items-center justify-center rounded-[4px] border border-dashed border-zk-divider text-zk-muted transition-colors group-hover:border-zk-accent group-hover:text-zk-accent">
+        <PlusIcon className="h-7 w-7" />
+      </span>
+      <span className="px-1 pt-3 font-display text-[16px] font-semibold text-zk-text-2 group-hover:text-zk-text">
+        New drawing
+      </span>
+    </button>
+  );
+
+  const card = (drawing: ISavedDrawing, natural: boolean) => (
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={() => open(drawing)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && editingId !== drawing.id) onEditDrawing(drawing.id);
+        if (e.key === "F2") startRename(drawing);
+      }}
+      className="group flex cursor-pointer flex-col rounded-[6px] p-2 transition-colors outline-none hover:bg-zk-raised focus-visible:bg-zk-raised"
+    >
+      {thumbBox(drawing, natural)}
+      <div className="flex items-start gap-2 px-1 pt-3">
+        <div className="min-w-0 flex-1">
+          {nameField(drawing, "text-[16px]")}
+          <p className="mt-0.5 truncate text-[12px] text-zk-muted">
+            Edited {formatDate(drawing.updatedAt)} · {plural(countStrokes(drawing), "stroke")}
+          </p>
+        </div>
+        {actions(drawing)}
+      </div>
+    </div>
+  );
+
+  const chooseView = (mode: ViewMode) => {
     setViewMode(mode);
     try {
       localStorage.setItem("zketch-vault-view", mode);
@@ -312,6 +390,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
               <div className="flex h-9 items-center gap-0.5 rounded-[4px] bg-zk-raised/60 p-0.5" role="radiogroup" aria-label="View">
                 {([
                   { id: "grid", label: "Grid", icon: LayoutGridIcon },
+                  { id: "masonry", label: "Masonry", icon: MasonryIcon },
                   { id: "list", label: "List", icon: ListIcon },
                 ] as const).map((v) => (
                   <button
@@ -366,49 +445,22 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
               Clear search
             </button>
           </div>
+        ) : viewMode === "masonry" ? (
+          <MasonryColumns
+            items={[
+              ...(!query ? [{ key: "new", aspect: 4 / 3, node: newTile }] : []),
+              ...drawings.map((drawing) => ({
+                key: drawing.id,
+                aspect: drawing.page ? drawing.page.width / drawing.page.height : 4 / 3,
+                node: card(drawing, true),
+              })),
+            ]}
+          />
         ) : viewMode === "grid" ? (
           <ul className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-3 gap-y-3">
-            {!query && (
-              <li>
-                <button
-                  onClick={onNewDrawing}
-                  className="group flex h-full w-full flex-col rounded-[6px] p-2 text-left transition-colors hover:bg-zk-raised"
-                >
-                  <span className="flex aspect-[4/3] w-full items-center justify-center rounded-[4px] border border-dashed border-zk-divider text-zk-muted transition-colors group-hover:border-zk-accent group-hover:text-zk-accent">
-                    <PlusIcon className="h-7 w-7" />
-                  </span>
-                  <span className="px-1 pt-3 font-display text-[16px] font-semibold text-zk-text-2 group-hover:text-zk-text">
-                    New drawing
-                  </span>
-                </button>
-              </li>
-            )}
+            {!query && <li>{newTile}</li>}
             {drawings.map((drawing) => (
-              <li key={drawing.id}>
-                <div
-                  role="link"
-                  tabIndex={0}
-                  onClick={() => open(drawing)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && editingId !== drawing.id) onEditDrawing(drawing.id);
-                    if (e.key === "F2") startRename(drawing);
-                  }}
-                  className="group flex cursor-pointer flex-col rounded-[6px] p-2 transition-colors outline-none hover:bg-zk-raised focus-visible:bg-zk-raised"
-                >
-                  <div className={`aspect-[4/3] w-full overflow-hidden rounded-[4px] ${drawing.background === "transparent" ? "bg-[repeating-conic-gradient(#efefef_0%_25%,#ffffff_0%_50%)] bg-[length:14px_14px]" : "bg-white"}`}>
-                    <ThumbnailImage thumbnailId={drawing.thumbnail} alt={drawing.name} className="h-full w-full object-cover" />
-                  </div>
-                  <div className="flex items-start gap-2 px-1 pt-3">
-                    <div className="min-w-0 flex-1">
-                      {nameField(drawing, "text-[16px]")}
-                      <p className="mt-0.5 truncate text-[12px] text-zk-muted">
-                        Edited {formatDate(drawing.updatedAt)} · {plural(countStrokes(drawing), "stroke")}
-                      </p>
-                    </div>
-                    {actions(drawing)}
-                  </div>
-                </div>
-              </li>
+              <li key={drawing.id}>{card(drawing, false)}</li>
             ))}
           </ul>
         ) : (
@@ -435,8 +487,16 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
                 }}
                 className="group grid cursor-pointer grid-cols-[64px_1fr_120px_120px_80px_80px_100px_32px] items-center gap-4 rounded-[4px] px-3 py-2 text-[13px] text-zk-text-2 outline-none hover:bg-zk-raised focus-visible:bg-zk-raised"
               >
-                <div role="cell" className="h-12 w-16 overflow-hidden rounded-[3px] bg-white">
-                  <ThumbnailImage thumbnailId={drawing.thumbnail} alt="" className="h-full w-full object-cover" />
+                <div
+                  role="cell"
+                  className={`flex h-12 w-16 items-center justify-center overflow-hidden rounded-[3px] ${drawing.page ? "" : "bg-white"}`}
+                  style={drawing.page ? { backgroundColor: surround } : undefined}
+                >
+                  <ThumbnailImage
+                    thumbnailId={drawing.thumbnail}
+                    alt=""
+                    className={drawing.page ? "max-h-full max-w-full" : "h-full w-full object-cover"}
+                  />
                 </div>
                 <div role="cell" className="min-w-0">{nameField(drawing, "text-[15px]")}</div>
                 <span role="cell">{formatDate(drawing.updatedAt)}</span>
