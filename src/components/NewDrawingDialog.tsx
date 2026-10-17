@@ -82,8 +82,10 @@ const NewDrawingDialog: React.FC<NewDrawingDialogProps> = ({ open, onOpenChange,
     (choice.kind === "preset" && choice.id === id);
 
   const tileClass = (id: string) =>
-    `flex h-full min-h-0 flex-col justify-between rounded-[4px] p-2.5 text-left transition-colors outline-none focus-visible:ring-1 focus-visible:ring-zk-accent ${
-      isSelected(id) ? "bg-zk-selected" : "bg-zk-raised hover:bg-zk-hover"
+    `group relative flex h-full min-h-0 flex-col justify-between overflow-hidden rounded-[4px] p-2.5 text-left transition-colors outline-none focus-visible:ring-1 focus-visible:ring-zk-accent ${
+      isSelected(id)
+        ? "bg-[#2E2E34] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-zk-accent"
+        : "bg-zk-raised hover:bg-zk-hover"
     }`;
 
   const select = (id: string) => {
@@ -155,7 +157,7 @@ const NewDrawingDialog: React.FC<NewDrawingDialogProps> = ({ open, onOpenChange,
                       onDoubleClick={() => create({ kind: "infinite" })}
                       className={tileClass(t.id)}
                     >
-                      <span className="text-[13px] font-semibold text-zk-text">Infinite</span>
+                      <span className="text-[13px] font-semibold text-zk-text group-aria-checked:text-zk-accent">Infinite</span>
                       <span className="my-2 min-h-0 flex-1 rounded-[3px] bg-[radial-gradient(#3A3A40_1px,transparent_1px)] bg-[length:12px_12px]" />
                       <span className="text-[11px] text-zk-muted">Endless canvas, pan anywhere</span>
                     </button>
@@ -175,7 +177,7 @@ const NewDrawingDialog: React.FC<NewDrawingDialogProps> = ({ open, onOpenChange,
                         <PlusIcon size={14} />
                       </span>
                       <span className="flex flex-1 items-baseline justify-between">
-                        <span className="text-[13px] font-semibold text-zk-text">Custom</span>
+                        <span className="text-[13px] font-semibold text-zk-text group-aria-checked:text-zk-accent">Custom</span>
                         <span className="text-[11px] text-zk-muted">W × H</span>
                       </span>
                     </button>
@@ -195,7 +197,7 @@ const NewDrawingDialog: React.FC<NewDrawingDialogProps> = ({ open, onOpenChange,
                       <PageShape width={preset!.width} height={preset!.height} />
                     </span>
                     <span className="flex items-baseline justify-between gap-1">
-                      <span className="text-[13px] font-semibold text-zk-text">{preset!.label}</span>
+                      <span className="text-[13px] font-semibold text-zk-text group-aria-checked:text-zk-accent">{preset!.label}</span>
                       <span className="text-[11px] text-zk-muted tabular-nums">
                         {preset!.width === preset!.height ? `${preset!.width}²` : `${preset!.width}×${preset!.height}`}
                       </span>
