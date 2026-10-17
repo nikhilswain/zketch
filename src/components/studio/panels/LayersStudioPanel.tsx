@@ -23,29 +23,41 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import LayersPanel, { DropLine, LayersActions, useLayerDrag, useLayerThumbnail } from "@/components/layers-panel";
+import LayersPanel, { LayersActions, useLayerThumbnail } from "@/components/layers-panel";
+import { useSortableList } from "@/hooks/useSortableList";
 import PanelFrame from "../PanelFrame";
 import { useStudio } from "../StudioContext";
 
-const StripThumb: React.FC<{ layer: any; active: boolean; onSelect: () => void; onExpand: () => void }> = observer(
-  ({ layer, active, onSelect, onExpand }) => {
+type SortProps = ReturnType<ReturnType<typeof useSortableList>["itemProps"]>;
+
+const StripThumb: React.FC<{
+  layer: any;
+  active: boolean;
+  sortProps: SortProps;
+  onSelect: () => void;
+  onExpand: () => void;
+}> = observer(
+  ({ layer, active, sortProps, onSelect, onExpand }) => {
     const canvasStore = useCanvasStore();
     const thumbnail = useLayerThumbnail(layer);
-    const { over, props: dragProps } = useLayerDrag(layer.id);
     const [menuOpen, setMenuOpen] = useState(false);
     const index = canvasStore.layers.findIndex((l: any) => l.id === layer.id);
     const isDraw = layer.type === "draw";
     return (
-      <div {...dragProps} className="relative" onContextMenu={(e) => {
-        e.preventDefault();
-        setMenuOpen(true);
-      }}>
-        <DropLine at={over} />
+      <div
+        {...sortProps}
+        className="cursor-grab touch-none select-none rounded-[3px] data-lifted:cursor-grabbing data-lifted:shadow-[0_8px_20px_rgba(0,0,0,0.5)]"
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setMenuOpen(true);
+        }}
+      >
         <button
+          data-sort-handle
           onClick={onSelect}
           aria-label={`Layer: ${layer.name}${active ? ", active" : ""}`}
           aria-pressed={active}
-          className="flex flex-col items-center gap-0.5"
+          className="flex cursor-[inherit] flex-col items-center gap-0.5"
         >
           <span
             className="block h-[30px] w-11 overflow-hidden rounded-[3px] bg-[#FBFAF6]"
@@ -121,6 +133,11 @@ const StripThumb: React.FC<{ layer: any; active: boolean; onSelect: () => void; 
 export const LayersStrip: React.FC<{ onExpand: () => void }> = observer(({ onExpand }) => {
   const canvasStore = useCanvasStore();
   const layers = [...canvasStore.layers].reverse();
+  const shown = layers.slice(0, 8);
+  const { itemProps } = useSortableList(
+    shown.map((l) => l.id),
+    (id, to) => canvasStore.moveLayer(id, canvasStore.layers.length - 1 - to),
+  );
   return (
     <div className="flex flex-col items-center gap-1.5 rounded-[6px] bg-zk-surface px-1.5 py-2">
       <button
@@ -130,10 +147,11 @@ export const LayersStrip: React.FC<{ onExpand: () => void }> = observer(({ onExp
       >
         <LayersIcon size={16} />
       </button>
-      {layers.slice(0, 8).map((layer) => (
+      {shown.map((layer) => (
         <StripThumb
           key={layer.id}
           layer={layer}
+          sortProps={itemProps(layer.id)}
           active={layer.id === canvasStore.activeLayerId}
           onSelect={() => canvasStore.setActiveLayer(layer.id)}
           onExpand={onExpand}

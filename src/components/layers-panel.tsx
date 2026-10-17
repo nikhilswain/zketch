@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { observer } from "mobx-react-lite";
 import { useCanvasStore } from "@/hooks/useStores";
+import { useSortableList } from "@/hooks/useSortableList";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import StrokeTrack from "@/components/studio/StrokeTrack";
@@ -21,6 +22,7 @@ import {
   EyeIcon,
   EyeOffIcon,
   FocusIcon,
+  GripIcon,
   ImageIcon,
   LayersIcon,
   LockIcon,
@@ -159,8 +161,11 @@ function drawElements(
   return finish();
 }
 
+type SortProps = ReturnType<ReturnType<typeof useSortableList>["itemProps"]>;
+
 interface LayerItemProps {
   layer: ILayer;
+  sortProps?: SortProps;
   isActive: boolean;
   isFocused: boolean;
   onSelect: () => void;
@@ -261,72 +266,11 @@ export function useLayerThumbnail(layer: any): string {
   return thumbnail;
 }
 
-export const LAYER_DRAG_TYPE = "application/x-zketch-layer";
-
-let draggingLayerId: string | null = null;
-
-export function useLayerDrag(layerId: string, enabled = true) {
-  const canvasStore = useCanvasStore();
-  const [over, setOver] = useState<"before" | "after" | null>(null);
-
-  const drop = (dragId: string, after: boolean) => {
-    const order = [...canvasStore.layers].reverse().map((l) => l.id).filter((id) => id !== dragId);
-    const at = order.indexOf(layerId);
-    if (at === -1) return;
-    order.splice(after ? at + 1 : at, 0, dragId);
-    canvasStore.moveLayer(dragId, order.length - 1 - order.indexOf(dragId));
-  };
-
-  const props: React.HTMLAttributes<HTMLElement> & { draggable: boolean } = {
-    draggable: enabled,
-    onDragStart: (e) => {
-      if (!enabled) return;
-      e.stopPropagation();
-      e.dataTransfer.setData(LAYER_DRAG_TYPE, layerId);
-      e.dataTransfer.effectAllowed = "move";
-      draggingLayerId = layerId;
-    },
-    onDragEnd: () => {
-      draggingLayerId = null;
-      setOver(null);
-    },
-    onDragOver: (e) => {
-      if (!e.dataTransfer.types.includes(LAYER_DRAG_TYPE)) return;
-      e.preventDefault();
-      e.stopPropagation();
-      e.dataTransfer.dropEffect = "move";
-      if (draggingLayerId === layerId) return setOver(null);
-      const r = e.currentTarget.getBoundingClientRect();
-      setOver(e.clientY < r.top + r.height / 2 ? "before" : "after");
-    },
-    onDragLeave: (e) => {
-      if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(null);
-    },
-    onDrop: (e) => {
-      const id = e.dataTransfer.getData(LAYER_DRAG_TYPE);
-      const after = over === "after";
-      setOver(null);
-      if (!id) return;
-      e.preventDefault();
-      e.stopPropagation();
-      if (id !== layerId) drop(id, after);
-    },
-  };
-
-  return { over, props };
-}
-
-export const DropLine: React.FC<{ at: "before" | "after" | null }> = ({ at }) =>
-  at ? (
-    <span
-      aria-hidden="true"
-      className={`pointer-events-none absolute inset-x-1 z-10 h-0.5 rounded bg-zk-accent ${at === "before" ? "-top-px" : "-bottom-px"}`}
-    />
-  ) : null;
 
 const LayerItem: React.FC<LayerItemProps> = observer(
   ({
     layer,
+    sortProps,
     isActive,
     isFocused,
     onSelect,
@@ -353,7 +297,6 @@ const LayerItem: React.FC<LayerItemProps> = observer(
     const [menuOpen, setMenuOpen] = useState(false);
     const canvasStore = useCanvasStore();
     const thumbnail = useLayerThumbnail(layer);
-    const { over, props: dragProps } = useLayerDrag(layer.id, !isEditing);
 
     const handleNameSubmit = () => {
       if (editName.trim()) {
@@ -366,18 +309,27 @@ const LayerItem: React.FC<LayerItemProps> = observer(
 
     return (
       <div
-        {...dragProps}
+        ref={sortProps?.ref}
+        onPointerDown={isEditing ? undefined : sortProps?.onPointerDown}
+        data-lifted={sortProps?.["data-lifted"]}
+        style={sortProps?.style}
         onContextMenu={(e) => {
           e.preventDefault();
           setMenuOpen(true);
         }}
-        className={`group relative mx-1.5 mb-0.5 flex flex-col rounded-[4px] transition-colors ${
+        className={`group mx-1.5 mb-0.5 flex cursor-grab select-none flex-col rounded-[4px] transition-colors data-lifted:cursor-grabbing data-lifted:bg-zk-raised data-lifted:shadow-[0_8px_24px_rgba(0,0,0,0.45)] ${
           isActive ? "bg-zk-selected" : "hover:bg-zk-raised"
         } ${!layer.visible ? "opacity-50" : ""}`}
       >
-        <DropLine at={over} />
         {/* Main Layer Row */}
-        <div className="flex items-center gap-2 p-2">
+        <div className="flex items-center gap-1.5 py-2 pr-2 pl-0.5">
+          <span
+            data-sort-handle
+            aria-hidden="true"
+            className="flex h-9 w-3 shrink-0 touch-none items-center justify-center text-[#5C5B60] opacity-0 transition-opacity group-hover:opacity-100 group-data-lifted:opacity-100"
+          >
+            <GripIcon size={12} />
+          </span>
           {/* Thumbnail Preview */}
           <div
             className="w-12 h-9 rounded border border-border overflow-hidden cursor-pointer flex-shrink-0 bg-muted/30 flex items-center justify-center"
@@ -670,6 +622,13 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
       }
     }, [canvasStore]);
 
+    // Reverse the layers for display (top layer first in UI)
+    const displayLayers = [...canvasStore.layers].reverse();
+    const { itemProps } = useSortableList(
+      displayLayers.map((l) => l.id),
+      (id, to) => canvasStore.moveLayer(id, canvasStore.layers.length - 1 - to),
+    );
+
     if (collapsed) {
       return (
         <div className={`flex items-center justify-center p-2 ${className}`}>
@@ -678,8 +637,6 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
       );
     }
 
-    // Reverse the layers for display (top layer first in UI)
-    const displayLayers = [...canvasStore.layers].reverse();
 
     const renderLayerItem = (layer: ILayer) => {
       const actualIndex = canvasStore.layers.findIndex((l) => l.id === layer.id);
@@ -687,6 +644,7 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
         <LayerItem
           key={layer.id}
           layer={layer}
+          sortProps={itemProps(layer.id)}
           isActive={layer.id === canvasStore.activeLayerId}
           isFocused={canvasStore.focusedLayerId === layer.id}
           onSelect={() => canvasStore.setActiveLayer(layer.id)}
