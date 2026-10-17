@@ -1,7 +1,6 @@
 import type React from "react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
-import { useCanvasStore } from "@/hooks/useStores";
 import { PanelLeftOpenIcon, PanelRightOpenIcon } from "@/components/icons";
 import {
   dockLayout,
@@ -70,7 +69,7 @@ const DropZone: React.FC<{ dock: DockId }> = ({ dock }) => {
         e.preventDefault();
         movePanel(id, dock);
       }}
-      className={`absolute z-30 flex items-center justify-center rounded-[6px] border border-dashed text-[12px] font-semibold transition-colors duration-150 ${
+      className={`pointer-events-auto absolute z-30 flex items-center justify-center rounded-[6px] border border-dashed text-[12px] font-semibold transition-colors duration-150 ${
         ZONE_POSITION[dock]
       } ${over ? "border-zk-accent bg-zk-accent/25 text-zk-text" : "border-zk-accent/50 bg-zk-surface/70 text-zk-text-2"}`}
     >
@@ -108,10 +107,8 @@ function useOverlayDocks() {
 }
 
 const StudioShell: React.FC<StudioShellProps> = observer(({ topLeft, topRight, onFit, children }) => {
-  const canvasStore = useCanvasStore();
   const overlay = useOverlayDocks();
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const lastLeft = useRef<number | null>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
   const s = dockLayout.state;
   const leftIds = panelsIn("left");
   const rightIds = panelsIn("right");
@@ -125,33 +122,13 @@ const StudioShell: React.FC<StudioShellProps> = observer(({ topLeft, topRight, o
   const leftClosedOthers = !leftVisible && leftIds.some((id) => id !== "layers");
   const rightClosedOthers = !rightVisible && rightIds.some((id) => id !== "layers");
 
-  const syncLeft = () => {
-    const el = viewportRef.current;
-    if (!el) return;
-    const left = el.getBoundingClientRect().left;
-    if (lastLeft.current !== null && left !== lastLeft.current) {
-      canvasStore.setPan(canvasStore.panX - (left - lastLeft.current), canvasStore.panY);
-    }
-    lastLeft.current = left;
-  };
-
-  useLayoutEffect(syncLeft);
-
-  useEffect(() => {
-    const el = viewportRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => syncLeft());
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [canvasStore]);
-
   useEffect(() => {
     setOverlayMode(overlay);
   }, [overlay]);
 
   useEffect(() => {
     if (!overlay) return;
-    const el = viewportRef.current;
+    const el = rowRef.current;
     if (!el) return;
     const onDown = (e: PointerEvent) => {
       const t = e.target as Element | null;
@@ -164,23 +141,23 @@ const StudioShell: React.FC<StudioShellProps> = observer(({ topLeft, topRight, o
 
   return (
     <div className="fixed inset-0 flex flex-col bg-zk-surface font-ui">
-      <div className="flex min-h-0 flex-1">
-        <DockSlot open={leftVisible && !overlay} axis="x" size={300} from="left">
+      <div ref={rowRef} className="relative flex min-h-0 flex-1">
+        <div className="absolute inset-0 overflow-hidden">{children}</div>
+        <DockSlot open={leftVisible && !overlay} axis="x" size={300} from="left" className="relative z-10">
           <DockArea dock="left" />
         </DockSlot>
-        <div ref={viewportRef} data-canvas-viewport className="relative min-w-0 flex-1 overflow-hidden">
-          {children}
-          <div className="absolute top-14 bottom-0 left-0 z-20 flex">
+        <div data-canvas-viewport className="pointer-events-none relative min-w-0 flex-1 overflow-hidden">
+          <div className="pointer-events-auto absolute top-14 bottom-0 left-0 z-20 flex">
             <DockSlot open={overlay && leftVisible} axis="x" size={300} from="left" className="h-full">
               <DockArea dock="left" overlay />
             </DockSlot>
           </div>
-          <div className="absolute top-14 right-0 bottom-0 z-20 flex">
+          <div className="pointer-events-auto absolute top-14 right-0 bottom-0 z-20 flex">
             <DockSlot open={overlay && rightVisible} axis="x" size={300} from="right" className="h-full">
               <DockArea dock="right" overlay />
             </DockSlot>
           </div>
-          <div className={`absolute inset-x-0 bottom-0 z-20 ${overlay && deckVisible ? "shadow-[0_-12px_40px_rgba(0,0,0,0.35)]" : ""}`}>
+          <div className={`pointer-events-auto absolute inset-x-0 bottom-0 z-20 ${overlay && deckVisible ? "shadow-[0_-12px_40px_rgba(0,0,0,0.35)]" : ""}`}>
             <DockSlot open={overlay && deckVisible} axis="y" size={212} from="bottom">
               <DockArea dock="bottom" overlay />
             </DockSlot>
@@ -207,7 +184,7 @@ const StudioShell: React.FC<StudioShellProps> = observer(({ topLeft, topRight, o
             )}
           </div>
         </div>
-        <DockSlot open={rightVisible && !overlay} axis="x" size={300} from="right">
+        <DockSlot open={rightVisible && !overlay} axis="x" size={300} from="right" className="relative z-10">
           <DockArea dock="right" />
         </DockSlot>
       </div>

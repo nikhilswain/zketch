@@ -26,3 +26,10 @@ export function fitViewToPage(store: PageView) {
   store.setPan(v.panX + r.x, v.panY + r.y);
   return true;
 }
+
+export function fitView(store: PageView) {
+  if (fitViewToPage(store)) return;
+  const r = visibleCanvasRect();
+  store.setZoom(1);
+  store.setPan(r.x, r.y);
+}

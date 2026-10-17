@@ -30,7 +30,7 @@ import type { StrokeLike } from "@/engine";
 import type { PlaybackState } from "@/engine/AnimationPlaybackEngine";
 import { reaction } from "mobx";
 import { effectiveExportScale, newPage, resizePage } from "@/utils/page";
-import { fitViewToPage } from "@/utils/viewport";
+import { fitView } from "@/utils/viewport";
 import PageSizeDialog from "./PageSizeDialog";
 
 interface CanvasViewProps {
@@ -201,7 +201,10 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               };
             });
             canvasStore.loadLayers(layersData as any, drawing.activeLayerId);
-            requestAnimationFrame(() => fitViewToPage(canvasStore) && canvasStore.syncViewToHistory());
+            requestAnimationFrame(() => {
+              fitView(canvasStore);
+              canvasStore.syncViewToHistory();
+            });
           } else {
             // No layers - start fresh
             canvasStore.clear();
@@ -212,7 +215,10 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         canvasStore.clear();
         canvasStore.setBackground(settingsStore.defaultBackground as BackgroundType);
         setDrawingName("Untitled Drawing");
-        requestAnimationFrame(() => fitViewToPage(canvasStore) && canvasStore.syncViewToHistory());
+        requestAnimationFrame(() => {
+          fitView(canvasStore);
+          canvasStore.syncViewToHistory();
+        });
       }
     }, [editingDrawingId, canvasStore, vaultStore]);
 
@@ -486,11 +492,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         }}
       >
         <StudioShell
-          onFit={() => {
-            if (fitViewToPage(canvasStore)) return;
-            canvasStore.setZoom(1);
-            canvasStore.setPan(0, 0);
-          }}
+          onFit={() => fitView(canvasStore)}
           topLeft={
             <TopLeftBlock
               drawingName={drawingName}
@@ -570,7 +572,10 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               const p = canvasStore.page;
               if (!p) return;
               canvasStore.setPage(resizePage({ x: p.x, y: p.y, width: p.width, height: p.height }, width, height));
-              requestAnimationFrame(() => fitViewToPage(canvasStore) && canvasStore.syncViewToHistory());
+              requestAnimationFrame(() => {
+                fitView(canvasStore);
+                canvasStore.syncViewToHistory();
+              });
             }}
           />
         )}
