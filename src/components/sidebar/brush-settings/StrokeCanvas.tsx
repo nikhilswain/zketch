@@ -17,6 +17,7 @@ export interface StrokeLook {
   streamline: number;
   taperStart: number;
   taperEnd: number;
+  input: "pen" | "mouse";
 }
 
 interface StrokeCanvasProps {
@@ -57,7 +58,8 @@ const StrokeCanvas: React.FC<StrokeCanvasProps> = ({
 
     const points: StrokeLike["points"] = [];
     for (let i = 0; i <= 60; i++) {
-      const t = i / 60;
+      const u = i / 60;
+      const t = look.input === "pen" ? u : u * u * (3 - 2 * u);
       points.push({
         x: 10 + t * (width - 20),
         y: height / 2 + Math.sin(t * Math.PI * 2) * amplitude,
@@ -82,7 +84,7 @@ const StrokeCanvas: React.FC<StrokeCanvasProps> = ({
         streamline: look.streamline,
         taperStart: (look.taperStart * size) / Math.max(1, look.size),
         taperEnd: (look.taperEnd * size) / Math.max(1, look.size),
-        input: "pen",
+        input: look.input,
       },
       brushRegistry,
     );
@@ -103,6 +105,7 @@ const StrokeCanvas: React.FC<StrokeCanvasProps> = ({
     look.streamline,
     look.taperStart,
     look.taperEnd,
+    look.input,
   ]);
 
   return (

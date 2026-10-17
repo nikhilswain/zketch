@@ -93,6 +93,7 @@ const ToolSettingsPanel: React.FC = observer(() => {
     streamline: bs.streamline,
     taperStart: bs.taperStart,
     taperEnd: bs.taperEnd,
+    input: lastInputWasPen() ? "pen" : "mouse",
   };
 
   const strokeValues: StrokeValues = {

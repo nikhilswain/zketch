@@ -181,7 +181,10 @@ export function optimizeStroke(
 ): StrokeData {
   return {
     ...stroke,
-    points: optimizePoints(stroke.points, epsilon),
+    points:
+      stroke.input != null
+        ? stroke.points.map(truncatePoint)
+        : optimizePoints(stroke.points, epsilon),
   };
 }
 

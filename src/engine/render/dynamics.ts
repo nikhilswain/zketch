@@ -47,14 +47,14 @@ export function hasDynamics(stroke: StrokeLike) {
 }
 
 export function pressureGain(stroke: StrokeLike) {
-  if (!hasDynamics(stroke)) return 1;
+  if (!hasDynamics(stroke) || stroke.input !== "pen") return 1;
   return 2 * (stroke.thinning ?? 0.5);
 }
 
 export function strokePressures(stroke: StrokeLike): number[] {
   const stored = stroke.points.map((p) => p.pressure ?? 0.5);
   if (!hasDynamics(stroke) || stroke.input === "pen") return stored;
-  const amount = Math.max(0, 2 * (stroke.thinning ?? 0.5) - 1);
+  const amount = 2 * (stroke.thinning ?? 0.5) - 1;
   if (amount === 0) return stored.map(() => 0.5);
   return speedPressure(stroke.points, stroke.size).map(
     (p) => 0.5 + (p - 0.5) * amount,
