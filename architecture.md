@@ -217,6 +217,13 @@ Per frame (`render()`):
 Image layers: `renderImageLayer` loads the blob via `BlobStorageService.getBlobUrl`,
 caches the `HTMLImageElement`, and draws with rotation around center.
 
+Fixed pages (`setPage` / `setSurround`): `renderBackground` fills the surround,
+draws the page with a soft shadow and the page background (white / world-space
+grid aligned to the page / world-space checker pattern) clipped to the page;
+after layers and previews `renderPageVeil` draws one surround-coloured fill at
+72% with an even-odd hole for the page, so overdraw reads as off the page.
+Both run every frame (including the cached pan/zoom composite), no re-bakes.
+
 ### 4.2 Brush registry
 
 `BrushRegistry` (`engine/render/BrushRegistry.ts`) maps `key → Brush` and is a
@@ -407,6 +414,12 @@ State highlights:
   (`ink|eraser|spray|texture`), `background`, `zoom/panX/panY`,
   `brushSettings` (thinning/smoothing/streamline/taper/easing/opacity).
 - `activeTool`: `"pan" | "select" | "brush" | "shape"`.
+- `page: {x, y, width, height} | null` — a **fixed-size page** in world units
+  (null = Infinite drawing). Part of the undo snapshot; `setPage` records
+  history (resize), `loadPage` doesn't (load/new). `clear()` keeps the page.
+  Helpers in `utils/page.ts` (presets, 64..4096 clamp, `resizePage` keeps the
+  centre, `fitPage`, `exportScaleCap`, `SURROUND` colours). Zoom is clamped
+  by `utils/zoom.ts` (0.1..5); `zoomAt(z, sx, sy)` zooms about a screen point.
 - Shape tool state: `currentShapeType`, `shapeStrokeWidth`, `shapeCornerRadius`,
   `shapeOpacity`, `shapeFillColor`, `colorTarget` (`stroke|fill`).
 - Selection: `selectedElements: {layerId, elementId|null}[]`,
@@ -454,13 +467,16 @@ are per drawing (`persistDrawing(id)` → `DexieService.saveDrawing`), never the
 whole vault. The
 on-disk snapshot interfaces live here (`IStrokeData`, `IShapeElementData`,
 `IDrawLayerData`, `IImageLayerData`, `IShapeLayerData`, `ISavedDrawingData`).
+`ISavedDrawingData.page?` stores a fixed page; absent = Infinite (old
+drawings need no migration).
 
 ### 5.4 `SettingsModel.ts`
 
 Persisted to `localStorage` key `drawing-app-settings`: defaults (pen size,
 brush, color, background), export settings (format/quality/transparent/scale),
 UI prefs (autoHideDock/delay/showGrid/snapToGrid), `touchMode`,
-`eraserWholeStroke`.
+`eraserWholeStroke`, `accent`, `surround` (`light` default / `dark`, the
+workspace tone around fixed pages).
 
 ---
 
@@ -475,6 +491,7 @@ drawing-canvas.tsx
   ├─ reaction(renderVersion) → engine.invalidate()
   ├─ reaction(pan/zoom) → engine.setPanZoom
   ├─ useEffect[background] → engine.setBackground
+  ├─ reaction(page) → engine.setPage; reaction(surround) → engine.setSurround
   └─ useEffect[animatingLayerId] → engine.setAnimationState
 
 canvas-view.tsx
@@ -518,8 +535,9 @@ Persistence layers:
     overlay the canvas and close on pointer-down on `[data-canvas-root]`.
     Shows the layers strip when the Layers dock is closed and reopen tabs for
     closed sidebars.
-  - `TopLeftBlock` (Z menu: rename, vault, import, export, background, touch &
-    stylus, layout, clear; name input; save status), `TopRightBlock` (undo,
+  - `TopLeftBlock` (Z menu: rename, vault, import, export, background, page
+    size… for fixed drawings (`PageSizeDialog`, resize around the centre then
+    refit), touch & stylus, layout, clear; name input; save status), `TopRightBlock` (undo,
     redo, Share → export dialog).
   - `BottomBar` — tools (select, draw, erase, shapes, pan), tool-dependent area
     (brush chip + Size/Opacity, eraser size + whole-stroke mode, shape kinds +
@@ -550,8 +568,13 @@ Persistence layers:
   dialogs: tw-animate's transform stacks on Tailwind 4's `translate` centring
   and the dialog flies in from the corner. Dialogs that shouldn't show a focus
   ring on open focus the content (`onOpenAutoFocus` → preventDefault + focus).
-- **Vault** (`valut-view.tsx`): studio chrome; grid/list choice in
-  localStorage `zketch-vault-view`; delete goes through a confirm dialog;
+- **Vault** (`valut-view.tsx`): studio chrome; grid / masonry / list choice in
+  localStorage `zketch-vault-view` (masonry = `MasonryColumns`, shortest-column
+  layout keeping recency order, cards at the page aspect; grid/list show fixed
+  pages contained on the surround tone); New drawing opens `NewDrawingDialog`
+  (justified masonry wall of real-shape tiles + Custom view with
+  `PageSizeForm`; remembers the last choice in `zketch-new-canvas`; `/?new=1`
+  and Ctrl+N open it) which navigates to `/draw?page=WxH` or `/draw`; delete goes through a confirm dialog;
   Settings opens the same `SettingsPage`.
 - **`studio/SettingsPage.tsx`** — full-page Settings over the studio (Z menu →
   Settings, Esc closes; key events stop at the page so drawing shortcuts don't
@@ -587,7 +610,10 @@ Persistence layers:
 
 ## 8. Services (`src/services/`)
 
-- **`ExportService`** — `exportToPNG/JPG/SVG`.
+- **`ExportService`** — `exportToPNG/JPG/SVG` (Infinite: content-fit into
+  1920 x 1080 x scale) and `exportPage` / `renderPageToCanvas` (Fixed: exactly
+  page W x H x scale, clipped to the page, strokes rendered at output
+  resolution; scale capped by `exportScaleCap` to 16.7 MP / 8192 px a side).
   - PNG/JPG take `layers: IExportLayer[]` and render in z-order with the same
     per-draw-layer two-pass logic as the engine (strokes baked offscreen so
     eraser `destination-out` works, shapes vector on top). Stroke and shape
@@ -757,6 +783,7 @@ While animating, `canvasLocked` blocks all drawing/import.
 | Export format/parity | `ExportService`, `ThumbnailService`, `export-dialog.tsx` |
 | Keyboard shortcut | `utils/keyBindings.ts` + `hooks/useKeyboardShortcuts.ts` |
 | Share/API | `services/ShareService.ts`, `pages/api/share/*`, `export-dialog.tsx` |
+| Add or change a page preset | `PAGE_PRESETS` in `utils/page.ts` (and the tile spans in `NewDrawingDialog` `TILES`) |
 | Add or change an icon | `icons/defs/*.mjs` (+ `icons/app.json` if the app uses it), then `npm run icons` |
 | New studio panel | `components/studio/panels/` + `PanelId` and preset placement in `utils/dockLayout.ts` + `panels/index.ts` |
 
