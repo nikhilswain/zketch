@@ -107,6 +107,10 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
   const deckOpen = isDockShown("bottom");
   const bs = canvasStore.brushSettings;
 
+  useEffect(() => {
+    if (!drawing) setPopover(false);
+  }, [drawing]);
+
   const openBrushes = () => {
     const dock = dockLayout.state.panels.brushes.dock;
     if (dockLayout.state.layout === "minimal") {
@@ -156,7 +160,7 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
       </div>
       <Divider />
 
-      {(drawing || tool === "select" || tool === "pan") && (
+      {drawing && (
         <div className="relative flex items-center gap-3">
           <button
             data-brush-chip
@@ -176,37 +180,33 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
             <ChevronUp className="h-3 w-3 text-zk-muted" />
           </button>
           {popover && <BrushPopover onClose={() => setPopover(false)} />}
-          {drawing && (
-            <>
-              <div className="w-[112px] min-[900px]:w-[136px]">
-                <StrokeTrack
-                  dense
-                  kind="size"
-                  label="Size"
-                  value={canvasStore.currentSize}
-                  display={`${canvasStore.currentSize} px`}
-                  min={1}
-                  max={brush?.maxSize ?? 100}
-                  step={1}
-                  onChange={(v) => canvasStore.setPenSize(v)}
-                />
-              </div>
-              <div className="w-[112px] min-[900px]:w-[136px]">
-                <StrokeTrack
-                  dense
-                  kind="opacity"
-                  color={canvasStore.currentColor}
-                  label="Opacity"
-                  value={bs.opacity ?? 1}
-                  display={`${Math.round((bs.opacity ?? 1) * 100)}%`}
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  onChange={(v) => canvasStore.setBrushSettings({ opacity: v })}
-                />
-              </div>
-            </>
-          )}
+          <div className="w-[112px] min-[900px]:w-[136px]">
+            <StrokeTrack
+              dense
+              kind="size"
+              label="Size"
+              value={canvasStore.currentSize}
+              display={`${canvasStore.currentSize} px`}
+              min={1}
+              max={brush?.maxSize ?? 100}
+              step={1}
+              onChange={(v) => canvasStore.setPenSize(v)}
+            />
+          </div>
+          <div className="w-[112px] min-[900px]:w-[136px]">
+            <StrokeTrack
+              dense
+              kind="opacity"
+              color={canvasStore.currentColor}
+              label="Opacity"
+              value={bs.opacity ?? 1}
+              display={`${Math.round((bs.opacity ?? 1) * 100)}%`}
+              min={0}
+              max={1}
+              step={0.05}
+              onChange={(v) => canvasStore.setBrushSettings({ opacity: v })}
+            />
+          </div>
         </div>
       )}
 
@@ -270,7 +270,7 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
         </div>
       )}
 
-      <Divider />
+      {(drawing || erasing || tool === "shape") && <Divider />}
       <div className="flex items-center gap-1.5">
         <button
           aria-label={`Colour ${canvasStore.currentColor}. Show colour panel`}

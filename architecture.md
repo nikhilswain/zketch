@@ -524,7 +524,7 @@ Persistence layers:
     redo, Share → export dialog).
   - `BottomBar` — tools (select, draw, erase, shapes, pan), tool-dependent area
     (brush chip + Size/Opacity, eraser size + whole-stroke mode, shape kinds +
-    stroke), colour + swatches, zoom/fit, deck toggle. In the Minimal layout
+    stroke; empty for Select and Pan), colour + swatches, zoom/fit, deck toggle. In the Minimal layout
     the brush chip opens a popover (brush grid + presets).
   - `DockArea` (one per dock; drag-and-drop target with drop line),
     `PanelFrame` (grip, title, collapse, dock-left/bottom/right buttons;
