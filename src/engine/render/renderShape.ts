@@ -1,5 +1,6 @@
 import type { ShapeElementLike } from "../types";
 import { traceShape } from "./shapePaths";
+import { drawSketchyShape } from "./sketchy";
 
 export function renderShape(ctx: CanvasRenderingContext2D, shape: ShapeElementLike) {
   const {
@@ -28,6 +29,15 @@ export function renderShape(ctx: CanvasRenderingContext2D, shape: ShapeElementLi
 
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
+
+  if (shape.look === "sketchy") {
+    ctx.strokeStyle = strokeColor;
+    ctx.fillStyle = fillColor ?? strokeColor;
+    ctx.lineWidth = strokeWidth;
+    drawSketchyShape(ctx, shape);
+    ctx.restore();
+    return;
+  }
 
   ctx.beginPath();
   traceShape(ctx, shape);

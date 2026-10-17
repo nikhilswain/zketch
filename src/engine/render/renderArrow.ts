@@ -11,6 +11,7 @@ import {
 } from "../geometry/arrow";
 import type { Box } from "../geometry/outline";
 import type { Measure } from "../geometry/textLayout";
+import { drawSketchyCurve } from "./sketchy";
 
 export function traceCurve(ctx: CanvasRenderingContext2D, r: ResolvedArrow) {
   ctx.moveTo(r.start.x, r.start.y);
@@ -77,6 +78,7 @@ export function renderArrow(
   if (labelBox) clipOutBox(ctx, labelBox);
   const body = arrowBody(a, r);
   if (drawBody) drawBody(ctx, body);
+  else if (a.look === "sketchy") drawSketchyCurve(ctx, a, body, a.seed, a.strokeColor, a.strokeWidth);
   else {
     ctx.beginPath();
     traceCurve(ctx, body);
