@@ -9,7 +9,8 @@ import { renderDrawLayer } from "./render/renderDrawLayer";
 import { buildElementLookup, type ElementLookup } from "./render/lookup";
 import { measureText, onFontsReady } from "./render/fonts";
 import { renderArrow } from "./render/renderArrow";
-import { bindableBox, boxCorners, isBindable } from "./geometry";
+import { bindableBox, boxCorners, isBindable, resolveArrow } from "./geometry";
+import { renderArrowHandles } from "./arrowHandles";
 import { drawImageLayer } from "./render/renderImage";
 import {
   installBrushAssetLoader,
@@ -27,7 +28,7 @@ import type {
   TransformableLayer,
   PageRect,
 } from "./types";
-import { isShapeElement } from "./types";
+import { elementKind, isShapeElement } from "./types";
 
 type LayerContent = readonly ElementLike[] | string;
 
@@ -774,6 +775,7 @@ export class CanvasEngine {
         bbox = layer as any;
       } else if (layer.type === "draw" && ref.elementId) {
         const el = (layer as any).elements.find((e: any) => e.id === ref.elementId);
+        if (el && elementKind(el) === "arrow") continue;
         if (el) {
           element = el;
           if (isShapeElement(el)) {
@@ -879,6 +881,10 @@ export class CanvasEngine {
       let element: any = null;
       if (layer.type === "draw" && ref.elementId) {
         element = (layer as any).elements.find((e: any) => e.id === ref.elementId);
+      }
+      if (element && elementKind(element) === "arrow") {
+        renderArrowHandles(ctx, resolveArrow(element, this.lookup, measureText), this.pz);
+        return;
       }
       const pad = this.selectionPaddingWorld(layer, element);
 

@@ -1,4 +1,4 @@
-import { isShapeElement, isStrokeElement } from "@/engine/types";
+import { elementKind, isShapeElement, isStrokeElement } from "@/engine/types";
 import type React from "react";
 import { useRef, useEffect, useState, useCallback } from "react";
 import { observer } from "mobx-react-lite";
@@ -21,7 +21,18 @@ import { ImportService } from "@/services/ImportService";
 import { toast } from "sonner";
 import { clampZoom } from "@/utils/zoom";
 import { SURROUND, type SurroundTone } from "@/utils/page";
-import { bindableBox, isBindable, pointInBox } from "@/engine/geometry";
+import {
+  bendFromMid,
+  bindableBox,
+  curveDistance,
+  isBindable,
+  pointInBox,
+  resolveArrow,
+  shapeBox,
+  textPlacement,
+} from "@/engine/geometry";
+import { buildElementLookup } from "@/engine/render/lookup";
+import { hitArrowHandle, type ArrowHandle } from "@/engine/arrowHandles";
 import { measureText } from "@/engine/render/fonts";
 import type { ArrowElementLike, ArrowHead, ElementLook } from "@/engine/types";
 
@@ -100,6 +111,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       endBind: string | null;
     } | null>(null);
     const ctrlDownRef = useRef(false);
+    const arrowEditRef = useRef<{ handle: ArrowHandle; moved: boolean } | null>(null);
+    const lastTapRef = useRef<{ t: number; x: number; y: number } | null>(null);
     const marqueeRef = useRef<{
       startX: number;
       startY: number;
@@ -125,6 +138,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       isStroke?: boolean;
       points?: Array<{ x: number; y: number; pressure: number }>;
       size?: number;
+      isArrow?: boolean;
+      ends?: Array<{ x: number; y: number }>;
     };
     const groupTransformRef = useRef<GroupSnap[] | null>(null);
     // InputManager is mounted once; route live values via refs so its closures stay current.
@@ -359,12 +374,63 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
     // Hit test selectable things — returns the topmost image layer OR shape element under the point.
     // For image hits: { layerId }. For shape hits: { layerId, elementId }.
+    const strokeHit = (el: any, canvasX: number, canvasY: number, tol: number) => {
+      if (el.brushStyle === "eraser") return false;
+      if (!el.points || el.points.length === 0) return false;
+      const half = (el.size ?? 1) / 2 + tol;
+      let sxMin = Infinity,
+        syMin = Infinity,
+        sxMax = -Infinity,
+        syMax = -Infinity;
+      for (const p of el.points) {
+        if (p.x < sxMin) sxMin = p.x;
+        if (p.y < syMin) syMin = p.y;
+        if (p.x > sxMax) sxMax = p.x;
+        if (p.y > syMax) syMax = p.y;
+      }
+      if (canvasX < sxMin - half || canvasX > sxMax + half || canvasY < syMin - half || canvasY > syMax + half) {
+        return false;
+      }
+      if (el.points.length === 1) {
+        const p = el.points[0];
+        return Math.hypot(canvasX - p.x, canvasY - p.y) <= half;
+      }
+      for (let k = 0; k < el.points.length - 1; k++) {
+        const p1 = el.points[k];
+        const p2 = el.points[k + 1];
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const lenSq = dx * dx + dy * dy;
+        let t = lenSq === 0 ? 0 : ((canvasX - p1.x) * dx + (canvasY - p1.y) * dy) / lenSq;
+        t = Math.max(0, Math.min(1, t));
+        if (Math.hypot(canvasX - (p1.x + t * dx), canvasY - (p1.y + t * dy)) <= half) return true;
+      }
+      return false;
+    };
+
+    const selectedArrow = () => {
+      if (canvasStore.selectionCount !== 1) return null;
+      const ref = canvasStore.selectedElements[0];
+      if (!ref?.elementId) return null;
+      const layer = canvasStore.layers.find((l) => l.id === ref.layerId) as any;
+      const el = layer?.type === "draw" ? layer.findElement(ref.elementId) : null;
+      return el && elementKind(el) === "arrow" ? el : null;
+    };
+
+    const isDoubleTap = (x: number, y: number) => {
+      const now = performance.now();
+      const last = lastTapRef.current;
+      lastTapRef.current = { t: now, x, y };
+      return !!last && now - last.t < 300 && Math.hypot(x - last.x, y - last.y) < 6;
+    };
+
     const hitTestSelectableLayers = useCallback(
       (
         canvasX: number,
         canvasY: number,
       ): { layerId: string; elementId: string | null } | null => {
         const layers = canvasStore.visibleLayers;
+        const lookup = buildElementLookup(canvasStore.layers as any);
         for (let i = layers.length - 1; i >= 0; i--) {
           const layer = layers[i];
           if (layer.locked) continue;
@@ -384,68 +450,33 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
           if (layer.type === "draw") {
             const elements = (layer as any).elements;
-            // Shapes render on top of strokes, so check shapes first (top-down).
-            for (let j = elements.length - 1; j >= 0; j--) {
-              const el = elements[j];
-              if (!el || isStrokeElement(el)) continue;
-              if (
-                canvasX >= el.x &&
-                canvasX <= el.x + el.width &&
-                canvasY >= el.y &&
-                canvasY <= el.y + el.height
-              ) {
-                return { layerId: layer.id, elementId: el.id };
-              }
-            }
-            // Then strokes (point-to-polyline distance, threshold = size/2 + 4px screen).
+            const p = { x: canvasX, y: canvasY };
             const tol = 4 / canvasStore.zoom;
             for (let j = elements.length - 1; j >= 0; j--) {
               const el = elements[j];
-              if (!el || isShapeElement(el)) continue;
-              if (el.brushStyle === "eraser") continue;
-              if (!el.points || el.points.length === 0) continue;
-              // AABB pre-filter
-              const half = (el.size ?? 1) / 2 + tol;
-              let sxMin = Infinity,
-                syMin = Infinity,
-                sxMax = -Infinity,
-                syMax = -Infinity;
-              for (const p of el.points) {
-                if (p.x < sxMin) sxMin = p.x;
-                if (p.y < syMin) syMin = p.y;
-                if (p.x > sxMax) sxMax = p.x;
-                if (p.y > syMax) syMax = p.y;
-              }
-              if (
-                canvasX < sxMin - half ||
-                canvasX > sxMax + half ||
-                canvasY < syMin - half ||
-                canvasY > syMax + half
-              )
-                continue;
-
-              if (el.points.length === 1) {
-                const p = el.points[0];
-                const d = Math.hypot(canvasX - p.x, canvasY - p.y);
-                if (d <= half) return { layerId: layer.id, elementId: el.id };
+              if (!el) continue;
+              const kind = elementKind(el);
+              if (kind === "shape") {
+                if (pointInBox(shapeBox(el), p, (el.strokeWidth ?? 0) / 2 + tol)) {
+                  return { layerId: layer.id, elementId: el.id };
+                }
                 continue;
               }
-              let minDist = Infinity;
-              for (let k = 0; k < el.points.length - 1; k++) {
-                const p1 = el.points[k];
-                const p2 = el.points[k + 1];
-                const dx = p2.x - p1.x;
-                const dy = p2.y - p1.y;
-                const lenSq = dx * dx + dy * dy;
-                let t = lenSq === 0 ? 0 : ((canvasX - p1.x) * dx + (canvasY - p1.y) * dy) / lenSq;
-                t = Math.max(0, Math.min(1, t));
-                const cxp = p1.x + t * dx;
-                const cyp = p1.y + t * dy;
-                const d = Math.hypot(canvasX - cxp, canvasY - cyp);
-                if (d < minDist) minDist = d;
-                if (minDist <= half) break;
+              if (kind === "arrow") {
+                const r = resolveArrow(el, lookup, measureText);
+                if (curveDistance(r, p) <= el.strokeWidth / 2 + 6 / canvasStore.zoom) {
+                  return { layerId: layer.id, elementId: el.id };
+                }
+                continue;
               }
-              if (minDist <= half) {
+              if (kind === "text") {
+                const placement = textPlacement(el, lookup, measureText);
+                if (placement && pointInBox(placement.box, p, tol)) {
+                  return { layerId: layer.id, elementId: el.containerId ?? el.id };
+                }
+                continue;
+              }
+              if (strokeHit(el, canvasX, canvasY, tol)) {
                 return { layerId: layer.id, elementId: el.id };
               }
             }
@@ -751,6 +782,23 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
           if (canvasStore.activeTool === "select") {
             const shift = shiftDownRef.current;
+            const doubleTap = isDoubleTap(pt.x, pt.y);
+
+            const arrow = selectedArrow();
+            if (arrow && !shift) {
+              const lookup = buildElementLookup(canvasStore.layers as any);
+              const handle = hitArrowHandle(resolveArrow(arrow, lookup, measureText), canvasPoint, canvasStore.zoom);
+              if (handle === "mid" && doubleTap) {
+                arrow.setBend(0);
+                canvasStore.saveCurrentStateToHistory();
+                return;
+              }
+              if (handle) {
+                arrowEditRef.current = { handle, moved: false };
+                drawingStartedRef.current = true;
+                return;
+              }
+            }
 
             // Resize / rotate handles always take priority — Shift only affects what
             // the corner drag does (aspect-break), not whether it starts.
@@ -812,7 +860,22 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                       if (layer.type === "draw" && ref.elementId) {
                         const el = layer.findElement(ref.elementId);
                         if (!el) continue;
-                        if (isShapeElement(el)) {
+                        if (elementKind(el) === "arrow") {
+                          snap.push({
+                            layerId: ref.layerId,
+                            elementId: ref.elementId,
+                            x: 0,
+                            y: 0,
+                            width: 0,
+                            height: 0,
+                            rotation: 0,
+                            isArrow: true,
+                            ends: [
+                              { x: el.start.x, y: el.start.y },
+                              { x: el.end.x, y: el.end.y },
+                            ],
+                          });
+                        } else if (isShapeElement(el)) {
                           snap.push({
                             layerId: ref.layerId,
                             elementId: ref.elementId,
@@ -983,6 +1046,25 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             return;
           }
 
+          if (arrowEditRef.current) {
+            const edit = arrowEditRef.current;
+            const arrow = selectedArrow();
+            if (!arrow) return;
+            edit.moved = true;
+            const p = { x: canvasPoint.x, y: canvasPoint.y };
+            if (edit.handle === "mid") {
+              const r = resolveArrow(arrow, buildElementLookup(canvasStore.layers as any), measureText);
+              arrow.setBend(bendFromMid(r.start, r.end, p));
+              return;
+            }
+            const other = edit.handle === "start" ? arrow.endBinding : arrow.startBinding;
+            const target = ctrlDownRef.current ? null : hitTestBindable(p.x, p.y, other?.elementId ?? null);
+            arrow.setEnd(edit.handle, p);
+            arrow.bind(edit.handle, target);
+            engineRef.current?.setBindHighlight(target);
+            return;
+          }
+
           if (arrowCreationRef.current) {
             const ref = arrowCreationRef.current;
             let end = { x: canvasPoint.x, y: canvasPoint.y };
@@ -1124,6 +1206,14 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         onDrawEnd: () => {
           drawingStartedRef.current = false;
 
+          if (arrowEditRef.current) {
+            const moved = arrowEditRef.current.moved;
+            arrowEditRef.current = null;
+            engineRef.current?.setBindHighlight(null);
+            if (moved) canvasStore.saveCurrentStateToHistory();
+            return;
+          }
+
           if (groupDragRef.current) {
             if (groupDragRef.current.hasMoved) {
               canvasStore.saveCurrentStateToHistory();
@@ -1212,6 +1302,12 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           if (marqueeRef.current) {
             marqueeRef.current = null;
             engineRef.current?.setMarquee(null);
+          }
+          if (arrowEditRef.current) {
+            arrowEditRef.current = null;
+            engineRef.current?.setBindHighlight(null);
+            canvasStore.saveCurrentStateToHistory();
+            return;
           }
           if (arrowCreationRef.current) {
             arrowCreationRef.current = null;
@@ -1564,7 +1660,13 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                   ? layer
                   : null;
             if (!target) continue;
-            if (s.isStroke && s.points) {
+            if (s.isArrow && s.ends) {
+              const [a, b] = s.ends.map((sp) => ({
+                x: (sp.x - cx) * cos - (sp.y - cy) * sin + cx,
+                y: (sp.x - cx) * sin + (sp.y - cy) * cos + cy,
+              }));
+              target.setEnds(a, b);
+            } else if (s.isStroke && s.points) {
               // Rotate each point around the anchor center.
               for (let i = 0; i < s.points.length && i < target.points.length; i++) {
                 const sp = s.points[i];
@@ -1628,7 +1730,15 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                   ? layer
                   : null;
             if (!target) continue;
-            if (s.isStroke && s.points) {
+            if (s.isArrow && s.ends) {
+              const [a, b] = s.ends.map((sp) => {
+                const lx = (sp.x - oldCenter.x) * unCos - (sp.y - oldCenter.y) * unSin;
+                const ly = (sp.x - oldCenter.x) * unSin + (sp.y - oldCenter.y) * unCos;
+                const { wx, wy } = localScale(lx, ly);
+                return { x: wx, y: wy };
+              });
+              target.setEnds(a, b);
+            } else if (s.isStroke && s.points) {
               for (let i = 0; i < s.points.length && i < target.points.length; i++) {
                 const sp = s.points[i];
                 const lx = (sp.x - oldCenter.x) * unCos - (sp.y - oldCenter.y) * unSin;

@@ -6,7 +6,7 @@ import {
   getSnapshot,
   isStateTreeNode,
 } from "mobx-state-tree";
-import { BRUSH_STYLES, elementKind, type BrushStyle, isShapeElement, isStrokeElement } from "@/engine/types";
+import { BRUSH_STYLES, elementKind, isVectorElement, type BrushStyle, isShapeElement, isStrokeElement } from "@/engine/types";
 import {
   Layer,
   createLayerId,
@@ -19,6 +19,7 @@ import { createShapeElement, type ElementLook, type ShapeKind } from "./ShapeLay
 import { createArrowElement, type ArrowHead } from "./ArrowElementModel";
 import type { FontFamilyId, TextAlign } from "./TextElementModel";
 import { buildElementLookup } from "@/engine/render/lookup";
+import { elementBounds } from "@/engine/render/elementBounds";
 import { measureText } from "@/engine/render/fonts";
 import { isBindable, resolveArrow } from "@/engine/geometry";
 // Import shared models and re-export for backward compatibility
@@ -393,7 +394,17 @@ export const CanvasModel = types
           valid = true;
         } else if (layer.type === "draw" && ref.elementId) {
           const el = (layer as any).findElement(ref.elementId);
-          if (el) {
+          const kind = el ? elementKind(el) : null;
+          if (el && (kind === "arrow" || kind === "text")) {
+            const b = elementBounds(el, buildElementLookup(self.layers as any));
+            if (b) {
+              bx = b.minX;
+              by = b.minY;
+              bw = b.maxX - b.minX;
+              bh = b.maxY - b.minY;
+              valid = true;
+            }
+          } else if (el) {
             if (isShapeElement(el)) {
               bx = el.x;
               by = el.y;
@@ -1090,7 +1101,7 @@ export const CanvasModel = types
             return;
           }
           const el = (layer as any).findElement(ref.elementId);
-          if (!el || isShapeElement(el)) {
+          if (!el || !isStrokeElement(el)) {
             self.selectionAnchor = null;
             return;
           }
@@ -1240,8 +1251,17 @@ export const CanvasModel = types
               addOnce(layer.id, null);
             }
           } else if (layer.type === "draw") {
+            const lookup = buildElementLookup(self.layers as any);
             for (const el of (layer as any).elements) {
-              if (isShapeElement(el)) {
+              const kind = elementKind(el);
+              if (kind === "arrow" || (kind === "text" && !el.containerId)) {
+                const b = elementBounds(el, lookup);
+                if (b && b.minX < bx2 && b.maxX > bounds.x && b.minY < by2 && b.maxY > bounds.y) {
+                  addOnce(layer.id, el.id);
+                }
+              } else if (kind === "text") {
+                continue;
+              } else if (isShapeElement(el)) {
                 if (
                   el.x < bx2 &&
                   el.x + el.width > bounds.x &&
@@ -1300,8 +1320,16 @@ export const CanvasModel = types
           if (!layer || layer.type !== "draw" || layer.locked) continue;
           const el = (layer as any).findElement(ref.elementId);
           if (!el) continue;
-          if (isShapeElement(el)) el.move(dx, dy);
+          if (isVectorElement(el)) el.move(dx, dy);
           else if (el.translate) el.translate(dx, dy);
+        }
+        const selectedIds = new Set(self.selectedElements.map((r) => r.elementId));
+        for (const ref of self.selectedElements) {
+          const layer = self.layers.find((l) => l.id === ref.layerId) as any;
+          const el = layer?.type === "draw" && ref.elementId ? layer.findElement(ref.elementId) : null;
+          if (!el || elementKind(el) !== "arrow") continue;
+          if (el.startBinding && !selectedIds.has(el.startBinding.elementId)) el.bind("start", null);
+          if (el.endBinding && !selectedIds.has(el.endBinding.elementId)) el.bind("end", null);
         }
         // Keep the rotated anchor in sync with the moved elements.
         if (self.selectionAnchor) {
