@@ -40,6 +40,7 @@ export const SettingsModel = types
     // Eraser mode: false = pixel eraser (destination-out, current behavior), true = object eraser
     // (deletes whole strokes/shapes, fade preview, commit on release).
     eraserWholeStroke: types.optional(types.boolean, false),
+    accent: types.optional(types.string, "#FF6B5B"),
   })
   .views((self) => ({
     get defaultSettings() {
@@ -71,6 +72,7 @@ export const SettingsModel = types
           snapToGrid: self.snapToGrid,
           touchMode: self.touchMode,
           eraserWholeStroke: self.eraserWholeStroke,
+          accent: self.accent,
         };
         localStorage.setItem("drawing-app-settings", JSON.stringify(settings));
       } catch (error) {
@@ -107,6 +109,12 @@ export const SettingsModel = types
           self.touchMode = settings.touchMode ?? self.touchMode;
           self.eraserWholeStroke =
             settings.eraserWholeStroke ?? self.eraserWholeStroke;
+          if (
+            typeof settings.accent === "string" &&
+            /^#[0-9a-fA-F]{6}$/.test(settings.accent)
+          ) {
+            self.accent = settings.accent;
+          }
         }
       } catch (error) {
         console.error("Failed to load settings:", error);
@@ -159,6 +167,11 @@ export const SettingsModel = types
       },
       setEraserWholeStroke(v: boolean) {
         self.eraserWholeStroke = v;
+        saveToStorage();
+      },
+      setAccent(hex: string) {
+        if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
+        self.accent = hex.toUpperCase();
         saveToStorage();
       },
       setUIPreferences(

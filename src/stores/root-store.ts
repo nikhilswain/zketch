@@ -3,6 +3,7 @@ import { CanvasModel } from "../models/CanvasModel";
 import { VaultModel } from "../models/VaultModel";
 import { SettingsModel } from "../models/SettingsModel";
 import { installBrushMemory } from "../utils/brushMemory";
+import { installAccent } from "../utils/accent";
 
 export const RootStore = types
   .model("RootStore", {
@@ -21,7 +22,10 @@ export interface IRootStore extends Instance<typeof RootStore> {}
 
 export const rootStore = RootStore.create({});
 
-if (typeof window !== "undefined") installBrushMemory(rootStore.canvasModel);
+if (typeof window !== "undefined") {
+  installBrushMemory(rootStore.canvasModel);
+  installAccent(rootStore.settingsModel);
+}
 
 // Auto-increment renderVersion on any visual state change.
 // Uses microtask batching so a single user action (e.g., undo which restores
