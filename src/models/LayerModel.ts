@@ -1,4 +1,4 @@
-import { isShapeElement, isStrokeElement } from "@/engine/types";
+import { elementKind, isShapeElement, isStrokeElement, isVectorElement } from "@/engine/types";
 import {
   types,
   type Instance,
@@ -10,23 +10,26 @@ import {
 import { Stroke } from "./SharedModels";
 import { ImageLayer } from "./ImageLayerModel";
 import { ShapeElement } from "./ShapeLayerModel";
+import { ArrowElement } from "./ArrowElementModel";
+import { TextElement } from "./TextElementModel";
 
 // Layer-level discriminator (image stays its own layer; everything else is a draw layer)
 export const LayerType = types.enumeration("LayerType", ["draw", "image"]);
 
-// Element union — strokes and shapes can both live inside a draw layer's elements array.
-// Stroke has `points`/`brushStyle`; ShapeElement has `shapeType`. Dispatch on shapeType presence.
 export const Element = types.union(
   {
     dispatcher: (snapshot: any) => {
-      if (snapshot && typeof snapshot === "object" && isShapeElement(snapshot)) {
-        return ShapeElement;
-      }
+      const kind = elementKind(snapshot);
+      if (kind === "arrow") return ArrowElement;
+      if (kind === "text") return TextElement;
+      if (kind === "shape") return ShapeElement;
       return Stroke;
     },
   },
   Stroke,
   ShapeElement,
+  ArrowElement,
+  TextElement,
 );
 
 export type IElement = Instance<typeof Element>;
@@ -61,6 +64,15 @@ export const DrawLayer = types
       return self.elements.filter(
         (e: any) => isShapeElement(e),
       ) as Instance<typeof ShapeElement>[];
+    },
+    get arrowElements() {
+      return self.elements.filter((e: any) => elementKind(e) === "arrow") as Instance<typeof ArrowElement>[];
+    },
+    get textElements() {
+      return self.elements.filter((e: any) => elementKind(e) === "text") as Instance<typeof TextElement>[];
+    },
+    get vectorElements() {
+      return self.elements.filter((e: any) => isVectorElement(e));
     },
     findElement(elementId: string) {
       return self.elements.find((e: any) => e.id === elementId) || null;
@@ -119,14 +131,13 @@ export const DrawLayer = types
       if (self.locked) return;
       self.elements.clear();
     },
-    // Used by "Clear Layer" — removes only stroke elements, keeps shapes.
     clearStrokes() {
       if (self.locked) return;
       const remaining = self.elements
-        .filter((e: any) => isShapeElement(e))
+        .filter((e: any) => isVectorElement(e))
         .map((e: any) => getSnapshot(e));
       self.elements.clear();
-      remaining.forEach((s: any) => self.elements.push(ShapeElement.create(s)));
+      remaining.forEach((s: any) => self.elements.push(s));
     },
   }));
 

@@ -1,11 +1,13 @@
-import { isShapeElement } from "@/engine/types";
-import { getSnapshot } from "mobx-state-tree";
+import { elementKind } from "@/engine/types";
+import { getSnapshot, isStateTreeNode } from "mobx-state-tree";
 import { optimizeStroke, type StrokeData } from "./StrokeOptimizer";
 
 const serializedElements = new WeakMap<object, unknown>();
 
 function serializeElement(el: any) {
-  if (isShapeElement(el)) {
+  const kind = elementKind(el);
+  if (kind === "arrow" || kind === "text") return isStateTreeNode(el) ? getSnapshot(el) : el;
+  if (kind === "shape") {
     return {
       id: el.id,
       shapeType: el.shapeType,
@@ -19,6 +21,8 @@ function serializeElement(el: any) {
       cornerRadius: el.cornerRadius,
       fillColor: el.fillColor ?? null,
       opacity: el.opacity,
+      look: el.look ?? "clean",
+      seed: el.seed,
     };
   }
   return optimizeStroke({

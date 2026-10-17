@@ -116,10 +116,48 @@ export interface ShapeElementLike {
   cornerRadius: number;
   fillColor: string | null;
   opacity: number;
+  look?: ElementLook;
+  seed?: number;
 }
 
-// An element inside a draw layer is either a stroke or a shape element.
-export type ElementLike = StrokeLike | ShapeElementLike;
+export type ElementLook = "clean" | "sketchy";
+export type ArrowHead = "none" | "arrow" | "triangle" | "dot";
+export type FontFamilyId = "hand" | "sans" | "mono";
+export type TextAlign = "left" | "center" | "right";
+
+export interface ArrowElementLike {
+  id: string;
+  kind: "arrow";
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+  bend: number;
+  startBinding: { elementId: string } | null;
+  endBinding: { elementId: string } | null;
+  startHead: ArrowHead;
+  endHead: ArrowHead;
+  strokeColor: string;
+  strokeWidth: number;
+  opacity: number;
+  look: ElementLook;
+  seed: number;
+}
+
+export interface TextElementLike {
+  id: string;
+  kind: "text";
+  x: number;
+  y: number;
+  text: string;
+  fontFamily: FontFamilyId;
+  fontSize: number;
+  align: TextAlign;
+  color: string;
+  opacity: number;
+  rotation: number;
+  containerId: string | null;
+}
+
+export type ElementLike = StrokeLike | ShapeElementLike | ArrowElementLike | TextElementLike;
 
 export type ElementKind = "stroke" | "shape" | "arrow" | "text";
 

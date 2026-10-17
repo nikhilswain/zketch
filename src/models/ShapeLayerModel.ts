@@ -6,6 +6,9 @@ import {
 } from "mobx-state-tree";
 
 export type ShapeKind = "rectangle" | "circle" | "diamond" | "triangle";
+export type ElementLook = "clean" | "sketchy";
+
+export const newSeed = () => Math.floor(Math.random() * 2 ** 31);
 
 // Shape element — lives inside a DrawLayer's elements array, not a layer itself.
 export const ShapeElement = types
@@ -27,6 +30,8 @@ export const ShapeElement = types
     cornerRadius: types.optional(types.number, 8),
     fillColor: types.optional(types.maybeNull(types.string), null),
     opacity: types.optional(types.number, 1),
+    look: types.optional(types.enumeration("ElementLook", ["clean", "sketchy"]), "clean"),
+    seed: types.optional(types.number, () => newSeed()),
   })
   .views((self) => ({
     get bounds() {
@@ -77,6 +82,9 @@ export const ShapeElement = types
     setOpacity(o: number) {
       self.opacity = Math.max(0, Math.min(1, o));
     },
+    setLook(look: ElementLook) {
+      self.look = look;
+    },
   }));
 
 export interface IShapeElement extends Instance<typeof ShapeElement> {}
@@ -99,6 +107,7 @@ export function createShapeElement(
     cornerRadius?: number;
     opacity?: number;
     fillColor?: string | null;
+    look?: ElementLook;
   },
 ): SnapshotIn<typeof ShapeElement> {
   return {
@@ -114,6 +123,8 @@ export function createShapeElement(
     cornerRadius: options?.cornerRadius ?? 8,
     fillColor: options?.fillColor ?? null,
     opacity: options?.opacity ?? 1,
+    look: options?.look ?? "clean",
+    seed: newSeed(),
   };
 }
 

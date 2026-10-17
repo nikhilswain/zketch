@@ -54,6 +54,40 @@ export interface IShapeElementData {
   cornerRadius: number;
   fillColor: string | null;
   opacity: number;
+  look?: "clean" | "sketchy";
+  seed?: number;
+}
+
+export interface IArrowElementData {
+  id: string;
+  kind: "arrow";
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+  bend: number;
+  startBinding: { elementId: string } | null;
+  endBinding: { elementId: string } | null;
+  startHead: "none" | "arrow" | "triangle" | "dot";
+  endHead: "none" | "arrow" | "triangle" | "dot";
+  strokeColor: string;
+  strokeWidth: number;
+  opacity: number;
+  look: "clean" | "sketchy";
+  seed: number;
+}
+
+export interface ITextElementData {
+  id: string;
+  kind: "text";
+  x: number;
+  y: number;
+  text: string;
+  fontFamily: "hand" | "sans" | "mono";
+  fontSize: number;
+  align: "left" | "center" | "right";
+  color: string;
+  opacity: number;
+  rotation: number;
+  containerId: string | null;
 }
 
 // New unified draw layer — holds an ordered mix of stroke and shape elements.
@@ -61,7 +95,7 @@ export interface IDrawLayerData {
   type: "draw";
   id: string;
   name: string;
-  elements: Array<IStrokeData | IShapeElementData>;
+  elements: Array<IStrokeData | IShapeElementData | IArrowElementData | ITextElementData>;
   visible: boolean;
   locked: boolean;
   opacity: number;
