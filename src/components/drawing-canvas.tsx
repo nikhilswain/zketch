@@ -1,3 +1,4 @@
+import { isShapeElement, isStrokeElement } from "@/engine/types";
 import type React from "react";
 import { useRef, useEffect, useState, useCallback } from "react";
 import { observer } from "mobx-react-lite";
@@ -339,7 +340,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             // Shapes render on top of strokes, so check shapes first (top-down).
             for (let j = elements.length - 1; j >= 0; j--) {
               const el = elements[j];
-              if (!el || !("shapeType" in el)) continue;
+              if (!el || isStrokeElement(el)) continue;
               if (
                 canvasX >= el.x &&
                 canvasX <= el.x + el.width &&
@@ -353,7 +354,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             const tol = 4 / canvasStore.zoom;
             for (let j = elements.length - 1; j >= 0; j--) {
               const el = elements[j];
-              if (!el || "shapeType" in el) continue;
+              if (!el || isShapeElement(el)) continue;
               if (el.brushStyle === "eraser") continue;
               if (!el.points || el.points.length === 0) continue;
               // AABB pre-filter
@@ -440,7 +441,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
         const gapWorld = 8 / canvasStore.zoom;
         let pad = gapWorld;
-        if (single && "shapeType" in single) {
+        if (single && isShapeElement(single)) {
           pad = (single.strokeWidth ?? 0) / 2 + gapWorld;
         } else if (canvasStore.selectionCount === 1 && !single) {
           // Stroke single-select — match the engine's rendered padding (size/2 + gap).
@@ -449,7 +450,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             const layer = canvasStore.layers.find((l) => l.id === ref.layerId) as any;
             if (layer && layer.type === "draw") {
               const el = layer.findElement(ref.elementId);
-              if (el && !("shapeType" in el)) pad = (el.size ?? 0) / 2 + gapWorld;
+              if (el && isStrokeElement(el)) pad = (el.size ?? 0) / 2 + gapWorld;
             }
           }
         }
@@ -756,7 +757,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                       if (layer.type === "draw" && ref.elementId) {
                         const el = layer.findElement(ref.elementId);
                         if (!el) continue;
-                        if ("shapeType" in el) {
+                        if (isShapeElement(el)) {
                           snap.push({
                             layerId: ref.layerId,
                             elementId: ref.elementId,
@@ -962,7 +963,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               for (const el of activeLayer.elements) {
                 if (!el) continue;
                 if (canvasStore.pendingEraserDeletes.has(el.id)) continue;
-                if ("shapeType" in el) {
+                if (isShapeElement(el)) {
                   const nx = Math.max(el.x, Math.min(canvasPoint.x, el.x + el.width));
                   const ny = Math.max(el.y, Math.min(canvasPoint.y, el.y + el.height));
                   const ddx = canvasPoint.x - nx;

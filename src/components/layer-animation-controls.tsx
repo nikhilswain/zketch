@@ -1,5 +1,6 @@
 "use client";
 
+import { isStrokeElement } from "@/engine/types";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { observer } from "mobx-react-lite";
 import { getSnapshot } from "mobx-state-tree";
@@ -98,7 +99,7 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
         const snapshot = getSnapshot(layer) as any;
         // Animation only plays back stroke elements; shape elements stay static.
         const elements = (snapshot.elements || []) as any[];
-        const strokes = elements.filter((e) => !("shapeType" in e)) as StrokeLike[];
+        const strokes = elements.filter((e) => isStrokeElement(e)) as StrokeLike[];
         engine.setStrokes(strokes);
         const info = engine.getPlaybackInfo();
         setTotalDuration(info.totalDuration);

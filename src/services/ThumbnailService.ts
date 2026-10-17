@@ -1,3 +1,4 @@
+import { isShapeElement, isStrokeElement } from "@/engine/types";
 import type { IStroke } from "../models/CanvasModel";
 import type { ILayerSnapshot } from "../models/LayerModel";
 import { BlobStorageService } from "./BlobStorageService";
@@ -162,7 +163,7 @@ export class ThumbnailService {
           offCtx.translate(offsetX, offsetY);
           offCtx.scale(scale, scale);
           for (const el of elements) {
-            if (!("shapeType" in el) && (el as any).points?.length >= 2) {
+            if (isStrokeElement(el) && (el as any).points?.length >= 2) {
               renderStroke(offCtx, el as any, brushRegistry);
             }
           }
@@ -174,7 +175,7 @@ export class ThumbnailService {
         ctx.translate(offsetX, offsetY);
         ctx.scale(scale, scale);
         for (const el of elements) {
-          if ("shapeType" in el) renderShape(ctx, el as any);
+          if (isShapeElement(el)) renderShape(ctx, el as any);
         }
         ctx.restore();
       }
@@ -305,7 +306,7 @@ export class ThumbnailService {
         Array.isArray((layer as any).elements)
       ) {
         for (const el of (layer as any).elements) {
-          if ("shapeType" in el) {
+          if (isShapeElement(el)) {
             const sw = el.width ?? 0;
             const sh = el.height ?? 0;
             if (sw > 0 && sh > 0) {

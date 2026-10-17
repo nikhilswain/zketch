@@ -1,10 +1,11 @@
+import { isShapeElement } from "@/engine/types";
 import { getSnapshot } from "mobx-state-tree";
 import { optimizeStroke, type StrokeData } from "./StrokeOptimizer";
 
 const serializedElements = new WeakMap<object, unknown>();
 
 function serializeElement(el: any) {
-  if ("shapeType" in el) {
+  if (isShapeElement(el)) {
     return {
       id: el.id,
       shapeType: el.shapeType,

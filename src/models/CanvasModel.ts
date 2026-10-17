@@ -6,7 +6,7 @@ import {
   getSnapshot,
   isStateTreeNode,
 } from "mobx-state-tree";
-import { BRUSH_STYLES, type BrushStyle } from "@/engine/types";
+import { BRUSH_STYLES, type BrushStyle, isShapeElement, isStrokeElement } from "@/engine/types";
 import {
   Layer,
   createLayerId,
@@ -229,7 +229,7 @@ export const CanvasModel = types
         if (layer.visible && layer.type === "draw") {
           const drawLayer = layer as any;
           for (const el of drawLayer.elements) {
-            if (!("shapeType" in el)) {
+            if (isStrokeElement(el)) {
               allStrokes.push(getSnapshot(el));
             }
           }
@@ -301,7 +301,7 @@ export const CanvasModel = types
       const layer = self.layers.find((l) => l.id === ref.layerId);
       if (!layer || layer.type !== "draw") return null;
       const element = (layer as any).findElement(ref.elementId);
-      return element && "shapeType" in element ? element : null;
+      return element && isShapeElement(element) ? element : null;
     },
     get selectedTransformableLayer() {
       if (self.selectedElements.length !== 1) return null;
@@ -311,7 +311,7 @@ export const CanvasModel = types
       if (layer.type === "image") return layer;
       if (layer.type === "draw" && ref.elementId) {
         const element = (layer as any).findElement(ref.elementId);
-        if (element && "shapeType" in element) return element;
+        if (element && isShapeElement(element)) return element;
       }
       return null;
     },
@@ -323,7 +323,7 @@ export const CanvasModel = types
         const layer = self.layers.find((l) => l.id === ref.layerId);
         if (!layer || layer.type !== "draw") continue;
         const element = (layer as any).findElement(ref.elementId);
-        if (element && "shapeType" in element) out.push(element);
+        if (element && isShapeElement(element)) out.push(element);
       }
       return out;
     },
@@ -335,7 +335,7 @@ export const CanvasModel = types
         const layer = self.layers.find((l) => l.id === ref.layerId);
         if (!layer || layer.type !== "draw") continue;
         const element = (layer as any).findElement(ref.elementId);
-        if (element && !("shapeType" in element)) out.push(element);
+        if (element && isStrokeElement(element)) out.push(element);
       }
       return out;
     },
@@ -379,7 +379,7 @@ export const CanvasModel = types
         } else if (layer.type === "draw" && ref.elementId) {
           const el = (layer as any).findElement(ref.elementId);
           if (el) {
-            if ("shapeType" in el) {
+            if (isShapeElement(el)) {
               bx = el.x;
               by = el.y;
               bw = el.width;
@@ -997,7 +997,7 @@ export const CanvasModel = types
             return;
           }
           const el = (layer as any).findElement(ref.elementId);
-          if (!el || "shapeType" in el) {
+          if (!el || isShapeElement(el)) {
             self.selectionAnchor = null;
             return;
           }
@@ -1148,7 +1148,7 @@ export const CanvasModel = types
             }
           } else if (layer.type === "draw") {
             for (const el of (layer as any).elements) {
-              if ("shapeType" in el) {
+              if (isShapeElement(el)) {
                 if (
                   el.x < bx2 &&
                   el.x + el.width > bounds.x &&
@@ -1207,7 +1207,7 @@ export const CanvasModel = types
           if (!layer || layer.type !== "draw" || layer.locked) continue;
           const el = (layer as any).findElement(ref.elementId);
           if (!el) continue;
-          if ("shapeType" in el) el.move(dx, dy);
+          if (isShapeElement(el)) el.move(dx, dy);
           else if (el.translate) el.translate(dx, dy);
         }
         // Keep the rotated anchor in sync with the moved elements.

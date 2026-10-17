@@ -1,3 +1,4 @@
+import { isShapeElement, isStrokeElement } from "@/engine/types";
 import { getStroke } from "perfect-freehand";
 import type { IStroke, BackgroundType } from "../models/CanvasModel";
 import type { IExportSettings } from "../models/SettingsModel";
@@ -253,7 +254,7 @@ export class ExportService {
       const prevAlpha = ctx.globalAlpha;
       ctx.globalAlpha = layer.opacity * prevAlpha;
       if (layer.type === "draw" && layer.elements) {
-        const strokeOnly = layer.elements.filter((e) => !(e as any).shapeType) as IStroke[];
+        const strokeOnly = layer.elements.filter((e) => isStrokeElement(e)) as IStroke[];
         if (strokeOnly.length > 0) {
           const strokeCanvas = document.createElement("canvas");
           strokeCanvas.width = outW;
@@ -269,7 +270,7 @@ export class ExportService {
           }
         }
         for (const el of layer.elements) {
-          if ((el as any).shapeType) renderShape(ctx, el as any);
+          if (isShapeElement(el)) renderShape(ctx, el as any);
         }
       } else if (layer.type === "image" && layer.imageData) {
         await this.renderImageLayer(ctx, layer.imageData);
@@ -357,7 +358,7 @@ export class ExportService {
 
       if (layer.type === "draw" && layer.elements) {
         for (const el of layer.elements) {
-          if ((el as any).shapeType) {
+          if (isShapeElement(el)) {
             const s = el as IExportShapeLayer;
             const hw = (s.strokeWidth ?? 0) / 2;
             minX = Math.min(minX, s.x - hw);
@@ -441,7 +442,7 @@ export class ExportService {
       if (layer.type === "draw" && layer.elements) {
         // Strokes bake into an offscreen so eraser destination-out works as a layer-local op.
         const strokeOnly = layer.elements.filter(
-          (e) => !(e as any).shapeType,
+          (e) => isStrokeElement(e),
         ) as IStroke[];
 
         if (strokeOnly.length > 0) {
@@ -472,7 +473,7 @@ export class ExportService {
 
         // Shapes render as vectors on top, in element order.
         for (const el of layer.elements) {
-          if ((el as any).shapeType) {
+          if (isShapeElement(el)) {
             renderShape(ctx, el as any);
           }
         }

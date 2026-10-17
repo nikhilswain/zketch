@@ -1,3 +1,4 @@
+import { isShapeElement, isStrokeElement } from "@/engine/types";
 import {
   types,
   type Instance,
@@ -18,7 +19,7 @@ export const LayerType = types.enumeration("LayerType", ["draw", "image"]);
 export const Element = types.union(
   {
     dispatcher: (snapshot: any) => {
-      if (snapshot && typeof snapshot === "object" && "shapeType" in snapshot) {
+      if (snapshot && typeof snapshot === "object" && isShapeElement(snapshot)) {
         return ShapeElement;
       }
       return Stroke;
@@ -53,12 +54,12 @@ export const DrawLayer = types
     },
     get strokeElements() {
       return self.elements.filter(
-        (e: any) => !("shapeType" in e),
+        (e: any) => isStrokeElement(e),
       ) as Instance<typeof Stroke>[];
     },
     get shapeElements() {
       return self.elements.filter(
-        (e: any) => "shapeType" in e,
+        (e: any) => isShapeElement(e),
       ) as Instance<typeof ShapeElement>[];
     },
     findElement(elementId: string) {
@@ -122,7 +123,7 @@ export const DrawLayer = types
     clearStrokes() {
       if (self.locked) return;
       const remaining = self.elements
-        .filter((e: any) => "shapeType" in e)
+        .filter((e: any) => isShapeElement(e))
         .map((e: any) => getSnapshot(e));
       self.elements.clear();
       remaining.forEach((s: any) => self.elements.push(ShapeElement.create(s)));

@@ -121,8 +121,30 @@ export interface ShapeElementLike {
 // An element inside a draw layer is either a stroke or a shape element.
 export type ElementLike = StrokeLike | ShapeElementLike;
 
-export function isShapeElement(el: ElementLike): el is ShapeElementLike {
-  return (el as any).shapeType !== undefined;
+export type ElementKind = "stroke" | "shape" | "arrow" | "text";
+
+export function elementKind(el: unknown): ElementKind {
+  const e = el as any;
+  if (!e || typeof e !== "object") return "stroke";
+  if (e.kind === "arrow" || e.kind === "text") return e.kind;
+  if (e.shapeType !== undefined) return "shape";
+  return "stroke";
+}
+
+export function isShapeElement(el: ElementLike): el is ShapeElementLike;
+export function isShapeElement(el: unknown): boolean;
+export function isShapeElement(el: unknown): boolean {
+  return elementKind(el) === "shape";
+}
+
+export function isStrokeElement(el: ElementLike): el is StrokeLike;
+export function isStrokeElement(el: unknown): boolean;
+export function isStrokeElement(el: unknown): boolean {
+  return elementKind(el) === "stroke";
+}
+
+export function isVectorElement(el: unknown): boolean {
+  return elementKind(el) !== "stroke";
 }
 
 // Draw layer — holds an ordered mix of stroke and shape elements.

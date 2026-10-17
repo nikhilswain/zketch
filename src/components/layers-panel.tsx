@@ -1,5 +1,6 @@
 "use client";
 
+import { isShapeElement, isStrokeElement } from "@/engine/types";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { observer } from "mobx-react-lite";
 import { useCanvasStore } from "@/hooks/useStores";
@@ -96,7 +97,7 @@ function generateDrawLayerThumbnail(
   const cap = Math.min(elements.length, 50);
   for (let i = 0; i < cap; i++) {
     const el = elements[i];
-    if (el.shapeType) {
+    if (isShapeElement(el)) {
       minX = Math.min(minX, el.x);
       minY = Math.min(minY, el.y);
       maxX = Math.max(maxX, el.x + el.width);
@@ -143,7 +144,7 @@ function drawElements(
     offCtx.translate(ox, oy);
     offCtx.scale(scale, scale);
     for (const el of elements) {
-      if (!el.shapeType && el.points && el.points.length >= 2) {
+      if (isStrokeElement(el) && el.points && el.points.length >= 2) {
         renderStroke(offCtx, el as any, brushRegistry);
       }
     }
@@ -155,7 +156,7 @@ function drawElements(
   ctx.translate(ox, oy);
   ctx.scale(scale, scale);
   for (const el of elements) {
-    if (el.shapeType) renderShape(ctx, el as any);
+    if (isShapeElement(el)) renderShape(ctx, el as any);
   }
   ctx.restore();
   return finish();
@@ -202,7 +203,7 @@ export function useLayerThumbnail(layer: any): string {
   const shapeSig =
     layer.type === "draw"
       ? (layer as any).elements
-          .filter((e: any) => "shapeType" in e)
+          .filter((e: any) => isShapeElement(e))
           .map(
             (e: any) =>
               `${e.shapeType}:${e.x}:${e.y}:${e.width}:${e.height}:${e.rotation}:${e.strokeColor}:${e.fillColor ?? ""}`,
@@ -382,7 +383,7 @@ const LayerItem: React.FC<LayerItemProps> = observer(
                     : (() => {
                         const els = (layer as any).elements ?? [];
                         const strokes = els.filter(
-                          (e: any) => !("shapeType" in e),
+                          (e: any) => isStrokeElement(e),
                         ).length;
                         const shapes = els.length - strokes;
                         if (strokes === 0 && shapes === 0) return "Empty";

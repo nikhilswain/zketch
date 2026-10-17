@@ -1,3 +1,4 @@
+import { isStrokeElement } from "@/engine/types";
 import type React from "react";
 import { useState, useEffect } from "react";
 import { observer } from "mobx-react-lite";
@@ -88,7 +89,7 @@ const ThumbnailImage: React.FC<{ thumbnailId: string; alt: string; className?: s
 function countStrokes(drawing: ISavedDrawing) {
   return drawing.layers.reduce((total, layer: any) => {
     if (layer.type === "draw" && Array.isArray(layer.elements)) {
-      return total + layer.elements.filter((e: any) => !("shapeType" in e)).length;
+      return total + layer.elements.filter((e: any) => isStrokeElement(e)).length;
     }
     if (layer.type === "stroke" && layer.strokes) return total + layer.strokes.length;
     return total;
@@ -100,7 +101,7 @@ function countColors(drawing: ISavedDrawing) {
   drawing.layers.forEach((layer: any) => {
     if (layer.type === "draw" && Array.isArray(layer.elements)) {
       layer.elements.forEach((e: any) => {
-        if (!("shapeType" in e)) colors.add(e.color);
+        if (isStrokeElement(e)) colors.add(e.color);
       });
     } else if (layer.type === "stroke" && layer.strokes) {
       layer.strokes.forEach((stroke: any) => colors.add(stroke.color));
