@@ -30,6 +30,7 @@ import type { StrokeLike } from "@/engine";
 import type { PlaybackState } from "@/engine/AnimationPlaybackEngine";
 import { reaction } from "mobx";
 import { newPage } from "@/utils/page";
+import { fitViewToPage } from "@/utils/viewport";
 
 interface CanvasViewProps {
   editingDrawingId: string | null;
@@ -198,6 +199,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               };
             });
             canvasStore.loadLayers(layersData as any, drawing.activeLayerId);
+            requestAnimationFrame(() => fitViewToPage(canvasStore));
           } else {
             // No layers - start fresh
             canvasStore.clear();
@@ -208,6 +210,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         canvasStore.clear();
         canvasStore.setBackground(settingsStore.defaultBackground as BackgroundType);
         setDrawingName("Untitled Drawing");
+        requestAnimationFrame(() => fitViewToPage(canvasStore));
       }
     }, [editingDrawingId, canvasStore, vaultStore]);
 
@@ -466,6 +469,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
       >
         <StudioShell
           onFit={() => {
+            if (fitViewToPage(canvasStore)) return;
             canvasStore.setZoom(1);
             canvasStore.setPan(0, 0);
           }}

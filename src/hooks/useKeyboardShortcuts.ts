@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useCanvasStore } from "../hooks/useStores";
 import { KeyBindingManager, KEY_BINDINGS } from "../utils/keyBindings";
 import { lastBrush, selectBrush } from "../utils/brushMemory";
-import { visibleCanvasCenter } from "@/utils/viewport";
+import { fitViewToPage, visibleCanvasCenter } from "@/utils/viewport";
 
 export const useKeyboardShortcuts = (
   onSave?: () => void,
@@ -86,10 +86,12 @@ export const useKeyboardShortcuts = (
       canvasStore.zoomAt(canvasStore.zoom / 1.2, c.x, c.y);
     });
     KeyBindingManager.registerHandler("zoomReset", () => {
+      if (fitViewToPage(canvasStore)) return;
       canvasStore.setZoom(1);
       canvasStore.setPan(0, 0);
     });
     KeyBindingManager.registerHandler("fitToScreen", () => {
+      if (fitViewToPage(canvasStore)) return;
       canvasStore.setZoom(1);
       canvasStore.setPan(0, 0);
     });

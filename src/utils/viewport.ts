@@ -1,3 +1,5 @@
+import { fitPage } from "./page";
+
 export function visibleCanvasRect() {
   const root = document.querySelector("[data-canvas-root]")?.getBoundingClientRect();
   const view = document.querySelector("[data-canvas-viewport]")?.getBoundingClientRect() ?? root;
@@ -8,4 +10,19 @@ export function visibleCanvasRect() {
 export function visibleCanvasCenter() {
   const r = visibleCanvasRect();
   return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+}
+
+type PageView = {
+  page: { x: number; y: number; width: number; height: number } | null;
+  setZoom(z: number): void;
+  setPan(x: number, y: number): void;
+};
+
+export function fitViewToPage(store: PageView) {
+  if (!store.page) return false;
+  const r = visibleCanvasRect();
+  const v = fitPage(store.page, r.width, r.height);
+  store.setZoom(v.zoom);
+  store.setPan(v.panX + r.x, v.panY + r.y);
+  return true;
 }
