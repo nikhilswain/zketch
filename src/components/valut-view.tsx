@@ -1,476 +1,474 @@
 import type React from "react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { observer } from "mobx-react-lite";
 import { useVaultStore } from "../hooks/useStores";
-import { Button } from "./ui/button";
-import { Card, CardContent } from "./ui/card";
-import { Input } from "./ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import {
-  Plus,
-  Edit,
-  Trash2,
-  MoreVertical,
-  Search,
-  Grid3X3,
-  List,
-  Palette,
-  HardDrive,
-} from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
+import { Plus, Pencil, Trash2, MoreHorizontal, Search, LayoutGrid, List, Settings, X } from "lucide-react";
 import { DexieService } from "@/services/DexieService";
 import { BlobStorageService } from "@/services/BlobStorageService";
 import type { ISavedDrawing } from "@/models/VaultModel";
+import SettingsPage from "./studio/SettingsPage";
 import { toast } from "sonner";
 
-type SortOrder = "name" | "created" | "updated";
+type SortOrder = "updated" | "created" | "name";
 
 interface VaultViewProps {
   onNewDrawing: () => void;
   onEditDrawing: (drawingId: string) => void;
 }
 
-// Thumbnail component that handles async loading from blob storage
-const ThumbnailImage: React.FC<{
-  thumbnailId: string;
-  alt: string;
-  className?: string;
-}> = ({ thumbnailId, alt, className }) => {
+const SORTS: { id: SortOrder; label: string }[] = [
+  { id: "updated", label: "Recent" },
+  { id: "created", label: "Created" },
+  { id: "name", label: "Name" },
+];
+
+const BACKGROUND_LABEL: Record<string, string> = { white: "White", transparent: "Transparent", grid: "Grid" };
+
+const ThumbnailImage: React.FC<{ thumbnailId: string; alt: string; className?: string }> = ({
+  thumbnailId,
+  alt,
+  className,
+}) => {
   const [src, setSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
-
     const loadThumbnail = async () => {
       if (!thumbnailId) {
         setLoading(false);
         return;
       }
-
-      // Check if it's a blob ID or legacy base64
       if (BlobStorageService.isThumbnailId(thumbnailId)) {
-        const dataUrl =
-          await BlobStorageService.getThumbnailDataUrl(thumbnailId);
-        if (mounted && dataUrl) {
-          setSrc(dataUrl);
-        }
-      } else {
-        // Legacy base64 thumbnail
-        if (mounted) {
-          setSrc(thumbnailId);
-        }
+        const dataUrl = await BlobStorageService.getThumbnailDataUrl(thumbnailId);
+        if (mounted && dataUrl) setSrc(dataUrl);
+      } else if (mounted) {
+        setSrc(thumbnailId);
       }
-      if (mounted) {
-        setLoading(false);
-      }
+      if (mounted) setLoading(false);
     };
-
     loadThumbnail();
     return () => {
       mounted = false;
     };
   }, [thumbnailId]);
 
-  if (loading) {
-    return <div className={`${className} bg-gray-100 animate-pulse`} />;
-  }
-
+  if (loading) return <div className={`${className} animate-pulse bg-[#efeee9]`} />;
   if (!src) {
     return (
-      <div
-        className={`${className} bg-gray-100 flex items-center justify-center`}
-      >
-        <Palette className="w-4 sm:w-6 h-4 sm:h-6 text-gray-400" />
+      <div className={`${className} flex items-center justify-center`}>
+        <span className="font-display text-[13px] text-[#b5b2aa]">Empty</span>
       </div>
     );
   }
-
   return <img src={src} alt={alt} className={className} loading="lazy" />;
 };
 
-const VaultView: React.FC<VaultViewProps> = observer(
-  ({ onNewDrawing, onEditDrawing }) => {
-    const vaultStore = useVaultStore();
-    const [searchQuery, setSearchQuery] = useState("");
-    const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-    const [sortBy, setSortBy] = useState<"updated" | "created" | "name">(
-      "updated",
-    );
-    const [editingName, setEditingName] = useState<string | null>(null);
-    const [newName, setNewName] = useState("");
-
-    const handleDelete = async (drawingId: string, e: React.MouseEvent) => {
-      e.stopPropagation();
-
-      await vaultStore.deleteDrawing(drawingId);
-
-      toast.success("Drawing deleted successfully.");
-    };
-
-    const handleRename = async (drawingId: string) => {
-      if (newName.trim() && newName !== editingName) {
-        await vaultStore.renameDrawing(drawingId, newName.trim());
-      }
-      setEditingName(null);
-      setNewName("");
-    };
-
-    const startRename = (drawing: ISavedDrawing, e: React.MouseEvent) => {
-      e.stopPropagation();
-      setEditingName(drawing.id);
-      setNewName(drawing.name);
-    };
-
-    const cancelRename = () => {
-      setEditingName(null);
-      setNewName("");
-    };
-
-    // Filter and sort drawings
-    interface FilteredDrawing extends ISavedDrawing {}
-
-    const filteredDrawings: FilteredDrawing[] = vaultStore.sortedDrawings
-      .filter((drawing: ISavedDrawing) =>
-        drawing.name.toLowerCase().includes(searchQuery.trim().toLowerCase()),
-      )
-      .sort((a: ISavedDrawing, b: ISavedDrawing) => {
-        switch (sortBy as SortOrder) {
-          case "name":
-            return a.name.localeCompare(b.name);
-          case "created":
-            return b.createdAt.getTime() - a.createdAt.getTime();
-          case "updated":
-          default:
-            return b.updatedAt.getTime() - a.updatedAt.getTime();
-        }
-      });
-
-    const formatDate = (date: Date) => {
-      const now = new Date();
-      const diffMs = now.getTime() - date.getTime();
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-      if (diffDays === 0) {
-        return "Today";
-      } else if (diffDays === 1) {
-        return "Yesterday";
-      } else if (diffDays < 7) {
-        return `${diffDays} days ago`;
-      } else {
-        return date.toLocaleDateString();
-      }
-    };
-
-    const getStrokeCount = (drawing: ISavedDrawing) => {
-      return drawing.layers.reduce((total, layer: any) => {
-        if (layer.type === "draw" && Array.isArray(layer.elements)) {
-          return (
-            total +
-            layer.elements.filter((e: any) => !("shapeType" in e)).length
-          );
-        }
-        // Legacy stroke layer
-        if (layer.type === "stroke" && layer.strokes) {
-          return total + layer.strokes.length;
-        }
-        return total;
-      }, 0);
-    };
-
-    const getColorCount = (drawing: ISavedDrawing) => {
-      const colors = new Set<string>();
-      drawing.layers.forEach((layer: any) => {
-        if (layer.type === "draw" && Array.isArray(layer.elements)) {
-          layer.elements.forEach((e: any) => {
-            if (!("shapeType" in e)) colors.add(e.color);
-          });
-        } else if (layer.type === "stroke" && layer.strokes) {
-          layer.strokes.forEach((stroke: any) => colors.add(stroke.color));
-        }
-      });
-      return colors.size;
-    };
-
-    if (vaultStore.isLoading) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <div className="text-lg text-gray-600">
-              Loading your drawings...
-            </div>
-          </div>
-        </div>
-      );
+function countStrokes(drawing: ISavedDrawing) {
+  return drawing.layers.reduce((total, layer: any) => {
+    if (layer.type === "draw" && Array.isArray(layer.elements)) {
+      return total + layer.elements.filter((e: any) => !("shapeType" in e)).length;
     }
+    if (layer.type === "stroke" && layer.strokes) return total + layer.strokes.length;
+    return total;
+  }, 0);
+}
 
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto p-4 sm:p-6">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 sm:mb-8 gap-4">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-                Your Vault
-              </h1>
-              <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
-                <span>
-                  {vaultStore.drawings.length} drawing
-                  {vaultStore.drawings.length !== 1 ? "s" : ""}
-                </span>
-                {vaultStore.storageInfo.quota > 0 && (
-                  <div className="flex items-center gap-1">
-                    <HardDrive className="w-4 h-4" />
-                    <span>
-                      {DexieService.formatBytes(
-                        vaultStore.storageInfo.used,
-                      )}{" "}
-                      used
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-            <Button
-              onClick={onNewDrawing}
-              className="flex items-center gap-2"
-              size="lg"
-            >
-              <Plus className="w-5 h-5" />
-              New Drawing
-            </Button>
+function countColors(drawing: ISavedDrawing) {
+  const colors = new Set<string>();
+  drawing.layers.forEach((layer: any) => {
+    if (layer.type === "draw" && Array.isArray(layer.elements)) {
+      layer.elements.forEach((e: any) => {
+        if (!("shapeType" in e)) colors.add(e.color);
+      });
+    } else if (layer.type === "stroke" && layer.strokes) {
+      layer.strokes.forEach((stroke: any) => colors.add(stroke.color));
+    }
+  });
+  return colors.size;
+}
+
+function plural(n: number, word: string) {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+function formatDate(date: Date) {
+  const days = Math.floor((Date.now() - date.getTime()) / 86400000);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days} days ago`;
+  return date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDrawing }) => {
+  const vaultStore = useVaultStore();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"grid" | "list">(() => {
+    try {
+      return localStorage.getItem("zketch-vault-view") === "list" ? "list" : "grid";
+    } catch {
+      return "grid";
+    }
+  });
+  const [sortBy, setSortBy] = useState<SortOrder>("updated");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [newName, setNewName] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<ISavedDrawing | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+
+  const chooseView = (mode: "grid" | "list") => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem("zketch-vault-view", mode);
+    } catch {
+      return;
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const name = pendingDelete.name;
+    await vaultStore.deleteDrawing(pendingDelete.id);
+    setPendingDelete(null);
+    toast.success(`Deleted “${name}”`);
+  };
+
+  const commitRename = async (drawingId: string) => {
+    const name = newName.trim();
+    const current = vaultStore.drawings.find((d: ISavedDrawing) => d.id === drawingId)?.name;
+    if (name && name !== current) await vaultStore.renameDrawing(drawingId, name);
+    setEditingId(null);
+    setNewName("");
+  };
+
+  const startRename = (drawing: ISavedDrawing) => {
+    setEditingId(drawing.id);
+    setNewName(drawing.name);
+  };
+
+  const query = searchQuery.trim().toLowerCase();
+  const drawings: ISavedDrawing[] = vaultStore.sortedDrawings
+    .filter((d: ISavedDrawing) => d.name.toLowerCase().includes(query))
+    .sort((a: ISavedDrawing, b: ISavedDrawing) => {
+      if (sortBy === "name") return a.name.localeCompare(b.name);
+      if (sortBy === "created") return b.createdAt.getTime() - a.createdAt.getTime();
+      return b.updatedAt.getTime() - a.updatedAt.getTime();
+    });
+
+  const count = vaultStore.drawings.length;
+
+  const nameField = (drawing: ISavedDrawing, className: string) =>
+    editingId === drawing.id ? (
+      <input
+        value={newName}
+        ref={(el) => {
+          if (el && document.activeElement !== el) requestAnimationFrame(() => el.focus());
+        }}
+        aria-label="Drawing name"
+        onClick={(e) => e.stopPropagation()}
+        onFocus={(e) => e.currentTarget.select()}
+        onChange={(e) => setNewName(e.target.value)}
+        onBlur={() => commitRename(drawing.id)}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === "Enter") commitRename(drawing.id);
+          if (e.key === "Escape") {
+            setEditingId(null);
+            setNewName("");
+          }
+        }}
+        className="h-7 w-full min-w-0 rounded-[3px] bg-zk-raised px-1.5 font-display text-[15px] font-semibold text-zk-text outline-none focus-visible:outline-1 focus-visible:outline-zk-accent"
+      />
+    ) : (
+      <h3 className={`truncate font-display font-semibold text-zk-text ${className}`}>{drawing.name}</h3>
+    );
+
+  const actions = (drawing: ISavedDrawing) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          aria-label={`Actions for ${drawing.name}`}
+          onClick={(e) => e.stopPropagation()}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[4px] text-zk-muted opacity-0 transition-opacity group-hover:opacity-100 hover:bg-zk-hover hover:text-zk-text focus-visible:opacity-100 data-[state=open]:opacity-100"
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()} onCloseAutoFocus={(e) => e.preventDefault()}>
+        <DropdownMenuItem onClick={() => onEditDrawing(drawing.id)}>Open</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => startRename(drawing)}>
+          <Pencil className="h-4 w-4" />
+          Rename
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => setPendingDelete(drawing)} className="text-[#ff8a7a] focus:text-[#ff8a7a]">
+          <Trash2 className="h-4 w-4" />
+          Delete…
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  const open = (drawing: ISavedDrawing) => {
+    if (editingId !== drawing.id) onEditDrawing(drawing.id);
+  };
+
+  return (
+    <div className="min-h-screen bg-zk-surface font-ui text-zk-text">
+      <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-zk-hairline bg-zk-surface/95 px-6 backdrop-blur sm:px-10">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-[4px] bg-zk-accent font-display text-[17px] font-semibold text-zk-on-accent">
+            Z
+          </span>
+          <span className="font-display text-[20px] font-semibold">Zketch</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSettings(true)}
+            aria-label="Settings"
+            className="flex h-9 w-9 items-center justify-center rounded-[4px] text-zk-text-2 hover:bg-zk-raised hover:text-zk-text"
+          >
+            <Settings className="h-[18px] w-[18px]" />
+          </button>
+          <button
+            onClick={onNewDrawing}
+            className="flex h-9 items-center gap-2 rounded-[4px] bg-zk-accent px-4 text-[14px] font-semibold text-zk-on-accent hover:brightness-110"
+          >
+            <Plus className="h-4 w-4" />
+            New drawing
+          </button>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-[1400px] px-6 pt-10 pb-16 sm:px-10">
+        <div className="mb-8 flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+          <div>
+            <h1 className="font-display text-[40px] leading-none font-semibold">Your drawings</h1>
+            <p className="mt-3 text-[13px] text-zk-muted">
+              {vaultStore.isLoading
+                ? "Loading…"
+                : `${count} drawing${count === 1 ? "" : "s"}${
+                    vaultStore.storageInfo.quota > 0
+                      ? ` · ${DexieService.formatBytes(vaultStore.storageInfo.used)} stored on this device`
+                      : ""
+                  }`}
+            </p>
           </div>
 
-          {/* Search and Controls */}
           {!vaultStore.isEmpty && (
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 mb-6">
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Search drawings..."
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-zk-muted" />
+                <input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
+                  placeholder="Search"
+                  aria-label="Search drawings"
+                  className="h-9 w-56 rounded-[4px] bg-zk-raised pr-8 pl-8 text-[13px] text-zk-text placeholder:text-zk-disabled outline-none focus-visible:outline-1 focus-visible:outline-zk-accent"
                 />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant={viewMode === "grid" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setViewMode("grid")}
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    aria-label="Clear search"
+                    className="absolute top-1/2 right-1.5 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-[3px] text-zk-muted hover:text-zk-text"
                   >
-                    <Grid3X3 className="w-4 h-4" />
-                    <span className="hidden sm:inline ml-1">Grid</span>
-                  </Button>
-                  <Button
-                    variant={viewMode === "list" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setViewMode("list")}
-                  >
-                    <List className="w-4 h-4" />
-                    <span className="hidden sm:inline ml-1">List</span>
-                  </Button>
-                </div>
-
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <span className="hidden sm:inline">Sort by </span>
-                      {sortBy === "updated"
-                        ? "Updated"
-                        : sortBy === "created"
-                          ? "Created"
-                          : "Name"}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuItem onClick={() => setSortBy("updated")}>
-                      Last Updated
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setSortBy("created")}>
-                      Date Created
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setSortBy("name")}>
-                      Name
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
-            </div>
-          )}
-
-          {/* Empty State */}
-          {vaultStore.isEmpty ? (
-            <div className="text-center py-16 sm:py-20">
-              <div className="text-gray-400 mb-6">
-                <div className="w-20 sm:w-24 h-20 sm:h-24 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                  <Plus className="w-10 sm:w-12 h-10 sm:h-12" />
-                </div>
-              </div>
-              <h2 className="text-xl sm:text-2xl font-semibold text-gray-700 mb-3">
-                No drawings yet
-              </h2>
-              <p className="text-gray-500 mb-6 sm:mb-8 max-w-md mx-auto px-4">
-                Start creating your first digital drawing or signature. Your
-                work will be automatically saved here.
-              </p>
-              <Button onClick={onNewDrawing} size="lg" className="px-6 sm:px-8">
-                Create Your First Drawing
-              </Button>
-            </div>
-          ) : filteredDrawings.length === 0 ? (
-            <div className="text-center py-16">
-              <Search className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h2 className="text-xl font-semibold text-gray-600 mb-2">
-                No drawings found
-              </h2>
-              <p className="text-gray-500">Try adjusting your search terms</p>
-            </div>
-          ) : (
-            /* Gallery */
-            <div
-              className={
-                viewMode === "grid"
-                  ? "grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-6"
-                  : "space-y-3"
-              }
-            >
-              {filteredDrawings.map((drawing: ISavedDrawing) => (
-                <Card
-                  key={drawing.id}
-                  className={`cursor-pointer hover:shadow-lg transition-all duration-200 group py-0  ${
-                    viewMode === "list" ? "flex p-3 sm:p-4" : ""
-                  }`}
-                  onClick={() => onEditDrawing(drawing.id)}
-                >
-                  <CardContent
-                    className={
-                      viewMode === "grid"
-                        ? "p-3 sm:p-4"
-                        : "flex items-center gap-3 sm:gap-4 p-0 flex-1"
-                    }
+              <div className="flex h-9 items-center gap-0.5 rounded-[4px] bg-zk-raised/60 p-0.5" role="radiogroup" aria-label="Sort by">
+                {SORTS.map((s) => (
+                  <button
+                    key={s.id}
+                    role="radio"
+                    aria-checked={sortBy === s.id}
+                    onClick={() => setSortBy(s.id)}
+                    className={`h-8 rounded-[3px] px-3 text-[13px] transition-colors ${
+                      sortBy === s.id ? "bg-zk-selected font-semibold text-zk-text" : "text-zk-muted hover:text-zk-text"
+                    }`}
                   >
-                    {/* Thumbnail */}
-                    <div
-                      className={`bg-white rounded-lg overflow-hidden border ${
-                        viewMode === "grid"
-                          ? "aspect-square mb-3"
-                          : "w-12 h-12 sm:w-16 sm:h-16 flex-shrink-0"
-                      }`}
-                    >
-                      <ThumbnailImage
-                        thumbnailId={drawing.thumbnail}
-                        alt={drawing.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-
-                    {/* Content */}
-                    <div
-                      className={`flex-1 ${
-                        viewMode === "grid" ? "" : "min-w-0"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          {editingName === drawing.id ? (
-                            <div
-                              className="flex items-center gap-2"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Input
-                                value={newName}
-                                onChange={(e) => setNewName(e.target.value)}
-                                onBlur={() => handleRename(drawing.id)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter")
-                                    handleRename(drawing.id);
-                                  if (e.key === "Escape") cancelRename();
-                                }}
-                                className="text-sm h-8"
-                                autoFocus
-                              />
-                            </div>
-                          ) : (
-                            <h3 className="font-semibold text-gray-900 truncate group-hover:text-blue-600 transition-colors text-sm sm:text-base">
-                              {drawing.name}
-                            </h3>
-                          )}
-
-                          <div className="flex items-center gap-2 sm:gap-3 mt-1 text-xs text-gray-500">
-                            <span className="meta-info inline-block whitespace-nowrap">
-                              {formatDate(drawing.updatedAt)}
-                            </span>
-                            <span>•</span>
-                            <span className="meta-info inline-block whitespace-nowrap">
-                              {getStrokeCount(drawing)} strokes
-                            </span>
-                            {viewMode === "grid" && (
-                              <>
-                                <span>•</span>
-                                <span className="meta-info inline-block whitespace-nowrap">
-                                  {getColorCount(drawing)} colors
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Actions */}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 p-0"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <MoreVertical className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={(e) => startRename(drawing, e)}
-                            >
-                              <Edit className="w-4 h-4 mr-2" />
-                              Rename
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={(e) => handleDelete(drawing.id, e)}
-                              className="text-red-600 focus:text-red-600"
-                            >
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-
-                      {/* Additional info for list view */}
-                      {viewMode === "list" && (
-                        <div className="flex items-center gap-3 sm:gap-4 mt-2 text-xs text-gray-400">
-                          <span>Created {formatDate(drawing.createdAt)}</span>
-                          <span>{getColorCount(drawing)} colors</span>
-                          <span>Background: {drawing.background}</span>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex h-9 items-center gap-0.5 rounded-[4px] bg-zk-raised/60 p-0.5" role="radiogroup" aria-label="View">
+                {([
+                  { id: "grid", label: "Grid", icon: LayoutGrid },
+                  { id: "list", label: "List", icon: List },
+                ] as const).map((v) => (
+                  <button
+                    key={v.id}
+                    role="radio"
+                    aria-checked={viewMode === v.id}
+                    aria-label={v.label}
+                    onClick={() => chooseView(v.id)}
+                    className={`flex h-8 w-8 items-center justify-center rounded-[3px] transition-colors ${
+                      viewMode === v.id ? "bg-zk-selected text-zk-text" : "text-zk-muted hover:text-zk-text"
+                    }`}
+                  >
+                    <v.icon className="h-4 w-4" />
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
-      </div>
-    );
-  },
-);
+
+        {vaultStore.isLoading ? (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-5 gap-y-7">
+            {Array.from({ length: 6 }, (_, i) => (
+              <div key={i} className="aspect-[4/3] animate-pulse rounded-[6px] bg-zk-raised" />
+            ))}
+          </div>
+        ) : vaultStore.isEmpty ? (
+          <div className="flex flex-col items-center py-24 text-center">
+            <button
+              onClick={onNewDrawing}
+              className="mb-8 flex aspect-[4/3] w-64 items-center justify-center rounded-[6px] bg-[#FBFAF6] text-[#b5b2aa] transition-transform hover:-translate-y-0.5"
+              aria-label="Start your first drawing"
+            >
+              <Plus className="h-10 w-10" />
+            </button>
+            <h2 className="font-display text-[28px] font-semibold">Nothing here yet</h2>
+            <p className="mt-2 max-w-sm text-[14px] text-zk-muted">
+              Start a drawing and it saves itself here as you work. Everything stays on this device.
+            </p>
+            <button
+              onClick={onNewDrawing}
+              className="mt-6 flex h-10 items-center gap-2 rounded-[4px] bg-zk-accent px-5 text-[14px] font-semibold text-zk-on-accent hover:brightness-110"
+            >
+              <Plus className="h-4 w-4" />
+              Start drawing
+            </button>
+          </div>
+        ) : drawings.length === 0 ? (
+          <div className="py-24 text-center">
+            <h2 className="font-display text-[24px] font-semibold">No drawings match “{searchQuery.trim()}”</h2>
+            <button onClick={() => setSearchQuery("")} className="mt-3 text-[13px] text-zk-text-2 underline-offset-4 hover:underline">
+              Clear search
+            </button>
+          </div>
+        ) : viewMode === "grid" ? (
+          <ul className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-3 gap-y-3">
+            {!query && (
+              <li>
+                <button
+                  onClick={onNewDrawing}
+                  className="group flex h-full w-full flex-col rounded-[6px] p-2 text-left transition-colors hover:bg-zk-raised"
+                >
+                  <span className="flex aspect-[4/3] w-full items-center justify-center rounded-[4px] border border-dashed border-zk-divider text-zk-muted transition-colors group-hover:border-zk-accent group-hover:text-zk-accent">
+                    <Plus className="h-7 w-7" />
+                  </span>
+                  <span className="px-1 pt-3 font-display text-[16px] font-semibold text-zk-text-2 group-hover:text-zk-text">
+                    New drawing
+                  </span>
+                </button>
+              </li>
+            )}
+            {drawings.map((drawing) => (
+              <li key={drawing.id}>
+                <div
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => open(drawing)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && editingId !== drawing.id) onEditDrawing(drawing.id);
+                    if (e.key === "F2") startRename(drawing);
+                  }}
+                  className="group flex cursor-pointer flex-col rounded-[6px] p-2 transition-colors outline-none hover:bg-zk-raised focus-visible:bg-zk-raised"
+                >
+                  <div className={`aspect-[4/3] w-full overflow-hidden rounded-[4px] ${drawing.background === "transparent" ? "bg-[repeating-conic-gradient(#efefef_0%_25%,#ffffff_0%_50%)] bg-[length:14px_14px]" : "bg-white"}`}>
+                    <ThumbnailImage thumbnailId={drawing.thumbnail} alt={drawing.name} className="h-full w-full object-cover" />
+                  </div>
+                  <div className="flex items-start gap-2 px-1 pt-3">
+                    <div className="min-w-0 flex-1">
+                      {nameField(drawing, "text-[16px]")}
+                      <p className="mt-0.5 truncate text-[12px] text-zk-muted">
+                        Edited {formatDate(drawing.updatedAt)} · {plural(countStrokes(drawing), "stroke")}
+                      </p>
+                    </div>
+                    {actions(drawing)}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div role="table" aria-label="Drawings" className="flex flex-col">
+            <div role="row" className="grid grid-cols-[64px_1fr_120px_120px_80px_80px_100px_32px] items-center gap-4 border-b border-zk-hairline px-3 pb-2 text-[11px] font-semibold tracking-[0.12em] text-zk-muted uppercase">
+              <span role="columnheader" />
+              <span role="columnheader">Name</span>
+              <span role="columnheader">Edited</span>
+              <span role="columnheader">Created</span>
+              <span role="columnheader">Strokes</span>
+              <span role="columnheader">Colours</span>
+              <span role="columnheader">Background</span>
+              <span role="columnheader" />
+            </div>
+            {drawings.map((drawing) => (
+              <div
+                key={drawing.id}
+                role="row"
+                tabIndex={0}
+                onClick={() => open(drawing)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && editingId !== drawing.id) onEditDrawing(drawing.id);
+                  if (e.key === "F2") startRename(drawing);
+                }}
+                className="group grid cursor-pointer grid-cols-[64px_1fr_120px_120px_80px_80px_100px_32px] items-center gap-4 rounded-[4px] px-3 py-2 text-[13px] text-zk-text-2 outline-none hover:bg-zk-raised focus-visible:bg-zk-raised"
+              >
+                <div role="cell" className="h-12 w-16 overflow-hidden rounded-[3px] bg-white">
+                  <ThumbnailImage thumbnailId={drawing.thumbnail} alt="" className="h-full w-full object-cover" />
+                </div>
+                <div role="cell" className="min-w-0">{nameField(drawing, "text-[15px]")}</div>
+                <span role="cell">{formatDate(drawing.updatedAt)}</span>
+                <span role="cell">{formatDate(drawing.createdAt)}</span>
+                <span role="cell" className="tabular-nums">{countStrokes(drawing)}</span>
+                <span role="cell" className="tabular-nums">{countColors(drawing)}</span>
+                <span role="cell">{BACKGROUND_LABEL[drawing.background] ?? drawing.background}</span>
+                <div role="cell">{actions(drawing)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+
+      <Dialog open={!!pendingDelete} onOpenChange={(o) => !o && setPendingDelete(null)}>
+        <DialogContent className="max-w-[400px] gap-5">
+          <div>
+            <DialogTitle className="text-[24px]">Delete drawing?</DialogTitle>
+            <DialogDescription className="mt-2 text-[13px] leading-relaxed text-zk-muted">
+              “{pendingDelete?.name}” and all its layers will be removed from this device. This can’t be undone.
+            </DialogDescription>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setPendingDelete(null)}
+              className="h-9 rounded-[4px] px-4 text-[13px] font-medium text-zk-text-2 hover:bg-zk-raised hover:text-zk-text"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmDelete}
+              className="h-9 rounded-[4px] bg-[#e5484d] px-4 text-[13px] font-semibold text-white hover:brightness-110"
+            >
+              Delete
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {showSettings && <SettingsPage onClose={() => setShowSettings(false)} />}
+    </div>
+  );
+});
 
 export default VaultView;
