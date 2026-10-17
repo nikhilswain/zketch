@@ -139,7 +139,8 @@ src/
 │   ├── StrokeOptimizer.ts     # RDP simplification before save
 │   ├── serializeLayers.ts     # MST layers → save format, cached per element snapshot
 │   ├── ImageProcessingUtils.ts# validate/resize/compress/sanitize images
-│   ├── applyBrushPreset.ts    # Select a brush + apply its first preset
+│   ├── brushMemory.ts         # Per-brush remembered settings (localStorage), presets, resets
+│   ├── brushCategories.ts     # Picker category list + registry grouping
 │   └── keyBindings.ts         # KEY_BINDINGS table + KeyBindingManager
 │
 ├── hooks/            # useStores, useKeyboardShortcuts, useMobile, useCanvasResize
@@ -245,8 +246,9 @@ clamps at 400) and `defaults?: Partial<BrushOptions>` (per-brush fallback option
 `src/engine/brushes/`, register it in `registerDefaultBrushes()`, add its key to
 `BRUSH_STYLES` in `engine/types.ts` (the `BrushStyle` type and the MST enums in
 `SharedModels.ts`/`CanvasModel.ts` derive from it; never remove or rename a key,
-saved strokes reference it), give it a `category`, and add a dock icon (the
-picker and mobile list read the registry). PNG/JPG/thumbnail parity is
+saved strokes reference it), give it a `category` and `strokeSettings`, add a
+dock icon, and run `npm run brushes:previews` (the picker and mobile list read
+the registry; see §4.2.2). PNG/JPG/thumbnail parity is
 automatic via the shared `renderStroke`. Set `legacy = true` to keep a brush
 render-only (excluded from the dock picker).
 
@@ -302,6 +304,40 @@ paper `grain` (`{id, scale, depth}`).
   tips ship. Credits: `THIRD_PARTY_ASSETS.md`. Only bundle sources whose license
   allows use inside the app (CC0, or free-for-commercial-use without
   redistribution of the files themselves).
+
+### 4.2.2 Stroke settings and per-brush memory
+
+- Every stroke records `input` (`pen`/`mouse`/`touch`, from the pointer that drew
+  it). **Strokes without `input` are pre-2026-10-17 strokes and every brush
+  renders them exactly as before** (pixel fingerprint harness in
+  `.work/bench/fingerprint.test.ts`). Strokes with `input` honour the Stroke
+  settings, all stored on the stroke: Width variation = `thinning`, Stabilizer =
+  `streamline`, Smoothing = `smoothing`, Taper = `taperStart`/`taperEnd` (px).
+- `engine/render/dynamics.ts`: `stabilize` (prefix-stable lag filter, so live
+  preview and commit match), `speedPressure` (perfect-freehand's simulation),
+  `strokePressures` (pen → real pressure; mouse/touch → constant 0.5 at default,
+  speed-based above 50% width variation), `pressureGain` (= 2 × thinning,
+  multiplies a brush's built-in pressure response; 1 at the default 0.5),
+  `taperFactor`, `strokeDefaultsFor(brush)`.
+- Pen and Marker use perfect-freehand with `simulatePressure: input !== "pen"`.
+  Stamp brushes apply stabilizer/pressure/taper before `stampSmooth`; a stamp
+  stroke with an end taper is re-rendered in full at commit (never reuses the
+  live buffer). Calligraphy scales and tapers the nib; Highlighter/Airbrush only
+  stabilize. Eraser strokes render with `input: null` and fixed shaping.
+- Each brush declares `strokeSettings` (which Stroke controls the panel shows)
+  and `strokeDefaults` (Pen 0.5/0.5/0.5/30/30, Marker taper 0; everyone else
+  `NEUTRAL_STROKE_DEFAULTS`: no stabilizer, no taper, so default strokes look as
+  before).
+- `utils/brushMemory.ts` (installed once in `stores/root-store.ts`): a MobX
+  reaction on `currentBrushStyle` saves the outgoing brush's size/opacity/angle/
+  softness/Stroke values and loads the incoming one (or its first preset +
+  Stroke defaults), whichever path switched it (picker, shortcuts, mobile list);
+  eraser is skipped. Persisted in localStorage `zketch-brush-memory-v1`.
+  `applyPreset`/`resetPreset`/`resetStroke`; "edited" is computed against the
+  base preset. Drawing code keeps reading `currentSize`/`brushSettings`.
+- Picker previews: `npm run brushes:previews` (`tools/render-brush-previews.ts`,
+  runs via vite-node; also chained after `npm run brushes`). Re-run after adding
+  or retuning a brush.
 
 `brushOptions.ts::createGetBrushOptions(settings)` converts the per-draw brush
 settings (`thinning/smoothing/streamline/taper/easing`) into `BrushOptions`,
@@ -472,21 +508,24 @@ Persistence layers:
   status, undo/redo/clear), `IconBar` + floating sidebar panels, `LayersPanel`,
   `FloatingDock`, export/import dialogs, autosave, animation playback state,
   canvas lock while animating.
-- **`floating-dock.tsx`** — bottom dock: Pan, Select(1), a **Brush picker**
-  (popover listing non-legacy brushes: Pen/Marker/Highlighter/Airbrush/Calligraphy, shortcut
-  numbers shown), Eraser(3), Shapes(5) + shape picker popover
-  (rectangle/circle/diamond/triangle), zoom out / % / zoom in / fit. Selecting a
-  brush applies its first `preset` (size/opacity/angle/softness) via
-  `utils/applyBrushPreset`.
+- **`floating-dock.tsx`** — bottom dock: Pan, Select(1), the brush button
+  (opens `brush-picker/BrushPicker.tsx`: 3-column grid of pre-rendered stroke
+  previews from `public/brushes/previews/`, tabs All/Draw/Paint/Texture/Nature/
+  Effects, All = every category under headings; selected = soft grey fill;
+  closes on pick, Esc or outside click), Eraser(3), Shapes(5) + shape picker
+  popover, zoom out / % / zoom in / fit. Picking calls
+  `brushMemory.selectBrush`.
 - **`layers-panel.tsx`** — per-layer row with generated thumbnail (via shared
   `renderStroke`/`renderShape`, rendered at 3× then downscaled), visibility, lock,
   focus/solo, rename, duplicate, reorder, opacity, delete, clear strokes, and
   expandable animation controls. Layer list is reversed (top = last).
 - **`sidebar/`** — `index.tsx` (IconBar: Tool/Shape/Color/Background/TouchMode/
   Import/Export) + draggable `FloatingPanel` + panels:
-  `ToolSettingsPanel` (live brush **preview** canvas + **Variants** chips from
-  `Brush.presets` + per-brush controls: size/opacity, calligraphy nib angle,
-  airbrush softness, pen thinning/smoothing/streamline/taper; eraser mode reactive),
+  `ToolSettingsPanel` + `sidebar/brush-settings/` (name + category, live preview
+  `StrokeCanvas`, `PresetList` rows that draw each preset's own stroke and mark
+  the active one "edited" with Reset, size (max `Brush.maxSize`)/opacity, nib
+  angle or softness where relevant, collapsible `StrokeSection` showing only
+  `Brush.strokeSettings`; eraser keeps its own view),
   `ShapeSettingsPanel`
   (stroke width/opacity/corner radius/fill), `ColorPanel` (stroke/fill target),
   `BackgroundPanel`, `TouchModePanel`.
@@ -666,7 +705,7 @@ While animating, `canvasLocked` blocks all drawing/import.
 
 | Task | Touch |
 |---|---|
-| Add a brush | implement in `engine/brushes/*`, register in `BrushRegistry.registerDefaultBrushes()`, add the key to the `BrushStyle` union (`engine/types.ts` + the MST enums), add a dock icon/list entry. Export/thumbnail parity is automatic. |
+| Add a brush | implement in `engine/brushes/*`, register in `BrushRegistry.registerDefaultBrushes()`, add the key to `BRUSH_STYLES` (`engine/types.ts`), set `category`, `strokeSettings` (and `strokeDefaults` if not neutral), add a dock icon, run `npm run brushes:previews`. Export/thumbnail parity is automatic. |
 | Add a shape kind | `ShapeLayerModel.ts` enum + factory, `CanvasModel` state, `CanvasEngine.tracePath`, `ExportService.traceShape`, `ThumbnailService.renderShape`, `layers-panel` thumbnail, dock picker |
 | Change selection/transform behavior | `drawing-canvas.tsx` (group refs + handlers) + `CanvasModel` selection actions + `TransformController` |
 | Change eraser behavior | `drawing-canvas.tsx` (pending scan), `CanvasEngine.renderStroke`, `CanvasModel.commitPendingErase`, `SettingsModel.eraserWholeStroke` |
