@@ -1,7 +1,7 @@
 import type React from "react";
 import { useRef } from "react";
 import { observer } from "mobx-react-lite";
-import { CheckIcon, ChevronDownIcon, LoaderIcon } from "@/components/icons";
+import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, LoaderIcon } from "@/components/icons";
 import { useCanvasStore, useSettingsStore } from "@/hooks/useStores";
 import { applyLayout, dockLayout } from "@/utils/dockLayout";
 import {
@@ -61,6 +61,15 @@ const TopLeftBlock: React.FC<TopLeftBlockProps> = observer(
 
     return (
       <div className="pointer-events-auto flex h-10 items-center gap-1 rounded-[6px] bg-zk-surface pr-2 pl-1.5 text-zk-text">
+        <button
+          onClick={onBack}
+          aria-label="Back to vault"
+          title="Back to vault"
+          className="flex h-8 w-8 items-center justify-center rounded-[4px] text-zk-text-2 hover:bg-zk-hover hover:text-zk-text"
+        >
+          <ArrowLeftIcon size={18} />
+        </button>
+        <span aria-hidden="true" className="h-5 w-px bg-zk-hairline" />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
