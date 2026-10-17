@@ -529,16 +529,18 @@ Persistence layers:
   import/clear dialogs, animation playback state and canvas lock); renders the
   studio shell and passes animation handlers through `studio/StudioContext`.
 - **`studio/`** — the drawing screen UI (spec `.work/specs/2026-10-17-app-redesign-design.md`):
-  - `StudioShell` — canvas viewport between the left/right docks, over the
-    bottom deck and bar. Desktop (≥1100 px): docks reserve space and the view is
-    pan-compensated when the viewport's left edge moves; below 1100 px docks
-    overlay the canvas and close on pointer-down on `[data-canvas-root]`.
+  - `StudioShell` — the canvas spans the whole row under the left/right docks
+    and never moves or resizes when they open; `[data-canvas-viewport]` is the
+    visible area between them (`utils/viewport.ts`: `visibleCanvasRect`,
+    `fitView` fits the page or puts the origin at the visible top-left).
+    Desktop (≥1100 px) docks sit beside the viewport; below 1100 px they
+    overlay it and close on pointer-down on `[data-canvas-root]`.
     Shows the layers strip when the Layers dock is closed and reopen tabs for
     closed sidebars.
-  - `TopLeftBlock` (Z menu: rename, vault, import, export, background, page
+  - `TopLeftBlock` (back to vault; Z menu: rename, vault, import, export, background, page
     size… for fixed drawings (`PageSizeDialog`, resize around the centre then
-    refit), touch & stylus, layout, clear; name input; save status), `TopRightBlock` (undo,
-    redo, Share → export dialog).
+    refit), touch & stylus, layout; name input; save status), `TopRightBlock` (undo,
+    redo, clear canvas, Share → export dialog).
   - `BottomBar` — tools (select, draw, erase, shapes, pan), tool-dependent area
     (brush chip + Size/Opacity, eraser size + whole-stroke mode, shape kinds +
     stroke; empty for Select and Pan), colour + swatches, zoom/fit, deck toggle. In the Minimal layout
@@ -547,7 +549,10 @@ Persistence layers:
     `PanelFrame` (grip, title, collapse, dock-left/bottom/right buttons;
     `PanelVariantContext` = deck | side | popover), `panels/` (Brushes,
     Presets, Stroke, Colour with `HsvPicker`, Layers + `LayersStrip`, Shapes;
-    registry in `panels/index.ts`).
+    registry in `panels/index.ts`). Layer rows and strip thumbnails reorder
+    with `hooks/useSortableList` (pointer drag from the grip or the card,
+    neighbours slide aside, Escape cancels) and open the layer menu on
+    right-click.
   - `StrokeTrack` — the only slider style for app settings: a picture of the
     setting (`trackShapes.ts`: size wedge, opacity checkerboard, stabilizer
     wobble, width variation, taper, flat), notch knob, value tag, keyboard,
@@ -556,8 +561,8 @@ Persistence layers:
     open flags, layout bottom | sidebars | minimal | custom; localStorage
     `zketch-dock-layout-v1`, bad data falls back to Bottom deck).
 - **Dock motion and dragging**: `studio/DockSlot.tsx` animates each dock's
-  width/height (200 ms) and unmounts it after closing; pan compensation runs
-  every frame through the viewport ResizeObserver, so the drawing stays put.
+  width/height (200 ms) and unmounts it after closing; the canvas sits under
+  the docks, so the drawing stays put.
   Side panels collapse with a grid-rows reveal (`PanelFrame`). While a panel
   header is dragged (`dockLayout.dragging`), `StudioShell` shows drop zones for
   docks that are hidden; open docks take the drop themselves. In tablet
