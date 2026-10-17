@@ -538,6 +538,14 @@ Persistence layers:
   - Dock state: `utils/dockLayout.ts` (panel → dock/order/collapsed, dock
     open flags, layout bottom | sidebars | minimal | custom; localStorage
     `zketch-dock-layout-v1`, bad data falls back to Bottom deck).
+- **Dock motion and dragging**: `studio/DockSlot.tsx` animates each dock's
+  width/height (200 ms) and unmounts it after closing; pan compensation runs
+  every frame through the viewport ResizeObserver, so the drawing stays put.
+  Side panels collapse with a grid-rows reveal (`PanelFrame`). While a panel
+  header is dragged (`dockLayout.dragging`), `StudioShell` shows drop zones for
+  docks that are hidden; open docks take the drop themselves. In tablet
+  overlay mode, drawing hides docks through `dockLayout.overlayHidden`
+  (session-only, never persisted); use `isDockShown(dock)` for visibility.
 - **Dialogs** (`ui/dialog.tsx`): dark `bg-zk-surface` sheet, 150 ms fade +
   0.97 scale in place. Never add shadcn `slide-in-from-*` classes to centred
   dialogs: tw-animate's transform stacks on Tailwind 4's `translate` centring

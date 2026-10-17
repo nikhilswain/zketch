@@ -6,6 +6,7 @@ import {
   dockLayout,
   movePanel,
   panelsIn,
+  setDraggingPanel,
   setSideOpen,
   type DockId,
   type PanelId,
@@ -47,6 +48,7 @@ const DockArea: React.FC<{ dock: DockId; overlay?: boolean }> = observer(({ dock
   const onDrop = (e: React.DragEvent) => {
     const id = e.dataTransfer.getData(PANEL_DRAG_TYPE) as PanelId;
     setDropAt(null);
+    setDraggingPanel(null);
     if (!id || !(id in dockLayout.state.panels) || !ref.current) return;
     e.preventDefault();
     let index = dropIndex(ref.current, dock, e.clientX, e.clientY);
@@ -72,14 +74,15 @@ const DockArea: React.FC<{ dock: DockId; overlay?: boolean }> = observer(({ dock
           if (!ref.current?.contains(e.relatedTarget as Node)) setDropAt(null);
         }}
         onDrop={onDrop}
-        aria-label={side ? `${dock === "left" ? "Left" : "Right"} sidebar` : "Brush deck"}
-        className={
+        role="region"
+        aria-label={side ? `${dock === "left" ? "Left" : "Right"} sidebar` : "Bottom panels"}
+        className={`${
           side
-            ? `flex h-full w-[300px] shrink-0 flex-col overflow-y-auto bg-zk-surface text-zk-text ${
+            ? `flex h-full w-[300px] shrink-0 flex-col overflow-x-hidden overflow-y-auto bg-zk-surface text-zk-text ${
                 dock === "left" ? "border-r" : "border-l"
               } border-zk-hairline ${overlay ? "shadow-[0_0_40px_rgba(0,0,0,0.35)]" : ""}`
-            : "flex h-[212px] shrink-0 overflow-x-auto border-t border-zk-hairline bg-zk-surface text-zk-text"
-        }
+            : "flex h-[212px] w-full shrink-0 overflow-x-auto overflow-y-hidden border-t border-zk-hairline bg-zk-surface text-zk-text"
+        } ${dockLayout.dragging ? "outline-1 -outline-offset-1 outline-zk-accent/45" : ""}`}
       >
         {side && (
           <div className={`flex h-8 shrink-0 items-center px-1.5 ${dock === "left" ? "justify-end" : "justify-start"}`}>
@@ -113,7 +116,7 @@ const DockArea: React.FC<{ dock: DockId; overlay?: boolean }> = observer(({ dock
         {indicator(ids.length)}
         {ids.length === 0 && (
           <p className="m-auto px-6 text-center text-[12px] text-zk-muted">
-            Drag a panel here by its grip, or use a panel&apos;s dock buttons.
+            Drag a panel here by its header, or use a panel&apos;s dock buttons.
           </p>
         )}
       </div>

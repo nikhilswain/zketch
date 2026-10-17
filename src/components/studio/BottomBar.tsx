@@ -21,6 +21,7 @@ import { lastBrush, selectBrush } from "@/utils/brushMemory";
 import {
   dockLayout,
   panelsIn,
+  isDockShown,
   revealPanel,
   setDeckOpen,
 } from "@/utils/dockLayout";
@@ -30,6 +31,7 @@ import { PanelVariantContext } from "./PanelFrame";
 import { BrushLibrary } from "./panels/BrushesPanel";
 import { PresetsBody } from "./panels/PresetsPanel";
 import { SWATCHES } from "./panels/ColourPanel";
+import { PANELS } from "./panels";
 
 const SHAPES: { kind: ShapeKind; label: string; Icon: typeof Square }[] = [
   { kind: "rectangle", label: "Rectangle", Icon: Square },
@@ -102,7 +104,7 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
   const brushKey = style === "eraser" ? lastBrush() : style;
   const brush = brushRegistry.get(brushKey);
   const deckHasPanels = panelsIn("bottom").length > 0;
-  const deckOpen = dockLayout.state.deckOpen && deckHasPanels;
+  const deckOpen = isDockShown("bottom");
   const bs = canvasStore.brushSettings;
 
   const openBrushes = () => {
@@ -148,7 +150,7 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
         <ToolButton label="Shapes (5)" active={tool === "shape"} onClick={() => canvasStore.setActiveTool("shape")}>
           <Shapes className="h-[18px] w-[18px]" strokeWidth={1.5} />
         </ToolButton>
-        <ToolButton label="Pan (hold Space)" active={tool === "pan"} onClick={() => canvasStore.setActiveTool("pan")}>
+        <ToolButton label="Pan (or hold Space)" active={tool === "pan"} onClick={() => canvasStore.setActiveTool("pan")}>
           <Hand className="h-[18px] w-[18px]" strokeWidth={1.5} />
         </ToolButton>
       </div>
@@ -223,7 +225,10 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
               onChange={(v) => canvasStore.setEraserSize(v)}
             />
           </div>
-          <label className="flex cursor-pointer items-center gap-2 text-[13px] text-zk-text-2">
+          <label
+            title="On: anything the eraser touches is deleted whole. Off: rubs out only the parts it touches."
+            className="flex cursor-pointer items-center gap-2 text-[13px] text-zk-text-2"
+          >
             <input
               type="checkbox"
               checked={settingsStore.eraserWholeStroke}
@@ -308,13 +313,15 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
         <>
           <Divider />
           <button
-            onClick={() => setDeckOpen(!dockLayout.state.deckOpen)}
+            onClick={() => setDeckOpen(!deckOpen)}
             aria-expanded={deckOpen}
+            aria-label={deckOpen ? "Hide bottom panels" : "Show bottom panels"}
+            title={`${deckOpen ? "Hide" : "Show"} ${panelsIn("bottom").map((id) => PANELS[id].title.toLowerCase()).join(", ")}`}
             className={`flex h-9 items-center gap-2 rounded-[4px] px-3 text-[12px] ${
               deckOpen ? "bg-zk-raised" : "hover:bg-zk-raised"
             }`}
           >
-            <span className="hidden min-[1100px]:inline">Brush deck</span>
+            <span className="hidden min-[1100px]:inline">Panels</span>
             {deckOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
           </button>
         </>

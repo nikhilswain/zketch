@@ -88,7 +88,7 @@ function restore(): DockState {
       rightOpen: parsed.rightOpen !== false,
       layout: ["bottom", "sidebars", "minimal", "custom"].includes(parsed.layout)
         ? parsed.layout
-        : "custom",
+        : "bottom",
     };
     for (const id of PANEL_IDS) {
       const p = parsed.panels?.[id];
@@ -108,9 +108,41 @@ function restore(): DockState {
 }
 
 export const dockLayout = observable(
-  { state: preset("bottom") as DockState },
+  {
+    state: preset("bottom") as DockState,
+    overlay: false,
+    overlayHidden: { left: false, right: false, bottom: false } as Record<DockId, boolean>,
+    dragging: null as PanelId | null,
+  },
   { state: observable.deep },
 );
+
+function unhide(dock: DockId) {
+  dockLayout.overlayHidden[dock] = false;
+}
+
+export function setOverlayMode(on: boolean) {
+  runInAction(() => {
+    dockLayout.overlay = on;
+    dockLayout.overlayHidden = { left: false, right: false, bottom: false };
+  });
+}
+
+export function hideOverlayDocks() {
+  runInAction(() => {
+    dockLayout.overlayHidden = { left: true, right: true, bottom: true };
+  });
+}
+
+export function setDraggingPanel(id: PanelId | null) {
+  runInAction(() => {
+    dockLayout.dragging = id;
+  });
+}
+
+export function isDockShown(dock: DockId) {
+  return isDockOpen(dock) && panelsIn(dock).length > 0 && !(dockLayout.overlay && dockLayout.overlayHidden[dock]);
+}
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -163,6 +195,7 @@ export function movePanel(id: PanelId, dock: DockId, index?: number) {
     if (dock === "left") dockLayout.state.leftOpen = true;
     if (dock === "right") dockLayout.state.rightOpen = true;
     if (dock === "bottom") dockLayout.state.deckOpen = true;
+    unhide(dock);
     customised();
   });
   save();
@@ -178,6 +211,7 @@ export function toggleCollapsed(id: PanelId) {
 export function setDeckOpen(open: boolean) {
   runInAction(() => {
     dockLayout.state.deckOpen = open;
+    if (open) unhide("bottom");
   });
   save();
 }
@@ -186,6 +220,7 @@ export function setSideOpen(side: "left" | "right", open: boolean) {
   runInAction(() => {
     if (side === "left") dockLayout.state.leftOpen = open;
     else dockLayout.state.rightOpen = open;
+    if (open) unhide(side);
   });
   save();
 }
@@ -198,6 +233,7 @@ export function isDockOpen(dock: DockId) {
 export function applyLayout(id: Exclude<LayoutId, "custom">) {
   runInAction(() => {
     dockLayout.state = preset(id);
+    dockLayout.overlayHidden = { left: false, right: false, bottom: false };
   });
   save();
 }
@@ -209,6 +245,7 @@ export function revealPanel(id: PanelId) {
     if (p.dock === "bottom") dockLayout.state.deckOpen = true;
     else if (p.dock === "left") dockLayout.state.leftOpen = true;
     else dockLayout.state.rightOpen = true;
+    unhide(p.dock);
   });
   save();
 }

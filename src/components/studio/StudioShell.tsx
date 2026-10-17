@@ -5,12 +5,20 @@ import { useCanvasStore } from "@/hooks/useStores";
 import { PanelLeftOpen, PanelRightOpen } from "lucide-react";
 import {
   dockLayout,
+  hideOverlayDocks,
+  isDockShown,
+  movePanel,
   panelsIn,
   revealPanel,
-  setDeckOpen,
+  setDraggingPanel,
+  setOverlayMode,
   setSideOpen,
+  type DockId,
+  type PanelId,
 } from "@/utils/dockLayout";
 import DockArea from "./DockArea";
+import DockSlot from "./DockSlot";
+import { PANEL_DRAG_TYPE } from "./PanelFrame";
 import BottomBar from "./BottomBar";
 import { LayersStrip } from "./panels/LayersStudioPanel";
 
@@ -34,6 +42,54 @@ const ReopenTab: React.FC<{ side: "left" | "right" }> = ({ side }) => (
     )}
   </button>
 );
+
+const ZONE_LABEL: Record<DockId, string> = { left: "Dock left", right: "Dock right", bottom: "Dock at the bottom" };
+
+const ZONE_POSITION: Record<DockId, string> = {
+  left: "top-16 bottom-4 left-3 w-28",
+  right: "top-16 bottom-4 right-3 w-28",
+  bottom: "bottom-3 left-36 right-36 h-20",
+};
+
+const DropZone: React.FC<{ dock: DockId }> = ({ dock }) => {
+  const [over, setOver] = useState(false);
+  return (
+    <div
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(PANEL_DRAG_TYPE)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        setOver(true);
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        const id = e.dataTransfer.getData(PANEL_DRAG_TYPE) as PanelId;
+        setOver(false);
+        setDraggingPanel(null);
+        if (!id || !(id in dockLayout.state.panels)) return;
+        e.preventDefault();
+        movePanel(id, dock);
+      }}
+      className={`absolute z-30 flex items-center justify-center rounded-[6px] border border-dashed text-[12px] font-semibold transition-colors duration-150 ${
+        ZONE_POSITION[dock]
+      } ${over ? "border-zk-accent bg-zk-accent/25 text-zk-text" : "border-zk-accent/50 bg-zk-surface/70 text-zk-text-2"}`}
+    >
+      <span className={dock === "bottom" ? "" : "[writing-mode:vertical-rl]"}>{ZONE_LABEL[dock]}</span>
+    </div>
+  );
+};
+
+const DropZones: React.FC = observer(() => {
+  if (!dockLayout.dragging) return null;
+  const docks = (["left", "right", "bottom"] as DockId[]).filter((d) => !isDockShown(d));
+  return (
+    <>
+      {docks.map((d) => (
+        <DropZone key={d} dock={d} />
+      ))}
+    </>
+  );
+});
 
 const OVERLAY_QUERY = "(max-width: 1099px)";
 
@@ -59,9 +115,9 @@ const StudioShell: React.FC<StudioShellProps> = observer(({ topLeft, topRight, o
   const s = dockLayout.state;
   const leftIds = panelsIn("left");
   const rightIds = panelsIn("right");
-  const leftVisible = s.leftOpen && leftIds.length > 0;
-  const rightVisible = s.rightOpen && rightIds.length > 0;
-  const deckVisible = s.deckOpen && panelsIn("bottom").length > 0;
+  const leftVisible = isDockShown("left");
+  const rightVisible = isDockShown("right");
+  const deckVisible = isDockShown("bottom");
   const layersDock = s.panels.layers.dock;
   const layersShown =
     layersDock === "left" ? leftVisible : layersDock === "right" ? rightVisible : deckVisible;
@@ -90,15 +146,17 @@ const StudioShell: React.FC<StudioShellProps> = observer(({ topLeft, topRight, o
   }, [canvasStore]);
 
   useEffect(() => {
+    setOverlayMode(overlay);
+  }, [overlay]);
+
+  useEffect(() => {
     if (!overlay) return;
     const el = viewportRef.current;
     if (!el) return;
     const onDown = (e: PointerEvent) => {
       const t = e.target as Element | null;
       if (!t || !t.closest("[data-canvas-root]")) return;
-      if (dockLayout.state.leftOpen) setSideOpen("left", false);
-      if (dockLayout.state.rightOpen) setSideOpen("right", false);
-      if (dockLayout.state.deckOpen) setDeckOpen(false);
+      hideOverlayDocks();
     };
     el.addEventListener("pointerdown", onDown, true);
     return () => el.removeEventListener("pointerdown", onDown, true);
@@ -107,24 +165,27 @@ const StudioShell: React.FC<StudioShellProps> = observer(({ topLeft, topRight, o
   return (
     <div className="fixed inset-0 flex flex-col bg-zk-surface font-ui">
       <div className="flex min-h-0 flex-1">
-        {leftVisible && !overlay && <DockArea dock="left" />}
+        <DockSlot open={leftVisible && !overlay} axis="x" size={300} from="left">
+          <DockArea dock="left" />
+        </DockSlot>
         <div ref={viewportRef} data-canvas-viewport className="relative min-w-0 flex-1 overflow-hidden">
           {children}
-          {overlay && leftVisible && (
-            <div className="absolute top-14 bottom-0 left-0 z-20">
+          <div className="absolute top-14 bottom-0 left-0 z-20 flex">
+            <DockSlot open={overlay && leftVisible} axis="x" size={300} from="left" className="h-full">
               <DockArea dock="left" overlay />
-            </div>
-          )}
-          {overlay && rightVisible && (
-            <div className="absolute top-14 bottom-0 right-0 z-20">
+            </DockSlot>
+          </div>
+          <div className="absolute top-14 right-0 bottom-0 z-20 flex">
+            <DockSlot open={overlay && rightVisible} axis="x" size={300} from="right" className="h-full">
               <DockArea dock="right" overlay />
-            </div>
-          )}
-          {overlay && deckVisible && (
-            <div className="absolute inset-x-0 bottom-0 z-20 shadow-[0_-12px_40px_rgba(0,0,0,0.35)]">
+            </DockSlot>
+          </div>
+          <div className={`absolute inset-x-0 bottom-0 z-20 ${overlay && deckVisible ? "shadow-[0_-12px_40px_rgba(0,0,0,0.35)]" : ""}`}>
+            <DockSlot open={overlay && deckVisible} axis="y" size={212} from="bottom">
               <DockArea dock="bottom" overlay />
-            </div>
-          )}
+            </DockSlot>
+          </div>
+          <DropZones />
           <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex items-start justify-between gap-3">
             {topLeft}
             {topRight}
@@ -146,9 +207,13 @@ const StudioShell: React.FC<StudioShellProps> = observer(({ topLeft, topRight, o
             )}
           </div>
         </div>
-        {rightVisible && !overlay && <DockArea dock="right" />}
+        <DockSlot open={rightVisible && !overlay} axis="x" size={300} from="right">
+          <DockArea dock="right" />
+        </DockSlot>
       </div>
-      {deckVisible && !overlay && <DockArea dock="bottom" />}
+      <DockSlot open={deckVisible && !overlay} axis="y" size={212} from="bottom">
+        <DockArea dock="bottom" />
+      </DockSlot>
       <BottomBar onFit={onFit} />
     </div>
   );
