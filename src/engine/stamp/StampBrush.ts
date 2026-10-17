@@ -3,12 +3,20 @@ import type {
   BrushCategory,
   BrushOptions,
   BrushPreset,
+  StrokeDefaults,
   StrokeLike,
+  StrokeSettingKey,
 } from "../types";
 import { hashString, seededRandom } from "../render/seededRandom";
 import { createCanvas } from "../render/canvasFactory";
 import { getTintedTip } from "./tips";
 import { getGrainMask } from "./grain";
+import {
+  dynamicPoints,
+  hasDynamics,
+  pressureGain,
+  taperFactor,
+} from "../render/dynamics";
 
 export interface StampSpec {
   key: string;
@@ -31,6 +39,8 @@ export interface StampSpec {
   angle?: number;
   directionOffset?: number;
   followCurve?: boolean;
+  strokeSettings?: StrokeSettingKey[];
+  strokeDefaults?: Partial<StrokeDefaults>;
   angleJitter?: number;
   roundness?: number;
   grain?: { id: string; scale: number; depth: number };
@@ -48,6 +58,7 @@ interface WalkState {
   carry: number;
   dabs: number;
   lastDir?: number;
+  travelled?: number;
 }
 
 type Matrix = [number, number, number, number, number, number];
@@ -80,6 +91,14 @@ function ensureCanvas(
   return canvas;
 }
 
+function pathLength(pts: readonly StampPoint[]) {
+  let total = 0;
+  for (let i = 1; i < pts.length; i++) {
+    total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+  }
+  return total;
+}
+
 export function stampSmooth(
   points: readonly { x: number; y: number; pressure?: number }[],
 ): StampPoint[] {
@@ -107,6 +126,8 @@ export class StampBrush implements Brush {
   readonly label: string;
   readonly category?: BrushCategory;
   readonly maxSize?: number;
+  readonly strokeSettings?: StrokeSettingKey[];
+  readonly strokeDefaults?: Partial<StrokeDefaults>;
   readonly presets?: BrushPreset[];
 
   constructor(readonly spec: StampSpec) {
@@ -114,6 +135,8 @@ export class StampBrush implements Brush {
     this.label = spec.label;
     this.category = spec.category;
     this.maxSize = spec.maxSize;
+    this.strokeSettings = spec.strokeSettings;
+    this.strokeDefaults = spec.strokeDefaults;
     this.presets = spec.presets;
   }
 
@@ -139,6 +162,7 @@ export class StampBrush implements Brush {
     m: Matrix,
     deviceBounds: { x0: number; y0: number; x1: number; y1: number },
   ) {
+    if (hasDynamics(stroke) && (stroke.taperEnd ?? 0) > 0) return false;
     const cache = live;
     if (!cache || cache.id !== stroke.id) return false;
     if (cache.rawCount > stroke.points.length) return false;
@@ -167,7 +191,7 @@ export class StampBrush implements Brush {
     bctx.globalAlpha = 1;
     bctx.clearRect(0, 0, cw, ch);
     bctx.drawImage(cache.accum, 0, 0, cw, ch, 0, 0, cw, ch);
-    this.walk(bctx, stroke, pts, lm, { ...cache.state }, pts.length);
+    this.walk(bctx, stroke, pts, lm, { ...cache.state }, pts.length, pathLength(pts));
     this.applyGrain(bctx, lm, cw, ch);
     bctx.restore();
     this.composite(ctx, stroke, buffer, dx, dy, cw, ch);
@@ -180,7 +204,7 @@ export class StampBrush implements Brush {
     stroke: StrokeLike,
     m: Matrix,
   ) {
-    const pts = stampSmooth(stroke.points);
+    const pts = stampSmooth(dynamicPoints(stroke));
     const size = Math.max(0.5, stroke.size);
     const scale = Math.hypot(m[0], m[1]) || 1;
     let minX = Infinity;
@@ -229,7 +253,15 @@ export class StampBrush implements Brush {
     bctx.setTransform(1, 0, 0, 1, 0, 0);
     bctx.globalCompositeOperation = "source-over";
     bctx.clearRect(0, 0, bw, bh);
-    this.walk(bctx, stroke, pts, local, { segment: 1, carry: 0, dabs: 0 }, pts.length);
+    this.walk(
+      bctx,
+      stroke,
+      pts,
+      local,
+      { segment: 1, carry: 0, dabs: 0 },
+      pts.length,
+      pathLength(pts),
+    );
     this.applyGrain(bctx, local, bw, bh);
     bctx.restore();
     this.composite(ctx, stroke, buffer, bx, by, bw, bh);
@@ -264,12 +296,20 @@ export class StampBrush implements Brush {
       };
     }
     const cache = live!;
-    const pts = stampSmooth(raw);
+    const pts = stampSmooth(dynamicPoints(stroke));
     const settledPoints = Math.max(0, pts.length - SMOOTH_PASSES - 1);
 
     const actx = cache.accum.getContext("2d")!;
     actx.save();
-    cache.state = this.walk(actx, stroke, pts, m, cache.state, settledPoints);
+    cache.state = this.walk(
+      actx,
+      stroke,
+      pts,
+      m,
+      cache.state,
+      settledPoints,
+      Infinity,
+    );
     actx.restore();
     cache.rawCount = raw.length;
 
@@ -281,7 +321,7 @@ export class StampBrush implements Brush {
     bctx.globalAlpha = 1;
     bctx.clearRect(0, 0, cw, ch);
     bctx.drawImage(cache.accum, 0, 0, cw, ch, 0, 0, cw, ch);
-    this.walk(bctx, stroke, pts, m, { ...cache.state }, pts.length);
+    this.walk(bctx, stroke, pts, m, { ...cache.state }, pts.length, pathLength(pts));
     this.applyGrain(bctx, m, cw, ch);
     bctx.restore();
     this.composite(ctx, stroke, buffer, 0, 0, cw, ch);
@@ -294,6 +334,7 @@ export class StampBrush implements Brush {
     m: Matrix,
     start: WalkState,
     endPoint: number,
+    totalLength: number,
   ): WalkState {
     const spec = this.spec;
     const size = Math.max(0.5, stroke.size);
@@ -306,6 +347,12 @@ export class StampBrush implements Brush {
       seededRandom(seed + i * 7.137 + k * 0.917);
     const tips = spec.tips.map((id) => getTintedTip(id, stroke.color));
     const count = Math.max(1, Math.round(spec.count ?? 1));
+    const gain = pressureGain(stroke);
+    const sizeK = (spec.sizePressure ?? 0) * gain;
+    const flowK = (spec.flowPressure ?? 0) * gain;
+    const tapered =
+      hasDynamics(stroke) &&
+      ((stroke.taperStart ?? 0) > 0 || (stroke.taperEnd ?? 0) > 0);
 
     const placeOne = (
       r: (k: number) => number,
@@ -313,14 +360,16 @@ export class StampBrush implements Brush {
       y: number,
       pressure: number,
       dir: number,
+      taper: number,
     ) => {
       const diameter =
         size *
-        (1 - (spec.sizePressure ?? 0) * (1 - pressure)) *
-        (1 - (spec.sizeJitter ?? 0) * r(1));
+        Math.max(0, 1 - sizeK * (1 - pressure)) *
+        (1 - (spec.sizeJitter ?? 0) * r(1)) *
+        taper;
       const flow =
         spec.flow *
-        (1 - (spec.flowPressure ?? 0) * (1 - pressure)) *
+        Math.max(0, 1 - flowK * (1 - pressure)) *
         (1 - (spec.flowJitter ?? 0) * r(2));
       if (diameter <= 0 || flow <= 0) return;
       let angle =
@@ -372,9 +421,10 @@ export class StampBrush implements Brush {
       y: number,
       pressure: number,
       dir: number,
+      taper = 1,
     ) => {
       for (let c = 0; c < count; c++) {
-        placeOne((k) => rand(i, k + c * 16), x, y, pressure, dir);
+        placeOne((k) => rand(i, k + c * 16), x, y, pressure, dir, taper);
       }
     };
 
@@ -427,8 +477,17 @@ export class StampBrush implements Brush {
         const y = p0.y + dy * u;
         const step = Math.max(
           minStep,
-          spec.spacing * size * (1 - (spec.sizePressure ?? 0) * (1 - pressure)),
+          spec.spacing * size * Math.max(0, 1 - sizeK * (1 - pressure)),
         );
+        const along = (state.travelled ?? 0) + state.carry;
+        const taper = tapered
+          ? taperFactor(
+              along,
+              totalLength - along,
+              stroke.taperStart ?? 0,
+              stroke.taperEnd ?? 0,
+            )
+          : 1;
         let dir = segDir;
         if (follow) {
           dir = d0 + turn * u;
@@ -436,17 +495,25 @@ export class StampBrush implements Brush {
             const delta = wrap(dir - state.lastDir);
             const fill = Math.ceil((Math.abs(delta) * size * 0.5) / step);
             for (let k = 1; k < fill && state.dabs < MAX_DABS; k++) {
-              placeDab(state.dabs, x, y, pressure, state.lastDir + (delta * k) / fill);
+              placeDab(
+                state.dabs,
+                x,
+                y,
+                pressure,
+                state.lastDir + (delta * k) / fill,
+                taper,
+              );
               state.dabs++;
             }
           }
           state.lastDir = dir;
         }
-        placeDab(state.dabs, x, y, pressure, dir);
+        placeDab(state.dabs, x, y, pressure, dir, taper);
         state.dabs++;
         state.carry += step;
       }
       state.carry -= len;
+      state.travelled = (state.travelled ?? 0) + len;
     }
     return state;
   }

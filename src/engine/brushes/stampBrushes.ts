@@ -7,6 +7,7 @@ const PAPER = `${REVOY}/paper-grain-b`;
 
 export const pencilBrush = new StampBrush({
   key: "pencil",
+  strokeSettings: ["variation", "stabilizer", "taper"],
   label: "Pencil",
   category: "draw",
   tips: ["round-hard"],
@@ -29,6 +30,7 @@ export const pencilBrush = new StampBrush({
 
 export const charcoalBrush = new StampBrush({
   key: "charcoal",
+  strokeSettings: ["variation", "stabilizer", "taper"],
   label: "Charcoal",
   category: "draw",
   tips: frames("charcoal", 4),
@@ -51,6 +53,7 @@ export const charcoalBrush = new StampBrush({
 
 export const pastelBrush = new StampBrush({
   key: "pastel",
+  strokeSettings: ["variation", "stabilizer", "taper"],
   label: "Pastel",
   category: "draw",
   tips: [`${REVOY}/chalk`, `${REVOY}/chalk-sparse`],
@@ -71,6 +74,7 @@ export const pastelBrush = new StampBrush({
 
 export const splatterBrush = new StampBrush({
   key: "splatter",
+  strokeSettings: ["stabilizer"],
   label: "Splatter",
   category: "texture",
   tips: [...frames("splat", 5), `${REVOY}/splat-dots`],
@@ -88,6 +92,7 @@ export const splatterBrush = new StampBrush({
 
 export const dryBrush = new StampBrush({
   key: "drybrush",
+  strokeSettings: ["variation", "stabilizer", "taper"],
   label: "Dry Brush",
   category: "paint",
   tips: [`${REVOY}/bristles`],
@@ -107,6 +112,7 @@ export const dryBrush = new StampBrush({
 
 export const spongeBrush = new StampBrush({
   key: "sponge",
+  strokeSettings: ["stabilizer"],
   label: "Sponge",
   category: "texture",
   tips: frames("sponge", 7),
@@ -126,6 +132,7 @@ export const spongeBrush = new StampBrush({
 
 export const gouacheBrush = new StampBrush({
   key: "gouache",
+  strokeSettings: ["variation", "stabilizer", "taper"],
   label: "Gouache",
   category: "paint",
   tips: [`${REVOY}/painterly`],
@@ -149,6 +156,7 @@ const OGA = "oga-grunge";
 
 export const watercolorBrush = new StampBrush({
   key: "watercolor",
+  strokeSettings: ["variation", "stabilizer"],
   label: "Watercolor",
   category: "paint",
   tips: Array.from({ length: 4 }, (_, i) => `${OGA}/wash-${i}`),

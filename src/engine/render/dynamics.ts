@@ -1,4 +1,16 @@
-import type { Point, StrokeLike } from "../types";
+import type { Brush, Point, StrokeDefaults, StrokeLike } from "../types";
+
+export const NEUTRAL_STROKE_DEFAULTS: StrokeDefaults = {
+  thinning: 0.5,
+  smoothing: 0.5,
+  streamline: 0,
+  taperStart: 0,
+  taperEnd: 0,
+};
+
+export function strokeDefaultsFor(brush: Brush | undefined): StrokeDefaults {
+  return { ...NEUTRAL_STROKE_DEFAULTS, ...(brush?.strokeDefaults ?? {}) };
+}
 
 export function stabilize(points: readonly Point[], amount: number): Point[] {
   if (amount <= 0 || points.length < 2) return points.map((p) => ({ ...p }));

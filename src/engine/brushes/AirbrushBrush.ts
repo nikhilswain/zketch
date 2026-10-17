@@ -1,5 +1,12 @@
 import { smoothPoints } from "../render/smooth";
-import type { Brush, BrushOptions, BrushPreset, StrokeLike } from "../types";
+import { hasDynamics, stabilize } from "../render/dynamics";
+import type {
+  Brush,
+  BrushOptions,
+  BrushPreset,
+  StrokeLike,
+  StrokeSettingKey,
+} from "../types";
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const SHADOW_SHIFT_PX = 100000;
@@ -8,6 +15,7 @@ export class AirbrushBrush implements Brush {
   key = "airbrush" as const;
   label = "Airbrush";
   category = "paint" as const;
+  strokeSettings: StrokeSettingKey[] = ["stabilizer"];
   presets: BrushPreset[] = [
     { id: "soft", label: "Soft", size: 70, opacity: 0.55, softness: 0.9 },
     { id: "medium", label: "Medium", size: 48, opacity: 0.7, softness: 0.6 },
@@ -19,7 +27,9 @@ export class AirbrushBrush implements Brush {
     stroke: StrokeLike,
     options?: BrushOptions,
   ) {
-    const raw = stroke.points;
+    const raw = hasDynamics(stroke)
+      ? stabilize(stroke.points, stroke.streamline ?? 0)
+      : stroke.points;
     if (raw.length === 0) return;
     const pts = smoothPoints(raw);
 

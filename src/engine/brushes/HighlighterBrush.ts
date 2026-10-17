@@ -1,17 +1,26 @@
-import type { Brush, BrushPreset, StrokeLike } from "../types";
+import type {
+  Brush,
+  BrushPreset,
+  StrokeLike,
+  StrokeSettingKey,
+} from "../types";
 import { smoothPoints } from "../render/smooth";
+import { hasDynamics, stabilize } from "../render/dynamics";
 
 export class HighlighterBrush implements Brush {
   key = "highlighter" as const;
   label = "Highlighter";
   category = "draw" as const;
+  strokeSettings: StrokeSettingKey[] = ["stabilizer"];
   presets: BrushPreset[] = [
     { id: "classic", label: "Classic", size: 34, opacity: 0.35 },
     { id: "narrow", label: "Narrow", size: 16, opacity: 0.45 },
     { id: "neon", label: "Neon", size: 44, opacity: 0.22 },
   ];
   render(ctx: CanvasRenderingContext2D, stroke: StrokeLike) {
-    const raw = stroke.points;
+    const raw = hasDynamics(stroke)
+      ? stabilize(stroke.points, stroke.streamline ?? 0)
+      : stroke.points;
     if (raw.length === 0) return;
     const pts = smoothPoints(raw);
 

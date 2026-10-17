@@ -1,12 +1,25 @@
 import { getStroke } from "perfect-freehand";
 import { easingFn } from "../easing";
 import { toPathData } from "../render/pathData";
-import type { Brush, BrushOptions, StrokeLike } from "../types";
+import type {
+  Brush,
+  BrushOptions,
+  StrokeLike,
+  StrokeSettingKey,
+} from "../types";
 
 export class FreehandBrush implements Brush {
   key = "ink" as const;
   label = "Pen";
   category = "draw" as const;
+  strokeSettings: StrokeSettingKey[] = ["variation", "stabilizer", "smoothing", "taper"];
+  strokeDefaults = {
+    thinning: 0.5,
+    smoothing: 0.5,
+    streamline: 0.5,
+    taperStart: 30,
+    taperEnd: 30,
+  };
 
   render(
     ctx: CanvasRenderingContext2D,

@@ -1,10 +1,23 @@
-import type { Brush, BrushOptions, BrushPreset, StrokeLike } from "../types";
+import type {
+  Brush,
+  BrushOptions,
+  BrushPreset,
+  StrokeLike,
+  StrokeSettingKey,
+} from "../types";
 import { smoothPoints } from "../render/smooth";
+import {
+  dynamicPoints,
+  hasDynamics,
+  pressureGain,
+  taperFactor,
+} from "../render/dynamics";
 
 export class CalligraphyBrush implements Brush {
   key = "calligraphy" as const;
   label = "Calligraphy";
   category = "draw" as const;
+  strokeSettings: StrokeSettingKey[] = ["variation", "stabilizer", "taper"];
   presets: BrushPreset[] = [
     { id: "italic", label: "Italic", size: 28, opacity: 1, angle: 30 },
     { id: "classic", label: "Classic", size: 28, opacity: 1, angle: 45 },
@@ -12,17 +25,38 @@ export class CalligraphyBrush implements Brush {
     { id: "upright", label: "Upright", size: 28, opacity: 1, angle: 90 },
   ];
 
+  private taper(pts: ReturnType<typeof smoothPoints>, stroke: StrokeLike) {
+    const start = stroke.taperStart ?? 0;
+    const end = stroke.taperEnd ?? 0;
+    if (start <= 0 && end <= 0) return null;
+    const along = [0];
+    for (let i = 1; i < pts.length; i++) {
+      along.push(
+        along[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y),
+      );
+    }
+    const total = along[along.length - 1];
+    return along.map((d) => taperFactor(d, total - d, start, end));
+  }
+
   private sweep(
     ctx: CanvasRenderingContext2D,
     pts: ReturnType<typeof smoothPoints>,
     angle: number,
     half: number,
     thickness: number,
+    stroke: StrokeLike,
   ) {
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
-    const nib = pts.map((p) => {
-      const h = half * (0.35 + 0.65 * p.pressure);
+    const dynamic = hasDynamics(stroke);
+    const gain = pressureGain(stroke);
+    const taper = dynamic ? this.taper(pts, stroke) : null;
+    const nib = pts.map((p, i) => {
+      let h = dynamic
+        ? half * Math.max(0.15, 1 - 0.65 * gain * (1 - p.pressure))
+        : half * (0.35 + 0.65 * p.pressure);
+      if (taper) h *= taper[i];
       return { x: cos * h, y: sin * h };
     });
 
@@ -79,7 +113,7 @@ export class CalligraphyBrush implements Brush {
     stroke: StrokeLike,
     options?: BrushOptions,
   ) {
-    const raw = stroke.points;
+    const raw = dynamicPoints(stroke);
     if (raw.length === 0) return;
     const pts = smoothPoints(raw);
 
@@ -100,7 +134,7 @@ export class CalligraphyBrush implements Brush {
         octx.setTransform(ctx.getTransform());
         octx.fillStyle = stroke.color;
         octx.strokeStyle = stroke.color;
-        this.sweep(octx, pts, angle, half, thickness);
+        this.sweep(octx, pts, angle, half, thickness, stroke);
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.globalAlpha = opacity * prevAlpha;
@@ -114,7 +148,7 @@ export class CalligraphyBrush implements Brush {
     ctx.fillStyle = stroke.color;
     ctx.strokeStyle = stroke.color;
     ctx.globalAlpha = opacity * prevAlpha;
-    this.sweep(ctx, pts, angle, half, thickness);
+    this.sweep(ctx, pts, angle, half, thickness, stroke);
     ctx.globalAlpha = prevAlpha;
   }
 }

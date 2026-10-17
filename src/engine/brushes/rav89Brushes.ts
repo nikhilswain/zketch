@@ -11,6 +11,7 @@ const GRUNGE = tip("grunge");
 
 export const oilBrush = new StampBrush({
   key: "oil",
+  strokeSettings: ["variation", "stabilizer", "taper"],
   label: "Oil Paint",
   category: "paint",
   tips: [tip("paint-blot")],
@@ -32,6 +33,7 @@ export const oilBrush = new StampBrush({
 
 export const rakeBrush = new StampBrush({
   key: "rake",
+  strokeSettings: ["variation", "stabilizer", "taper"],
   label: "Bristle Rake",
   category: "paint",
   tips: [tip("rake")],
@@ -51,6 +53,7 @@ export const rakeBrush = new StampBrush({
 
 export const smearBrush = new StampBrush({
   key: "smear",
+  strokeSettings: ["variation", "stabilizer", "taper"],
   label: "Rough Smear",
   category: "paint",
   tips: [tip("smear")],
@@ -72,6 +75,7 @@ export const smearBrush = new StampBrush({
 
 export const flatBristleBrush = new StampBrush({
   key: "flatbristle",
+  strokeSettings: ["variation", "stabilizer", "taper"],
   label: "Flat Bristle",
   category: "paint",
   tips: [tip("flat-bristle")],
@@ -94,6 +98,7 @@ export const flatBristleBrush = new StampBrush({
 
 export const knifeBrush = new StampBrush({
   key: "knife",
+  strokeSettings: ["variation", "stabilizer", "taper"],
   label: "Palette Knife",
   category: "paint",
   tips: [tip("knife")],
@@ -115,6 +120,7 @@ export const knifeBrush = new StampBrush({
 
 export const softFlatBrush = new StampBrush({
   key: "softflat",
+  strokeSettings: ["variation", "stabilizer", "taper"],
   label: "Soft Flat",
   category: "paint",
   tips: [tip("soft-flat")],
@@ -136,6 +142,7 @@ export const softFlatBrush = new StampBrush({
 
 export const wetFlatBrush = new StampBrush({
   key: "wetflat",
+  strokeSettings: ["variation", "stabilizer", "taper"],
   label: "Wet Flat",
   category: "paint",
   tips: [tip("wet-flat")],
@@ -156,6 +163,7 @@ export const wetFlatBrush = new StampBrush({
 
 export const dabsBrush = new StampBrush({
   key: "dabs",
+  strokeSettings: ["stabilizer"],
   label: "Impressionist",
   category: "texture",
   tips: [tip("dabs")],
@@ -175,6 +183,7 @@ export const dabsBrush = new StampBrush({
 
 export const streaksBrush = new StampBrush({
   key: "streaks",
+  strokeSettings: ["stabilizer"],
   label: "Streaks",
   category: "texture",
   tips: [tip("streaks")],
@@ -197,6 +206,7 @@ export const streaksBrush = new StampBrush({
 
 export const scratchBrush = new StampBrush({
   key: "scratch",
+  strokeSettings: ["stabilizer"],
   label: "Scratchy",
   category: "texture",
   tips: [tip("scratch")],
@@ -215,6 +225,7 @@ export const scratchBrush = new StampBrush({
 
 export const crayonBrush = new StampBrush({
   key: "crayon",
+  strokeSettings: ["variation", "stabilizer", "taper"],
   label: "Wax Crayon",
   category: "draw",
   tips: [tip("crayon")],
@@ -237,6 +248,7 @@ export const crayonBrush = new StampBrush({
 
 export const cloudsBrush = new StampBrush({
   key: "clouds",
+  strokeSettings: ["stabilizer"],
   label: "Clouds",
   category: "nature",
   maxSize: 400,
@@ -259,6 +271,7 @@ export const cloudsBrush = new StampBrush({
 
 export const dustBrush = new StampBrush({
   key: "dust",
+  strokeSettings: ["stabilizer"],
   label: "Dust",
   category: "texture",
   maxSize: 400,
@@ -279,6 +292,7 @@ export const dustBrush = new StampBrush({
 
 export const sparkleBrush = new StampBrush({
   key: "sparkle",
+  strokeSettings: ["stabilizer"],
   label: "Sparkle",
   category: "effects",
   tips: [tip("star")],
@@ -300,6 +314,7 @@ export const sparkleBrush = new StampBrush({
 
 export const starsBrush = new StampBrush({
   key: "stars",
+  strokeSettings: ["stabilizer"],
   label: "Starfield",
   category: "effects",
   maxSize: 400,
@@ -321,6 +336,7 @@ export const starsBrush = new StampBrush({
 
 export const glintBrush = new StampBrush({
   key: "glint",
+  strokeSettings: ["stabilizer"],
   label: "Water Glints",
   category: "effects",
   tips: frames("glint", 2),
@@ -343,6 +359,7 @@ export const glintBrush = new StampBrush({
 
 export const foliageBrush = new StampBrush({
   key: "foliage",
+  strokeSettings: ["stabilizer"],
   label: "Foliage",
   category: "nature",
   maxSize: 400,
@@ -365,6 +382,7 @@ export const foliageBrush = new StampBrush({
 
 export const leavesBrush = new StampBrush({
   key: "leaves",
+  strokeSettings: ["stabilizer"],
   label: "Leaves",
   category: "nature",
   maxSize: 400,
@@ -386,6 +404,7 @@ export const leavesBrush = new StampBrush({
 
 export const grassBrush = new StampBrush({
   key: "grass",
+  strokeSettings: ["stabilizer"],
   label: "Grass",
   category: "nature",
   maxSize: 400,
@@ -407,6 +426,7 @@ export const grassBrush = new StampBrush({
 
 export const forestBrush = new StampBrush({
   key: "forest",
+  strokeSettings: ["stabilizer"],
   label: "Forest",
   category: "nature",
   maxSize: 400,
@@ -427,6 +447,7 @@ export const forestBrush = new StampBrush({
 
 export const bushBrush = new StampBrush({
   key: "bush",
+  strokeSettings: ["stabilizer"],
   label: "Bush",
   category: "nature",
   maxSize: 400,
@@ -452,6 +473,7 @@ export const bushBrush = new StampBrush({
 
 export const pineBrush = new StampBrush({
   key: "pine",
+  strokeSettings: ["stabilizer"],
   label: "Pine",
   category: "nature",
   maxSize: 400,
@@ -474,6 +496,7 @@ export const pineBrush = new StampBrush({
 
 export const treeBrush = new StampBrush({
   key: "tree",
+  strokeSettings: ["stabilizer"],
   label: "Bare Tree",
   category: "nature",
   maxSize: 400,

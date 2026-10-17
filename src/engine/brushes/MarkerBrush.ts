@@ -1,11 +1,25 @@
 import { getStroke } from "perfect-freehand";
 import { toPathData } from "../render/pathData";
-import type { Brush, BrushOptions, BrushPreset, StrokeLike } from "../types";
+import type {
+  Brush,
+  BrushOptions,
+  BrushPreset,
+  StrokeLike,
+  StrokeSettingKey,
+} from "../types";
 
 export class MarkerBrush implements Brush {
   key = "marker" as const;
   label = "Marker";
   category = "draw" as const;
+  strokeSettings: StrokeSettingKey[] = ["variation", "stabilizer", "smoothing", "taper"];
+  strokeDefaults = {
+    thinning: 0.5,
+    smoothing: 0.5,
+    streamline: 0.5,
+    taperStart: 0,
+    taperEnd: 0,
+  };
   defaults: Partial<BrushOptions> = {
     thinning: 0.15,
     smoothing: 0.45,
