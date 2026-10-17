@@ -1,4 +1,3 @@
-import { isShapeElement } from "@/engine/types";
 import { getStroke } from "perfect-freehand";
 import type { IStroke, BackgroundType } from "../models/CanvasModel";
 import type { IExportSettings } from "../models/SettingsModel";
@@ -7,6 +6,8 @@ import { brushRegistry } from "@/engine/render/BrushRegistry";
 import { renderStroke } from "@/engine/render/renderStroke";
 import { renderDrawLayer } from "@/engine/render/renderDrawLayer";
 import { buildElementLookup } from "@/engine/render/lookup";
+import { ensureFonts, fontFamiliesIn } from "@/engine/render/fonts";
+import { elementBounds } from "@/engine/render/elementBounds";
 import { easingFn } from "@/engine/easing";
 import type { Page } from "@/utils/page";
 
@@ -88,6 +89,7 @@ export class ExportService {
    * Pre-load all images needed for export
    */
   private static async preloadImages(layers: IExportLayer[]): Promise<void> {
+    await ensureFonts(fontFamiliesIn(layers as any));
     const imagePromises: Promise<HTMLImageElement | null>[] = [];
 
     for (const layer of layers) {
@@ -351,31 +353,19 @@ export class ExportService {
     let maxY = -Infinity;
     let hasContent = false;
 
+    const lookup = buildElementLookup(layers as any);
     for (const layer of layers) {
       if (!layer.visible) continue;
 
       if (layer.type === "draw" && layer.elements) {
         for (const el of layer.elements) {
-          if (isShapeElement(el)) {
-            const s = el as IExportShapeLayer;
-            const hw = (s.strokeWidth ?? 0) / 2;
-            minX = Math.min(minX, s.x - hw);
-            minY = Math.min(minY, s.y - hw);
-            maxX = Math.max(maxX, s.x + s.width + hw);
-            maxY = Math.max(maxY, s.y + s.height + hw);
-            hasContent = true;
-          } else {
-            const stroke = el as IStroke;
-            if (stroke.brushStyle === "eraser") continue;
-            const half = (stroke.size ?? 0) / 2;
-            for (const point of stroke.points) {
-              minX = Math.min(minX, point.x - half);
-              minY = Math.min(minY, point.y - half);
-              maxX = Math.max(maxX, point.x + half);
-              maxY = Math.max(maxY, point.y + half);
-              hasContent = true;
-            }
-          }
+          const b = elementBounds(el as any, lookup);
+          if (!b) continue;
+          minX = Math.min(minX, b.minX);
+          minY = Math.min(minY, b.minY);
+          maxX = Math.max(maxX, b.maxX);
+          maxY = Math.max(maxY, b.maxY);
+          hasContent = true;
         }
       } else if (layer.type === "image" && layer.imageData) {
         const img = layer.imageData;

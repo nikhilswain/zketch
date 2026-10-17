@@ -7,6 +7,7 @@ import { renderStroke } from "./render/renderStroke";
 import { renderShape } from "./render/renderShape";
 import { renderDrawLayer } from "./render/renderDrawLayer";
 import { buildElementLookup, type ElementLookup } from "./render/lookup";
+import { onFontsReady } from "./render/fonts";
 import { drawImageLayer } from "./render/renderImage";
 import {
   installBrushAssetLoader,
@@ -26,6 +27,15 @@ import type {
 import { isShapeElement } from "./types";
 
 type LayerContent = readonly ElementLike[] | string;
+
+const NO_DEPS: unknown[] = [];
+
+function sameDeps(a: unknown[], b: unknown[]) {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
 
 export class CanvasEngine {
   // Main display canvases
@@ -54,8 +64,10 @@ export class CanvasEngine {
       panY: number;
       zoom: number;
       animating: boolean;
+      deps: unknown[];
     }
   > = new Map();
+  private stopFontListener: (() => void) | null = null;
   private static readonly OVERSCAN_CSS_PX = 256;
   private static readonly VIEW_SETTLE_MS = 150;
   private lastViewChange = 0;
@@ -128,6 +140,10 @@ export class CanvasEngine {
       this.layerBakes.clear();
       this.invalidate();
     });
+    this.stopFontListener = onFontsReady(() => {
+      this.layerBakes.clear();
+      this.invalidate();
+    });
     this.resize();
     window.addEventListener("resize", this.resize);
     if (typeof ResizeObserver !== "undefined") {
@@ -144,6 +160,7 @@ export class CanvasEngine {
   destroy = () => {
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.stopAssetListener();
+    this.stopFontListener?.();
     window.removeEventListener("resize", this.resize);
     this.resizeObserver?.disconnect();
     this.bg.remove();
@@ -440,6 +457,7 @@ export class CanvasEngine {
         this.animatingLayerId === layer.id && !!this.animationStrokes;
       const content = this.layerContentKey(layer);
       const elements = layer.type === "draw" ? layer.elements : null;
+      const deps = elements ? this.layerDeps(elements) : NO_DEPS;
       const bake = this.layerBakes.get(layer.id);
       const sameView =
         !!bake &&
@@ -451,7 +469,8 @@ export class CanvasEngine {
         !isAnimating &&
         !bake.animating &&
         bake.pending === pending &&
-        bake.content === content;
+        bake.content === content &&
+        sameDeps(bake.deps, deps);
       const reusable =
         sameContent &&
         (sameView ||
@@ -463,6 +482,7 @@ export class CanvasEngine {
         !isAnimating &&
         !bake.animating &&
         bake.pending === pending &&
+        sameDeps(bake.deps, deps) &&
         this.appendedElement(bake.content, elements);
 
       const applyBakeTransform = () => {
@@ -483,6 +503,7 @@ export class CanvasEngine {
         this.renderElement(layerCtx, appended, pending);
         layerCtx.restore();
         bake!.content = content;
+        bake!.deps = deps;
       } else if (!reusable) {
         layerCtx.save();
         layerCtx.setTransform(1, 0, 0, 1, 0, 0);
@@ -510,6 +531,7 @@ export class CanvasEngine {
           panY,
           zoom,
           animating: isAnimating,
+          deps,
         });
       }
 
@@ -552,6 +574,17 @@ export class CanvasEngine {
     }
 
     this.renderPageVeil();
+  }
+
+  private layerDeps(elements: readonly ElementLike[]): unknown[] {
+    const deps: unknown[] = [];
+    for (const el of elements) {
+      const a = el as any;
+      if (a.kind !== "arrow") continue;
+      if (a.startBinding) deps.push(this.lookup.get(a.startBinding.elementId));
+      if (a.endBinding) deps.push(this.lookup.get(a.endBinding.elementId));
+    }
+    return deps.length ? deps : NO_DEPS;
   }
 
   private layerContentKey(layer: LayerLike): LayerContent {

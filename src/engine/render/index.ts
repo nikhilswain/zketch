@@ -7,3 +7,7 @@ export * from "./seededRandom";
 export * from "./smooth";
 export * from "./lookup";
 export * from "./renderDrawLayer";
+export * from "./fonts";
+export * from "./renderArrow";
+export * from "./renderText";
+export * from "./elementBounds";

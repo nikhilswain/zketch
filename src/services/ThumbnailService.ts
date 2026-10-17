@@ -1,4 +1,3 @@
-import { isShapeElement } from "@/engine/types";
 import type { IStroke } from "../models/CanvasModel";
 import type { ILayerSnapshot } from "../models/LayerModel";
 import { BlobStorageService } from "./BlobStorageService";
@@ -7,6 +6,8 @@ import { brushRegistry } from "@/engine/render/BrushRegistry";
 import { renderStroke } from "@/engine/render/renderStroke";
 import { renderDrawLayer } from "@/engine/render/renderDrawLayer";
 import { buildElementLookup } from "@/engine/render/lookup";
+import { ensureFonts, fontFamiliesIn } from "@/engine/render/fonts";
+import { elementBounds } from "@/engine/render/elementBounds";
 import type { Page } from "@/utils/page";
 
 interface ImageLayerData {
@@ -108,6 +109,7 @@ export class ThumbnailService {
         }
       : this.calculateTransform(bounds!, width, height);
 
+    await ensureFonts(fontFamiliesIn(visibleLayers as any));
     // Load all images first
     const imageCache = new Map<string, HTMLImageElement>();
     for (const layer of visibleLayers) {
@@ -276,6 +278,7 @@ export class ThumbnailService {
       maxY = Number.NEGATIVE_INFINITY;
 
     let hasContent = false;
+    const lookup = buildElementLookup(layers as any);
 
     for (const layer of layers) {
       if (layer.type === "image") {
@@ -296,25 +299,13 @@ export class ThumbnailService {
         Array.isArray((layer as any).elements)
       ) {
         for (const el of (layer as any).elements) {
-          if (isShapeElement(el)) {
-            const sw = el.width ?? 0;
-            const sh = el.height ?? 0;
-            if (sw > 0 && sh > 0) {
-              minX = Math.min(minX, el.x ?? 0);
-              minY = Math.min(minY, el.y ?? 0);
-              maxX = Math.max(maxX, (el.x ?? 0) + sw);
-              maxY = Math.max(maxY, (el.y ?? 0) + sh);
-              hasContent = true;
-            }
-          } else if (el.points) {
-            for (const point of el.points) {
-              minX = Math.min(minX, point.x);
-              minY = Math.min(minY, point.y);
-              maxX = Math.max(maxX, point.x);
-              maxY = Math.max(maxY, point.y);
-              hasContent = true;
-            }
-          }
+          const b = elementBounds(el, lookup);
+          if (!b) continue;
+          minX = Math.min(minX, b.minX);
+          minY = Math.min(minY, b.minY);
+          maxX = Math.max(maxX, b.maxX);
+          maxY = Math.max(maxY, b.maxY);
+          hasContent = true;
         }
       }
     }

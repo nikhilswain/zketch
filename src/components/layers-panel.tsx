@@ -1,6 +1,6 @@
 "use client";
 
-import { isShapeElement, isStrokeElement } from "@/engine/types";
+import { elementKind, isVectorElement } from "@/engine/types";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { observer } from "mobx-react-lite";
 import { useCanvasStore } from "@/hooks/useStores";
@@ -40,6 +40,7 @@ import { BlobStorageService } from "@/services/BlobStorageService";
 import LayerAnimationControls from "@/components/layer-animation-controls";
 import type { StrokeLike } from "@/engine";
 import { renderDrawLayer } from "@/engine/render/renderDrawLayer";
+import { elementBounds } from "@/engine/render/elementBounds";
 import type { PlaybackState } from "@/engine/AnimationPlaybackEngine";
 
 // Generate a small thumbnail preview of a draw layer (strokes + shapes).
@@ -94,20 +95,12 @@ function generateDrawLayerThumbnail(
     maxY = -Infinity;
   const cap = Math.min(elements.length, 50);
   for (let i = 0; i < cap; i++) {
-    const el = elements[i];
-    if (isShapeElement(el)) {
-      minX = Math.min(minX, el.x);
-      minY = Math.min(minY, el.y);
-      maxX = Math.max(maxX, el.x + el.width);
-      maxY = Math.max(maxY, el.y + el.height);
-    } else if (el.points) {
-      for (const p of el.points) {
-        if (p.x < minX) minX = p.x;
-        if (p.y < minY) minY = p.y;
-        if (p.x > maxX) maxX = p.x;
-        if (p.y > maxY) maxY = p.y;
-      }
-    }
+    const b = elementBounds(elements[i]);
+    if (!b) continue;
+    minX = Math.min(minX, b.minX);
+    minY = Math.min(minY, b.minY);
+    maxX = Math.max(maxX, b.maxX);
+    maxY = Math.max(maxY, b.maxY);
   }
   if (!isFinite(minX)) return finish();
 
@@ -189,11 +182,8 @@ export function useLayerThumbnail(layer: any): string {
   const shapeSig =
     layer.type === "draw"
       ? (layer as any).elements
-          .filter((e: any) => isShapeElement(e))
-          .map(
-            (e: any) =>
-              `${e.shapeType}:${e.x}:${e.y}:${e.width}:${e.height}:${e.rotation}:${e.strokeColor}:${e.fillColor ?? ""}`,
-          )
+          .filter((e: any) => isVectorElement(e))
+          .map((e: any) => JSON.stringify(getSnapshot(e)))
           .join("|")
       : "";
   const layerId = layer.id;
@@ -368,17 +358,19 @@ const LayerItem: React.FC<LayerItemProps> = observer(
                     ? "Image"
                     : (() => {
                         const els = (layer as any).elements ?? [];
-                        const strokes = els.filter(
-                          (e: any) => isStrokeElement(e),
-                        ).length;
-                        const shapes = els.length - strokes;
-                        if (strokes === 0 && shapes === 0) return "Empty";
-                        const parts: string[] = [];
-                        if (strokes > 0)
-                          parts.push(`${strokes} stroke${strokes === 1 ? "" : "s"}`);
-                        if (shapes > 0)
-                          parts.push(`${shapes} shape${shapes === 1 ? "" : "s"}`);
-                        return parts.join(" · ");
+                        const counts = { stroke: 0, shape: 0, arrow: 0, text: 0 };
+                        for (const e of els) counts[elementKind(e)]++;
+                        const parts = (
+                          [
+                            ["stroke", "strokes"],
+                            ["shape", "shapes"],
+                            ["arrow", "arrows"],
+                            ["text", "texts"],
+                          ] as const
+                        )
+                          .filter(([k]) => counts[k] > 0)
+                          .map(([k, plural]) => `${counts[k]} ${counts[k] === 1 ? k : plural}`);
+                        return parts.length ? parts.join(" · ") : "Empty";
                       })()}
                 </span>
               </div>
