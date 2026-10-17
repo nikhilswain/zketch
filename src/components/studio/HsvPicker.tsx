@@ -111,6 +111,9 @@ const HsvPicker: React.FC<HsvPickerProps> = ({ value, onChange, size = 132 }) =>
         ref={square}
         role="slider"
         aria-label="Saturation and brightness"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(hsv.s * 100)}
         aria-valuetext={`saturation ${Math.round(hsv.s * 100)}%, brightness ${Math.round(hsv.v * 100)}%`}
         tabIndex={0}
         {...pointer(dragSquare)}
@@ -177,6 +180,18 @@ const HsvPicker: React.FC<HsvPickerProps> = ({ value, onChange, size = 132 }) =>
             const t = e.target.value.replace(/[^0-9a-fA-F]/g, "").toUpperCase();
             setHexText(t);
             if (t.length === 6) emit(hexToHsv(`#${t}`));
+          }}
+          onBlur={() => {
+            if (hexText.length === 3) {
+              const full = hexText.split("").map((c) => c + c).join("");
+              setHexText(full);
+              emit(hexToHsv(`#${full}`));
+            } else if (hexText.length !== 6) {
+              setHexText(value.replace("#", "").toUpperCase());
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
           }}
           className="w-full bg-transparent font-semibold tabular-nums text-zk-text outline-none"
         />

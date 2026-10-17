@@ -47,6 +47,7 @@ const StrokeTrack: React.FC<StrokeTrackProps> = ({
   const [hover, setHover] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
+  const cancelled = useRef(false);
 
   const span = max - min || 1;
   const t = Math.max(0, Math.min(1, (value - min) / span));
@@ -59,6 +60,16 @@ const StrokeTrack: React.FC<StrokeTrackProps> = ({
     const clamped = Math.max(min, Math.min(max, snapped));
     const fixed = Number(clamped.toFixed(decimals(step)));
     if (fixed !== value) onChange(fixed);
+  };
+
+  const finishEditing = () => {
+    if (editing === null) return;
+    if (!cancelled.current && editing.trim() !== "") {
+      const n = Number(editing);
+      if (Number.isFinite(n)) commit(n);
+    }
+    cancelled.current = false;
+    setEditing(null);
   };
 
   const fromPointer = (clientX: number) => {
@@ -75,6 +86,10 @@ const StrokeTrack: React.FC<StrokeTrackProps> = ({
     else if (e.key === "ArrowLeft" || e.key === "ArrowDown") commit(value - step * big);
     else if (e.key === "Home") commit(min);
     else if (e.key === "End") commit(max);
+    else if (e.key === "Enter") {
+      cancelled.current = false;
+      setEditing(String(value));
+    }
     else return;
     e.preventDefault();
   };
@@ -97,14 +112,16 @@ const StrokeTrack: React.FC<StrokeTrackProps> = ({
             step={step}
             aria-label={`${label} value`}
             onChange={(e) => setEditing(e.target.value)}
-            onBlur={() => setEditing(null)}
+            onBlur={finishEditing}
             onKeyDown={(e) => {
+              e.stopPropagation();
               if (e.key === "Enter") {
-                const n = Number(editing);
-                if (Number.isFinite(n)) commit(n);
-                setEditing(null);
+                finishEditing();
+                trackRef.current?.focus();
               } else if (e.key === "Escape") {
+                cancelled.current = true;
                 setEditing(null);
+                trackRef.current?.focus();
               }
             }}
             className="w-16 rounded-[3px] bg-zk-raised px-1 text-right text-[13px] font-semibold text-zk-text outline-none"
@@ -112,7 +129,11 @@ const StrokeTrack: React.FC<StrokeTrackProps> = ({
         ) : (
           <span
             className="font-semibold text-zk-text tabular-nums cursor-text"
-            onDoubleClick={() => setEditing(String(value))}
+            title="Double-click to type a value"
+            onDoubleClick={() => {
+              cancelled.current = false;
+              setEditing(String(value));
+            }}
           >
             {display}
           </span>

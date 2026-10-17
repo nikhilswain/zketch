@@ -53,7 +53,7 @@ export const KEY_BINDINGS: Record<string, KeyBinding> = {
   },
   PEN_TOOL: {
     key: "2",
-    description: "Select pen tool",
+    description: "Draw with your last brush",
     action: "selectPen",
   },
   ERASER_TOOL: {

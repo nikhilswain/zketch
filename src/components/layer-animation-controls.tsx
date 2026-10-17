@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { observer } from "mobx-react-lite";
 import { getSnapshot } from "mobx-state-tree";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
+import StrokeTrack from "@/components/studio/StrokeTrack";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -241,30 +241,26 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
         </div>
 
         {/* Progress Bar Row */}
-        <div className="flex items-center gap-2">
-          <Slider
-            value={[currentTime]}
+        <div
+          onPointerDownCapture={handleSeekStart}
+          onPointerUpCapture={handleSeekEnd}
+          title={
+            gapCompressionActive
+              ? `Long pauses shortened: ${formatTime(originalDuration)} → ${formatTime(totalDuration)}`
+              : undefined
+          }
+        >
+          <StrokeTrack
+            dense
+            kind="flat"
+            label="Timeline"
+            value={currentTime}
             min={0}
             max={totalDuration}
             step={100}
-            onValueChange={handleSeekChange}
-            onPointerDown={handleSeekStart}
-            onPointerUp={handleSeekEnd}
-            className="flex-1"
+            display={`${formatTime(currentTime)} / ${formatTime(totalDuration)}`}
+            onChange={(v) => handleSeekChange([v])}
           />
-          <span
-            className="text-[10px] text-muted-foreground whitespace-nowrap min-w-[65px] text-right"
-            title={
-              gapCompressionActive
-                ? `Gap compression active: ${formatTime(originalDuration)} → ${formatTime(totalDuration)}`
-                : undefined
-            }
-          >
-            {formatTime(currentTime)} / {formatTime(totalDuration)}
-            {gapCompressionActive && (
-              <span className="text-primary/60 ml-1">⚡</span>
-            )}
-          </span>
         </div>
       </div>
     );

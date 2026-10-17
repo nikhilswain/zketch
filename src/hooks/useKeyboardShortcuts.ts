@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useCanvasStore } from "../hooks/useStores";
 import { KeyBindingManager, KEY_BINDINGS } from "../utils/keyBindings";
-import { selectBrush } from "../utils/brushMemory";
+import { lastBrush, selectBrush } from "../utils/brushMemory";
 
 export const useKeyboardShortcuts = (
   onSave?: () => void,
@@ -52,10 +52,9 @@ export const useKeyboardShortcuts = (
     KeyBindingManager.registerHandler("selectShapeTool", () =>
       canvasStore.setActiveTool("shape")
     );
-    KeyBindingManager.registerHandler("selectPen", () => {
-      canvasStore.setActiveTool("brush");
-      canvasStore.setBrushStyle("ink");
-    });
+    KeyBindingManager.registerHandler("selectPen", () =>
+      selectBrush(canvasStore, lastBrush()),
+    );
     KeyBindingManager.registerHandler("selectEraser", () => {
       canvasStore.setActiveTool("brush");
       canvasStore.setBrushStyle("eraser");

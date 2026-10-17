@@ -53,6 +53,8 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     const [currentDrawingId, setCurrentDrawingId] = useState<string | null>(
       editingDrawingId,
     );
+    const savedIdRef = useRef<string | null>(null);
+    savedIdRef.current = currentDrawingId;
     // Track if rename was just done (to prevent double toast from Enter + blur)
     const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
     const isDirtyRef = useRef(false);
@@ -202,7 +204,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     }, [editingDrawingId, canvasStore, vaultStore]);
 
     const performSave = async (): Promise<boolean> => {
-      if (canvasStore.isEmpty) return false;
+      if (canvasStore.isEmpty && !currentDrawingId) return false;
 
       try {
         const layersToSave = serializeLayers(canvasStore.layers);
@@ -310,7 +312,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
       const disposer = reaction(
         () => canvasStore.renderVersion,
         () => {
-          isDirtyRef.current = !canvasStore.isEmpty;
+          isDirtyRef.current = !canvasStore.isEmpty || !!savedIdRef.current;
 
           // Reset debounce timer
           if (autosaveTimerRef.current !== null) {
@@ -328,7 +330,10 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               return;
             }
 
-            if (canvasStore.isEmpty) return;
+            if (canvasStore.isEmpty && !savedIdRef.current) {
+              isDirtyRef.current = false;
+              return;
+            }
 
             setSaveStatus("saving");
             const success = await performSaveRef.current();
