@@ -117,14 +117,12 @@ src/
 ├── components/       # React UI (see §7)
 │   ├── canvas-view.tsx        # Desktop editor shell (top bar, panels, autosave)
 │   ├── drawing-canvas.tsx     # Canvas host: mounts engine, wires InputManager
-│   ├── floating-dock.tsx      # Bottom tool dock (tools, shapes, zoom)
 │   ├── layers-panel.tsx       # Right layers panel + per-layer thumbnails/animation
 │   ├── export-dialog.tsx      # Export + share dialog (preview pane + options column)
 │   ├── share/ShareViewer.tsx  # Shared viewer for /share and /share/[id] (pages only load data)
 │   ├── import-dialog.tsx      # Image import (file/URL/drag)
 │   ├── layer-animation-controls.tsx
-│   ├── mobile-canvas-view.tsx / mobile-drawing-app.tsx / mobile-slider.tsx
-│   ├── drawing-app.tsx / valut-view.tsx   (note: "valut" typo is intentional/baked in)
+│   ├── valut-view.tsx         (note: "valut" typo is intentional/baked in)
 │   ├── studio/                # drawing-screen shell, bottom bar, docks, panels, StrokeTrack
 │   └── ui/                    # shadcn primitives
 │
@@ -571,15 +569,11 @@ Persistence layers:
   lock, focus/solo, rename, duplicate, reorder, opacity (StrokeTrack), delete,
   clear, animation controls. `embedded` hides its own header (the studio panel
   shows `LayersActions` in its frame). Layer list is reversed (top = last).
-- **`floating-dock.tsx`** + `brush-picker/BrushPicker.tsx` — only used by the
-  phone-size `mobile-canvas-view.tsx` now.
 - **`valut-view.tsx`** — vault gallery (grid/list, search, sort, rename, delete,
   storage usage, async thumbnail loading). *(Filename typo is load-bearing.)*
-- **Mobile**: `drawing-app.tsx` switches to `MobileDrawingApp` below 768px;
-  mobile uses `mobile-canvas-view.tsx` (save/export, sheet sidebar) and
-  `mobile-slider.tsx`. `vault-page.tsx` shows `no-mobile.tsx` instead of the
-  vault on phones (inconsistent with `MobileDrawingApp`, which still renders
-  `VaultView`).
+- **Phones**: there is no phone drawing UI. `draw-page.tsx` and
+  `draw-by-id.tsx` redirect phones (`useIsMobile`) to `/`, where
+  `vault-page.tsx` shows `no-mobile.tsx` ("Desktop & Tablet Only").
 
 ---
 
@@ -621,7 +615,7 @@ Persistence layers:
 - **`serializeLayers`** — maps MST layers to the save format from
   `getSnapshot`, caching each element's serialized/optimized output in a
   `WeakMap` keyed by its snapshot, so a save only processes new or changed
-  elements. Shared by canvas-view and mobile-canvas-view.
+  elements. Used by canvas-view.
 - **`ImageProcessingUtils`** — validate, resize, compress, SVG sanitize,
   dataURL↔blob.
 - **`keyBindings`** — `KEY_BINDINGS` table + `KeyBindingManager`
@@ -650,10 +644,6 @@ Ctrl+S save · Ctrl+E export · Ctrl+N new · Ctrl+V vault · B/W/R colors ·
 | `/api/share/[shareId]` | `pages/api/share/[shareId].ts` | GET → reads KV |
 
 `Layout.astro` wires global CSS, viewport (`user-scalable=no`), favicon.
-
-`drawing-app.tsx` (used by `vault-page`? no — the Astro pages mount shells
-directly; `drawing-app.tsx` is the legacy SPA shell kept for the vault↔canvas
-toggle used by `MobileDrawingApp`) contains the mobile/desktop switch.
 
 ---
 
@@ -794,7 +784,6 @@ animation, sidebar floating panels.
 - Shape animation ("how shapes appear") is an open design question.
 - Selection avatar for shape config is partially duplicated between
   `CanvasModel` shape-tool state and `ShapeSettingsPanel`.
-- `mobile-canvas-view` exists but the vault page blocks mobile; inconsistent.
 - No automated tests; performance relies on full per-layer redraws.
 - Layer `dirtyLayers` tracking is scaffolded but unused.
 
