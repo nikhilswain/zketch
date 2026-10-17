@@ -21,6 +21,9 @@ import { ImportService } from "@/services/ImportService";
 import { toast } from "sonner";
 import { clampZoom } from "@/utils/zoom";
 import { SURROUND, type SurroundTone } from "@/utils/page";
+import { bindableBox, isBindable, pointInBox } from "@/engine/geometry";
+import { measureText } from "@/engine/render/fonts";
+import type { ArrowElementLike, ArrowHead, ElementLook } from "@/engine/types";
 
 interface DrawingCanvasProps {
   isDrawingMode: boolean;
@@ -90,6 +93,13 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       curX: number;
       curY: number;
     } | null>(null);
+    const arrowCreationRef = useRef<{
+      start: { x: number; y: number };
+      end: { x: number; y: number };
+      startBind: string | null;
+      endBind: string | null;
+    } | null>(null);
+    const ctrlDownRef = useRef(false);
     const marqueeRef = useRef<{
       startX: number;
       startY: number;
@@ -295,6 +305,43 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     }, [animatingLayerId, animationStrokes]);
 
     // Coordinate conversion
+    const hitTestBindable = useCallback(
+      (x: number, y: number, exclude?: string | null): string | null => {
+        const pad = 4 / canvasStore.zoom;
+        for (let i = canvasStore.layers.length - 1; i >= 0; i--) {
+          const layer = canvasStore.layers[i] as any;
+          if (!layer.visible || layer.locked || layer.type !== "draw") continue;
+          for (let j = layer.elements.length - 1; j >= 0; j--) {
+            const el = layer.elements[j];
+            if (!isBindable(el) || el.id === exclude) continue;
+            if (pointInBox(bindableBox(el, measureText), { x, y }, pad)) return el.id;
+          }
+        }
+        return null;
+      },
+      [canvasStore],
+    );
+
+    const arrowPreview = (ref: NonNullable<typeof arrowCreationRef.current>): ArrowElementLike => {
+      const line = canvasStore.arrowKind === "line";
+      return {
+        id: "preview-arrow",
+        kind: "arrow",
+        start: ref.start,
+        end: ref.end,
+        bend: 0,
+        startBinding: ref.startBind ? { elementId: ref.startBind } : null,
+        endBinding: ref.endBind ? { elementId: ref.endBind } : null,
+        startHead: line ? "none" : (canvasStore.arrowStartHead as ArrowHead),
+        endHead: line ? "none" : (canvasStore.arrowEndHead as ArrowHead),
+        strokeColor: canvasStore.currentColor,
+        strokeWidth: canvasStore.arrowStrokeWidth,
+        opacity: 1,
+        look: canvasStore.elementLook as ElementLook,
+        seed: 1,
+      };
+    };
+
     const screenToCanvas = useCallback(
       (clientX: number, clientY: number): PointLike => {
         const root = rootRef.current;
@@ -537,12 +584,17 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         if (e.key === "Shift") {
           shiftDownRef.current = true;
         }
+        if (e.key === "Control" || e.key === "Meta") {
+          ctrlDownRef.current = true;
+        }
         if (e.key === "Escape") {
           if (canvasStore.isTransformMode) {
             e.preventDefault();
             canvasStore.deselectLayer();
           } else if (
             canvasStore.activeTool === "shape" ||
+            canvasStore.activeTool === "arrow" ||
+            canvasStore.activeTool === "text" ||
             canvasStore.activeTool === "select"
           ) {
             e.preventDefault();
@@ -560,6 +612,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         if (e.key === "Shift") {
           shiftDownRef.current = false;
           lastShiftUpTsRef.current = performance.now();
+        }
+        if (e.key === "Control" || e.key === "Meta") {
+          ctrlDownRef.current = false;
         }
       };
 
@@ -864,6 +919,18 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             return;
           }
 
+          if (canvasStore.activeTool === "arrow") {
+            const p = { x: canvasPoint.x, y: canvasPoint.y };
+            arrowCreationRef.current = {
+              start: p,
+              end: p,
+              startBind: ctrlDownRef.current ? null : hitTestBindable(p.x, p.y),
+              endBind: null,
+            };
+            drawingStartedRef.current = true;
+            return;
+          }
+
           if (canvasStore.activeTool === "shape") {
             shapeCreationRef.current = {
               startX: canvasPoint.x,
@@ -913,6 +980,24 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               width: Math.abs(m.curX - m.startX),
               height: Math.abs(m.curY - m.startY),
             });
+            return;
+          }
+
+          if (arrowCreationRef.current) {
+            const ref = arrowCreationRef.current;
+            let end = { x: canvasPoint.x, y: canvasPoint.y };
+            if (shiftDownRef.current) {
+              const dx = end.x - ref.start.x;
+              const dy = end.y - ref.start.y;
+              const len = Math.hypot(dx, dy);
+              const step = Math.PI / 12;
+              const angle = Math.round(Math.atan2(dy, dx) / step) * step;
+              end = { x: ref.start.x + Math.cos(angle) * len, y: ref.start.y + Math.sin(angle) * len };
+            }
+            const endBind = ctrlDownRef.current ? null : hitTestBindable(end.x, end.y, ref.startBind);
+            arrowCreationRef.current = { ...ref, end, endBind };
+            engineRef.current?.setBindHighlight(endBind);
+            engineRef.current?.setPreviewArrow(arrowPreview(arrowCreationRef.current));
             return;
           }
 
@@ -1067,6 +1152,22 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             return;
           }
 
+          if (arrowCreationRef.current) {
+            const ref = arrowCreationRef.current;
+            arrowCreationRef.current = null;
+            engineRef.current?.setPreviewArrow(null);
+            engineRef.current?.setBindHighlight(null);
+            const dist = Math.hypot(ref.end.x - ref.start.x, ref.end.y - ref.start.y) * canvasStore.zoom;
+            if (dist >= 5) {
+              const created = canvasStore.addArrow(ref.start, ref.end, { start: ref.startBind, end: ref.endBind });
+              if (created) {
+                canvasStore.setActiveTool("select");
+                canvasStore.selectElement(created.layerId, created.elementId);
+              }
+            }
+            return;
+          }
+
           if (shapeCreationRef.current) {
             const ref = shapeCreationRef.current;
             shapeCreationRef.current = null;
@@ -1111,6 +1212,12 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           if (marqueeRef.current) {
             marqueeRef.current = null;
             engineRef.current?.setMarquee(null);
+          }
+          if (arrowCreationRef.current) {
+            arrowCreationRef.current = null;
+            engineRef.current?.setPreviewArrow(null);
+            engineRef.current?.setBindHighlight(null);
+            return;
           }
           if (shapeCreationRef.current) {
             shapeCreationRef.current = null;

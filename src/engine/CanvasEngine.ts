@@ -7,13 +7,16 @@ import { renderStroke } from "./render/renderStroke";
 import { renderShape } from "./render/renderShape";
 import { renderDrawLayer } from "./render/renderDrawLayer";
 import { buildElementLookup, type ElementLookup } from "./render/lookup";
-import { onFontsReady } from "./render/fonts";
+import { measureText, onFontsReady } from "./render/fonts";
+import { renderArrow } from "./render/renderArrow";
+import { bindableBox, boxCorners, isBindable } from "./geometry";
 import { drawImageLayer } from "./render/renderImage";
 import {
   installBrushAssetLoader,
   onBrushAssetsChanged,
 } from "./stamp/assets";
 import type {
+  ArrowElementLike,
   ElementLike,
   EngineConfig,
   PanZoom,
@@ -90,6 +93,8 @@ export class CanvasEngine {
   private checker: CanvasPattern | null = null;
   private preview: StrokeLike | null = null;
   private previewShape: ShapeElementLike | null = null;
+  private previewArrow: ArrowElementLike | null = null;
+  private bindHighlight: string | null = null;
   private marquee: { x: number; y: number; width: number; height: number } | null = null;
   private cursor: { visible: boolean; x?: number; y?: number; worldRadius?: number } = {
     visible: false,
@@ -241,6 +246,15 @@ export class CanvasEngine {
   }
   setPreviewShape(s: ShapeElementLike | null) {
     this.previewShape = s;
+    this.invalidate();
+  }
+  setPreviewArrow(a: ArrowElementLike | null) {
+    this.previewArrow = a;
+    this.invalidate();
+  }
+  setBindHighlight(id: string | null) {
+    if (this.bindHighlight === id) return;
+    this.bindHighlight = id;
     this.invalidate();
   }
   setCursor(c: { visible: boolean; x?: number; y?: number; worldRadius?: number }) {
@@ -573,6 +587,14 @@ export class CanvasEngine {
       this.displayCtx.restore();
     }
 
+    if (this.previewArrow) {
+      this.displayCtx.save();
+      this.displayCtx.translate(this.pz.panX, this.pz.panY);
+      this.displayCtx.scale(this.pz.zoom, this.pz.zoom);
+      renderArrow(this.displayCtx, this.previewArrow, this.lookup, measureText, null);
+      this.displayCtx.restore();
+    }
+
     this.renderPageVeil();
   }
 
@@ -688,6 +710,7 @@ export class CanvasEngine {
     this.renderSelectionOutlines(ctx);
     this.renderTransformHandles(ctx);
     this.renderMarquee(ctx);
+    this.renderBindHighlight(ctx);
 
     // Render cursor overlay (eraser circle)
     if (
@@ -799,6 +822,28 @@ export class CanvasEngine {
       ctx.strokeRect(screenX, screenY, screenW, screenH);
       ctx.restore();
     }
+    ctx.restore();
+  }
+
+  private renderBindHighlight(ctx: CanvasRenderingContext2D) {
+    if (!this.bindHighlight) return;
+    const el = this.lookup.get(this.bindHighlight);
+    if (!isBindable(el)) return;
+    const box = bindableBox(el, measureText);
+    const pad = 6 / this.pz.zoom;
+    const corners = boxCorners({ ...box, x: box.x - pad, y: box.y - pad, width: box.width + pad * 2, height: box.height + pad * 2 });
+    ctx.save();
+    ctx.strokeStyle = overlayAccent();
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    corners.forEach((p, i) => {
+      const x = p.x * this.pz.zoom + this.pz.panX;
+      const y = p.y * this.pz.zoom + this.pz.panY;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.closePath();
+    ctx.stroke();
     ctx.restore();
   }
 

@@ -6,7 +6,7 @@ import {
   getSnapshot,
   isStateTreeNode,
 } from "mobx-state-tree";
-import { BRUSH_STYLES, type BrushStyle, isShapeElement, isStrokeElement } from "@/engine/types";
+import { BRUSH_STYLES, elementKind, type BrushStyle, isShapeElement, isStrokeElement } from "@/engine/types";
 import {
   Layer,
   createLayerId,
@@ -15,7 +15,12 @@ import {
   type ILayerSnapshot,
   type IDrawLayer,
 } from "./LayerModel";
-import { createShapeElement, type ShapeKind } from "./ShapeLayerModel";
+import { createShapeElement, type ElementLook, type ShapeKind } from "./ShapeLayerModel";
+import { createArrowElement, type ArrowHead } from "./ArrowElementModel";
+import type { FontFamilyId, TextAlign } from "./TextElementModel";
+import { buildElementLookup } from "@/engine/render/lookup";
+import { measureText } from "@/engine/render/fonts";
+import { isBindable, resolveArrow } from "@/engine/geometry";
 // Import shared models and re-export for backward compatibility
 import { Point, Stroke, BrushSettings } from "./SharedModels";
 export { Point, Stroke, BrushSettings } from "./SharedModels";
@@ -28,6 +33,8 @@ export const PageModel = types.model("Page", {
   width: types.number,
   height: types.number,
 });
+
+export type ActiveTool = "pan" | "select" | "brush" | "shape" | "arrow" | "text";
 
 export const CanvasState = types.model("CanvasState", {
   strokes: types.array(Stroke),
@@ -106,7 +113,7 @@ export const CanvasModel = types
     ),
     // Active tool: "pan" navigates, "select" hit-tests, "brush" draws, "shape" creates
     activeTool: types.optional(
-      types.enumeration("ActiveTool", ["pan", "select", "brush", "shape"]),
+      types.enumeration("ActiveTool", ["pan", "select", "brush", "shape", "arrow", "text"]),
       "brush",
     ),
     currentShapeType: types.optional(
@@ -122,6 +129,14 @@ export const CanvasModel = types
     shapeCornerRadius: types.optional(types.number, 8),
     shapeOpacity: types.optional(types.number, 1),
     shapeFillColor: types.optional(types.maybeNull(types.string), null),
+    arrowKind: types.optional(types.enumeration("ArrowKind", ["arrow", "line"]), "arrow"),
+    arrowStartHead: types.optional(types.enumeration("ArrowHeadDefault", ["none", "arrow", "triangle", "dot"]), "none"),
+    arrowEndHead: types.optional(types.enumeration("ArrowHeadDefault", ["none", "arrow", "triangle", "dot"]), "arrow"),
+    arrowStrokeWidth: types.optional(types.number, 4),
+    elementLook: types.optional(types.enumeration("ElementLookDefault", ["clean", "sketchy"]), "sketchy"),
+    textFontFamily: types.optional(types.enumeration("TextFontDefault", ["hand", "sans", "mono"]), "hand"),
+    textFontSize: types.optional(types.number, 24),
+    textAlign: types.optional(types.enumeration("TextAlignDefault", ["left", "center", "right"]), "left"),
     // Which attribute the global Color picker writes to when a shape is selected.
     colorTarget: types.optional(
       types.enumeration("ColorTarget", ["stroke", "fill"]),
@@ -446,6 +461,7 @@ export const CanvasModel = types
   .actions((self) => {
     // First action block - internal helper actions
     const saveToHistory = () => {
+      (self as any).syncArrows?.();
       const state = {
         strokes: self.strokes.map((stroke) => ({
           id: stroke.id,
@@ -848,7 +864,7 @@ export const CanvasModel = types
         return newLayer.id;
       },
 
-      setActiveTool(tool: "pan" | "select" | "brush" | "shape") {
+      setActiveTool(tool: ActiveTool) {
         self.activeTool = tool;
         if (tool !== "select") {
           self.selectedElements.clear();
@@ -871,6 +887,67 @@ export const CanvasModel = types
       setShapeFillColor(c: string | null) {
         self.shapeFillColor = c;
       },
+      setArrowKind(k: "arrow" | "line") {
+        self.arrowKind = k;
+      },
+      setArrowHeads(start: ArrowHead, end: ArrowHead) {
+        self.arrowStartHead = start;
+        self.arrowEndHead = end;
+      },
+      setArrowStrokeWidth(w: number) {
+        self.arrowStrokeWidth = Math.max(1, Math.min(50, w));
+      },
+      setElementLook(look: ElementLook) {
+        self.elementLook = look;
+      },
+      setTextFontFamily(f: FontFamilyId) {
+        self.textFontFamily = f;
+      },
+      setTextFontSize(size: number) {
+        self.textFontSize = Math.max(4, Math.min(512, size));
+      },
+      setTextAlign(a: TextAlign) {
+        self.textAlign = a;
+      },
+
+      targetDrawLayer(fallback = false): { layer: IDrawLayer; created: boolean } | null {
+        const usable = (l: any) => l && l.type === "draw" && l.visible && !l.locked;
+        const active = self.layers.find((l) => l.id === self.activeLayerId) as any;
+        if (active && active.type === "draw") {
+          if (!fallback) return active.locked ? null : { layer: active, created: false };
+          if (usable(active)) return { layer: active, created: false };
+        }
+        if (fallback) {
+          for (let i = self.layers.length - 1; i >= 0; i--) {
+            const l = self.layers[i] as any;
+            if (usable(l)) {
+              self.activeLayerId = l.id;
+              return { layer: l, created: false };
+            }
+          }
+        }
+        const newLayerData = createDefaultLayer(`Layer ${self.layers.length + 1}`);
+        self.layers.push(Layer.create(newLayerData as any));
+        self.activeLayerId = newLayerData.id;
+        return { layer: self.layers.find((l) => l.id === newLayerData.id) as IDrawLayer, created: true };
+      },
+
+      syncArrows() {
+        const lookup = buildElementLookup(self.layers as any);
+        for (const layer of self.layers) {
+          if (layer.type !== "draw") continue;
+          for (const el of (layer as IDrawLayer).elements as any[]) {
+            if (elementKind(el) !== "arrow") continue;
+            if (el.startBinding && !isBindable(lookup.get(el.startBinding.elementId))) el.bind("start", null);
+            if (el.endBinding && !isBindable(lookup.get(el.endBinding.elementId))) el.bind("end", null);
+            if (!el.startBinding && !el.endBinding) continue;
+            const r = resolveArrow(el, lookup, measureText);
+            if (r.start.x !== el.start.x || r.start.y !== el.start.y || r.end.x !== el.end.x || r.end.y !== el.end.y) {
+              el.setEnds(r.start, r.end);
+            }
+          }
+        }
+      },
 
       // Add a shape element to the active draw layer.
       // If active is an image (or none), spin up a draw layer above it and add there.
@@ -880,31 +957,47 @@ export const CanvasModel = types
         y: number,
         width: number,
         height: number,
-      ): { layerId: string; elementId: string } | null {
-        let activeLayer = self.layers.find((l) => l.id === self.activeLayerId);
-        if (!activeLayer || activeLayer.type !== "draw") {
-          // Create a new draw layer above the current active layer.
-          const newLayerData = createDefaultLayer(
-            `Layer ${self.layers.length + 1}`,
-          );
-          self.layers.push(Layer.create(newLayerData as any));
-          self.activeLayerId = newLayerData.id;
-          activeLayer = self.layers.find((l) => l.id === newLayerData.id)!;
-        }
-        const drawLayer = activeLayer as IDrawLayer;
-        if (drawLayer.locked) return null;
+        fallback = false,
+      ): { layerId: string; elementId: string; createdLayer: boolean } | null {
+        const target = (self as any).targetDrawLayer(fallback) as { layer: IDrawLayer; created: boolean } | null;
+        if (!target) return null;
+        const drawLayer = target.layer;
         const shapeData = createShapeElement(shapeType, x, y, width, height, {
           strokeColor: self.currentColor,
           strokeWidth: self.shapeStrokeWidth,
           cornerRadius: self.shapeCornerRadius,
           opacity: self.shapeOpacity,
           fillColor: self.shapeFillColor,
+          look: self.elementLook as ElementLook,
         });
         const elementId = drawLayer.addShape(shapeData);
         self.saveToHistory();
         return elementId
-          ? { layerId: drawLayer.id, elementId }
+          ? { layerId: drawLayer.id, elementId, createdLayer: target.created }
           : null;
+      },
+
+      addArrow(
+        start: { x: number; y: number },
+        end: { x: number; y: number },
+        bindings: { start: string | null; end: string | null },
+        fallback = false,
+      ): { layerId: string; elementId: string; createdLayer: boolean } | null {
+        const target = (self as any).targetDrawLayer(fallback) as { layer: IDrawLayer; created: boolean } | null;
+        if (!target) return null;
+        const line = self.arrowKind === "line";
+        const data = createArrowElement(start, end, {
+          startBinding: bindings.start ? { elementId: bindings.start } : null,
+          endBinding: bindings.end ? { elementId: bindings.end } : null,
+          startHead: line ? "none" : (self.arrowStartHead as ArrowHead),
+          endHead: line ? "none" : (self.arrowEndHead as ArrowHead),
+          strokeColor: self.currentColor,
+          strokeWidth: self.arrowStrokeWidth,
+          look: self.elementLook as ElementLook,
+        });
+        target.layer.elements.push(data as any);
+        self.saveToHistory();
+        return { layerId: target.layer.id, elementId: data.id as string, createdLayer: target.created };
       },
 
       // Add a new image layer

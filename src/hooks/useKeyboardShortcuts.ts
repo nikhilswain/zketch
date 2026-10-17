@@ -53,6 +53,17 @@ export const useKeyboardShortcuts = (
     KeyBindingManager.registerHandler("selectShapeTool", () =>
       canvasStore.setActiveTool("shape")
     );
+    KeyBindingManager.registerHandler("selectArrowTool", () => {
+      canvasStore.setArrowKind("arrow");
+      canvasStore.setActiveTool("arrow");
+    });
+    KeyBindingManager.registerHandler("selectLineTool", () => {
+      canvasStore.setArrowKind("line");
+      canvasStore.setActiveTool("arrow");
+    });
+    KeyBindingManager.registerHandler("selectTextTool", () =>
+      canvasStore.setActiveTool("text")
+    );
     KeyBindingManager.registerHandler("selectPen", () =>
       selectBrush(canvasStore, lastBrush()),
     );
