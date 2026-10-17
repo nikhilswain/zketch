@@ -70,6 +70,14 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     const strokeStartTimeRef = useRef<number | null>(null);
     const strokeIdRef = useRef("");
     const strokeInputRef = useRef<StrokeInput>("mouse");
+    const strokeShape = () =>
+      canvasStore.currentBrushStyle === "eraser"
+        ? { thinning: 0.5, smoothing: 0.5, streamline: 0.5 }
+        : {
+            thinning: canvasStore.brushSettings.thinning,
+            smoothing: canvasStore.brushSettings.smoothing,
+            streamline: canvasStore.brushSettings.streamline,
+          };
     // Distinguishes a real draw from onDrawStart that early-returned (image select / transform).
     const drawingStartedRef = useRef(false);
     // Active shape creation drag (start + current canvas-space coords).
@@ -464,9 +472,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             opacity: canvasStore.brushSettings.opacity ?? 1,
             brushStyle: canvasStore.currentBrushStyle as any,
             timestamp: Date.now(),
-            thinning: canvasStore.brushSettings.thinning,
-            smoothing: canvasStore.brushSettings.smoothing,
-            streamline: canvasStore.brushSettings.streamline,
+            ...strokeShape(),
             taperStart: canvasStore.brushSettings.taperStart,
             taperEnd: canvasStore.brushSettings.taperEnd,
             easing: canvasStore.brushSettings.easing,
@@ -1178,9 +1184,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             timestamp: endTime,
             startTime,
             duration,
-            thinning: canvasStore.brushSettings.thinning,
-            smoothing: canvasStore.brushSettings.smoothing,
-            streamline: canvasStore.brushSettings.streamline,
+            ...strokeShape(),
             taperStart: canvasStore.brushSettings.taperStart,
             taperEnd: canvasStore.brushSettings.taperEnd,
             easing: canvasStore.brushSettings.easing,

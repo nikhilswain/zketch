@@ -2,6 +2,7 @@ import { types, type Instance, onPatch } from "mobx-state-tree";
 import { CanvasModel } from "../models/CanvasModel";
 import { VaultModel } from "../models/VaultModel";
 import { SettingsModel } from "../models/SettingsModel";
+import { installBrushMemory } from "../utils/brushMemory";
 
 export const RootStore = types
   .model("RootStore", {
@@ -19,6 +20,8 @@ export const RootStore = types
 export interface IRootStore extends Instance<typeof RootStore> {}
 
 export const rootStore = RootStore.create({});
+
+if (typeof window !== "undefined") installBrushMemory(rootStore.canvasModel);
 
 // Auto-increment renderVersion on any visual state change.
 // Uses microtask batching so a single user action (e.g., undo which restores

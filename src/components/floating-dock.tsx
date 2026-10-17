@@ -66,7 +66,7 @@ const NumberBadge: React.FC<{ value: string; active?: boolean }> = ({
 import type { BrushStyle } from "@/models/CanvasModel";
 import type { ShapeKind } from "@/models/ShapeLayerModel";
 import { pickerBrushGroups } from "@/utils/brushCategories";
-import { applyBrushPreset } from "@/utils/applyBrushPreset";
+import { selectBrush as switchBrush } from "@/utils/brushMemory";
 
 interface FloatingDockProps {
   className?: string;
@@ -216,7 +216,7 @@ const FloatingDock: React.FC<FloatingDockProps> = observer(
     };
 
     const selectBrush = (brush: BrushStyle) => {
-      applyBrushPreset(canvasStore, brush);
+      switchBrush(canvasStore, brush);
     };
 
     const handleSelectTool = () => {
