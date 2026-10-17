@@ -5,7 +5,7 @@ import { observer } from "mobx-react-lite";
 import { useCanvasStore } from "@/hooks/useStores";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Slider } from "@/components/ui/slider";
+import StrokeTrack from "@/components/studio/StrokeTrack";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -155,6 +155,80 @@ interface LayerItemProps {
   onAnimationStateChange?: (state: PlaybackState) => void;
 }
 
+export function useLayerThumbnail(layer: any): string {
+  const canvasStore = useCanvasStore();
+  const [thumbnail, setThumbnail] = useState<string>("");
+  const thumbnailTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const layerIdRef = useRef(layer.id);
+
+  // Update layerId ref when layer changes
+  layerIdRef.current = layer.id;
+
+  // Generate thumbnail when layer elements change (debounced).
+  // Signature includes a count + a small mix of shape geometry to invalidate on tweaks.
+  const elementCount =
+    layer.type === "draw" ? (layer as any).elements.length : 0;
+  const shapeSig =
+    layer.type === "draw"
+      ? (layer as any).elements
+          .filter((e: any) => "shapeType" in e)
+          .map(
+            (e: any) =>
+              `${e.shapeType}:${e.x}:${e.y}:${e.width}:${e.height}:${e.rotation}:${e.strokeColor}:${e.fillColor ?? ""}`,
+          )
+          .join("|")
+      : "";
+  const layerId = layer.id;
+
+  useEffect(() => {
+    // Clear any pending thumbnail generation
+    if (thumbnailTimeoutRef.current) {
+      clearTimeout(thumbnailTimeoutRef.current);
+    }
+
+    // Debounce thumbnail generation to prevent hanging on rapid updates
+    const generate = async () => {
+      if (canvasStore.isInteracting) {
+        thumbnailTimeoutRef.current = setTimeout(generate, 150);
+        return;
+      }
+      try {
+        // Use snapshot to avoid accessing detached MST nodes
+        const snapshot = getSnapshot(layer) as any;
+
+        if (snapshot.type === "image" && snapshot.blobId) {
+          const blobUrl = await BlobStorageService.getBlobUrl(
+            snapshot.blobId,
+          );
+          if (blobUrl && layerIdRef.current === layerId) {
+            setThumbnail(blobUrl);
+          }
+          return;
+        }
+
+        if (snapshot.type !== "draw" || !snapshot.elements) {
+          if (layerIdRef.current === layerId) setThumbnail("");
+          return;
+        }
+
+        const thumb = generateDrawLayerThumbnail(snapshot);
+        if (layerIdRef.current === layerId) setThumbnail(thumb);
+      } catch (e) {
+        // Layer may have been detached during reorder, ignore
+        console.warn("Thumbnail generation skipped:", e);
+      }
+    };
+    thumbnailTimeoutRef.current = setTimeout(generate, 150);
+
+    return () => {
+      if (thumbnailTimeoutRef.current) {
+        clearTimeout(thumbnailTimeoutRef.current);
+      }
+    };
+  }, [layerId, elementCount, shapeSig]);
+  return thumbnail;
+}
+
 const LayerItem: React.FC<LayerItemProps> = observer(
   ({
     layer,
@@ -181,76 +255,8 @@ const LayerItem: React.FC<LayerItemProps> = observer(
     const [editName, setEditName] = useState(layer.name);
     const [showOpacity, setShowOpacity] = useState(false);
     const [showAnimation, setShowAnimation] = useState(false);
-    const [thumbnail, setThumbnail] = useState<string>("");
     const canvasStore = useCanvasStore();
-    const thumbnailTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const layerIdRef = useRef(layer.id);
-
-    // Update layerId ref when layer changes
-    layerIdRef.current = layer.id;
-
-    // Generate thumbnail when layer elements change (debounced).
-    // Signature includes a count + a small mix of shape geometry to invalidate on tweaks.
-    const elementCount =
-      layer.type === "draw" ? (layer as any).elements.length : 0;
-    const shapeSig =
-      layer.type === "draw"
-        ? (layer as any).elements
-            .filter((e: any) => "shapeType" in e)
-            .map(
-              (e: any) =>
-                `${e.shapeType}:${e.x}:${e.y}:${e.width}:${e.height}:${e.rotation}:${e.strokeColor}:${e.fillColor ?? ""}`,
-            )
-            .join("|")
-        : "";
-    const layerId = layer.id;
-
-    useEffect(() => {
-      // Clear any pending thumbnail generation
-      if (thumbnailTimeoutRef.current) {
-        clearTimeout(thumbnailTimeoutRef.current);
-      }
-
-      // Debounce thumbnail generation to prevent hanging on rapid updates
-      const generate = async () => {
-        if (canvasStore.isInteracting) {
-          thumbnailTimeoutRef.current = setTimeout(generate, 150);
-          return;
-        }
-        try {
-          // Use snapshot to avoid accessing detached MST nodes
-          const snapshot = getSnapshot(layer) as any;
-
-          if (snapshot.type === "image" && snapshot.blobId) {
-            const blobUrl = await BlobStorageService.getBlobUrl(
-              snapshot.blobId,
-            );
-            if (blobUrl && layerIdRef.current === layerId) {
-              setThumbnail(blobUrl);
-            }
-            return;
-          }
-
-          if (snapshot.type !== "draw" || !snapshot.elements) {
-            if (layerIdRef.current === layerId) setThumbnail("");
-            return;
-          }
-
-          const thumb = generateDrawLayerThumbnail(snapshot);
-          if (layerIdRef.current === layerId) setThumbnail(thumb);
-        } catch (e) {
-          // Layer may have been detached during reorder, ignore
-          console.warn("Thumbnail generation skipped:", e);
-        }
-      };
-      thumbnailTimeoutRef.current = setTimeout(generate, 150);
-
-      return () => {
-        if (thumbnailTimeoutRef.current) {
-          clearTimeout(thumbnailTimeoutRef.current);
-        }
-      };
-    }, [layerId, elementCount, shapeSig]);
+    const thumbnail = useLayerThumbnail(layer);
 
     const handleNameSubmit = () => {
       if (editName.trim()) {
@@ -465,20 +471,19 @@ const LayerItem: React.FC<LayerItemProps> = observer(
         {showOpacity && (
           <div className="px-2 pb-2">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground w-14">
-                Opacity
-              </span>
-              <Slider
-                value={[layer.opacity * 100]}
-                onValueChange={([val]) => onOpacityChange(val / 100)}
-                min={0}
-                max={100}
-                step={1}
-                className="flex-1"
-              />
-              <span className="text-xs w-8 text-right">
-                {Math.round(layer.opacity * 100)}%
-              </span>
+              <div className="flex-1">
+                <StrokeTrack
+                  compact
+                  kind="flat"
+                  label="Layer opacity"
+                  value={Math.round(layer.opacity * 100)}
+                  display={`${Math.round(layer.opacity * 100)}%`}
+                  min={0}
+                  max={100}
+                  step={1}
+                  onChange={(val) => onOpacityChange(val / 100)}
+                />
+              </div>
             </div>
           </div>
         )}
@@ -499,14 +504,59 @@ const LayerItem: React.FC<LayerItemProps> = observer(
 interface LayersPanelProps {
   className?: string;
   collapsed?: boolean;
+  embedded?: boolean;
   onAnimationFrame?: (layerId: string, strokes: StrokeLike[]) => void;
   onAnimationStateChange?: (layerId: string, state: PlaybackState) => void;
 }
+
+export const LayersActions: React.FC = observer(() => {
+  const canvasStore = useCanvasStore();
+  return (
+    <div className="flex items-center gap-1">
+      {canvasStore.isFocusMode && (
+        <span className="rounded-[3px] bg-zk-selected px-1.5 py-0.5 text-[10px] font-semibold text-zk-accent">
+          Focus
+        </span>
+      )}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7"
+        onClick={() => canvasStore.addLayer()}
+        title="Add Layer"
+      >
+        <Plus className="h-4 w-4" />
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-7 w-7" title="Merge Options">
+            <Merge className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            onClick={() => canvasStore.mergeVisibleLayers()}
+            disabled={canvasStore.visibleLayers.length < 2}
+          >
+            Merge Visible
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => canvasStore.flattenAllLayers()}
+            disabled={canvasStore.layerCount < 2}
+          >
+            Flatten All
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+});
 
 const LayersPanel: React.FC<LayersPanelProps> = observer(
   ({
     className = "",
     collapsed = false,
+    embedded = false,
     onAnimationFrame,
     onAnimationStateChange,
   }) => {
@@ -570,57 +620,15 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
       <div
         className={`flex flex-col bg-background overflow-hidden ${className}`}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between p-2 border-b border-border/50">
-          <div className="flex items-center gap-2">
-            <Layers className="h-4 w-4" />
-            <span className="text-sm font-medium">Layers</span>
-            {canvasStore.isFocusMode && (
-              <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded">
-                Focus
-              </span>
-            )}
+        {!embedded && (
+          <div className="flex items-center justify-between p-2 border-b border-border/50">
+            <div className="flex items-center gap-2">
+              <Layers className="h-4 w-4" />
+              <span className="text-sm font-medium">Layers</span>
+            </div>
+            <LayersActions />
           </div>
-          <div className="flex items-center gap-1">
-            {/* Add Layer Button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => canvasStore.addLayer()}
-              title="Add Layer"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-            {/* Merge Menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  title="Merge Options"
-                >
-                  <Merge className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onClick={() => canvasStore.mergeVisibleLayers()}
-                  disabled={canvasStore.visibleLayers.length < 2}
-                >
-                  Merge Visible
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => canvasStore.flattenAllLayers()}
-                  disabled={canvasStore.layerCount < 2}
-                >
-                  Flatten All
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
+        )}
 
         {/* Exit Focus Mode Button - shown when in focus mode */}
         {canvasStore.isFocusMode && (
@@ -638,7 +646,7 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
         )}
 
         {/* Layers List */}
-        <div className="flex-1 overflow-y-auto max-h-72">
+        <div className={`flex-1 overflow-y-auto ${embedded ? "" : "max-h-72"}`}>
           {displayLayers.map(renderLayerItem)}
         </div>
 

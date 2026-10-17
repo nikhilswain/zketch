@@ -15,8 +15,8 @@ import {
   resetStroke,
   setStrokeOpen,
 } from "@/utils/brushMemory";
-import StrokeCanvas, { type StrokeLook } from "./brush-settings/StrokeCanvas";
-import PresetList from "./brush-settings/PresetList";
+import StrokeCanvas, { type StrokeLook } from "@/components/studio/panels/StrokeCanvas";
+import PresetList from "@/components/studio/panels/PresetList";
 import StrokeTrack from "@/components/studio/StrokeTrack";
 import StrokeSection, { type StrokeValues } from "./brush-settings/StrokeSection";
 
@@ -133,7 +133,6 @@ const ToolSettingsPanel: React.FC = observer(() => {
             toBrush();
             applyPreset(canvasStore, brushStyle, id);
           }}
-          onReset={() => resetPreset(canvasStore, brushStyle)}
         />
       )}
 
