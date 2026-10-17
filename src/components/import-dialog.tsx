@@ -3,16 +3,7 @@
 import type React from "react";
 import { useState, useCallback, useRef } from "react";
 import { observer } from "mobx-react-lite";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "./ui/dialog";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "./ui/dialog";
 import {
   Upload,
   Link,
@@ -165,151 +156,144 @@ const ImportDialog: React.FC<ImportDialogProps> = observer(
 
     return (
       <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ImageIcon className="w-5 h-5" />
-              Import Image
-            </DialogTitle>
-            <DialogDescription>
-              Add an image to your canvas as a new layer
+        <DialogContent
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            (e.currentTarget as HTMLElement | null)?.focus();
+          }}
+          className="max-w-[460px] gap-5"
+        >
+          <div>
+            <DialogTitle className="text-[26px]">Import image</DialogTitle>
+            <DialogDescription className="mt-1 text-[13px] text-zk-muted">
+              Each image lands on a new layer above the current one.
             </DialogDescription>
-          </DialogHeader>
-
-          {/* Tab Buttons */}
-          <div className="flex gap-2 border-b pb-2">
-            <Button
-              variant={activeTab === "file" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setActiveTab("file")}
-              className="flex items-center gap-2"
-            >
-              <Upload className="w-4 h-4" />
-              File
-            </Button>
-            <Button
-              variant={activeTab === "url" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setActiveTab("url")}
-              className="flex items-center gap-2"
-            >
-              <Link className="w-4 h-4" />
-              URL
-            </Button>
           </div>
 
-          {/* File Upload Tab */}
-          {activeTab === "file" && (
-            <div className="space-y-4">
-              <div
-                className={`
-                  border-2 border-dashed rounded-lg p-8 text-center cursor-pointer
-                  transition-colors
-                  ${
-                    isDragOver
-                      ? "border-primary bg-primary/5"
-                      : "border-gray-300 hover:border-gray-400"
-                  }
-                  ${isLoading ? "opacity-50 pointer-events-none" : ""}
-                `}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={handleBrowseClick}
+          <div className="grid grid-cols-2 gap-1 rounded-[4px] bg-zk-raised/50 p-1" role="tablist" aria-label="Import from">
+            {([
+              { id: "file", label: "From file", icon: Upload },
+              { id: "url", label: "From link", icon: Link },
+            ] as const).map((t) => (
+              <button
+                key={t.id}
+                role="tab"
+                aria-selected={activeTab === t.id}
+                onClick={() => {
+                  setActiveTab(t.id);
+                  setError(null);
+                }}
+                className={`flex h-8 items-center justify-center gap-2 rounded-[3px] text-[13px] transition-colors ${
+                  activeTab === t.id ? "bg-zk-selected font-semibold text-zk-text" : "text-zk-muted hover:text-zk-text"
+                }`}
               >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="hidden"
-                  accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
-                  multiple
-                  onChange={(e) => handleFileSelect(e.target.files)}
-                />
+                <t.icon className="h-3.5 w-3.5" />
+                {t.label}
+              </button>
+            ))}
+          </div>
 
-                {isLoading ? (
-                  <div className="flex flex-col items-center gap-2">
-                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                    <p className="text-sm text-gray-600">Importing...</p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-2">
-                    <Upload className="w-8 h-8 text-gray-400" />
-                    <p className="text-sm font-medium">
-                      Drop images here or click to browse
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      PNG, JPEG, GIF, WebP, SVG supported
-                    </p>
-                  </div>
-                )}
-              </div>
+          {activeTab === "file" && (
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label="Choose images to import"
+              className={`flex h-48 cursor-pointer flex-col items-center justify-center gap-2 rounded-[6px] border border-dashed px-6 text-center transition-colors ${
+                isDragOver
+                  ? "border-zk-accent bg-zk-selected"
+                  : "border-zk-divider bg-zk-raised/40 hover:bg-zk-raised/70"
+              } ${isLoading ? "pointer-events-none opacity-60" : ""}`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={handleBrowseClick}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleBrowseClick();
+                }
+              }}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+                multiple
+                onChange={(e) => handleFileSelect(e.target.files)}
+              />
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-6 w-6 animate-spin text-zk-muted" />
+                  <p className="text-[13px] text-zk-text-2">Importing…</p>
+                </>
+              ) : (
+                <>
+                  <ImageIcon className={`h-7 w-7 ${isDragOver ? "text-zk-accent" : "text-zk-muted"}`} />
+                  <p className="text-[14px] font-medium text-zk-text">
+                    {isDragOver ? "Drop to import" : "Drop images here, or click to browse"}
+                  </p>
+                  <p className="text-[12px] text-zk-muted">PNG, JPEG, GIF, WebP or SVG. You can also paste with Ctrl+V on the canvas.</p>
+                </>
+              )}
             </div>
           )}
 
-          {/* URL Import Tab */}
           {activeTab === "url" && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="image-url">Image URL</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="image-url"
-                    type="url"
-                    placeholder="https://example.com/image.png"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    disabled={isLoading}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleUrlImport();
-                      }
-                    }}
-                  />
-                  <Button
-                    onClick={handleUrlImport}
-                    disabled={isLoading || !url.trim()}
-                  >
-                    {isLoading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      "Import"
-                    )}
-                  </Button>
-                </div>
+            <div className="flex flex-col gap-2">
+              <label htmlFor="image-url" className="text-[13px] text-zk-text-2">
+                Image address
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="image-url"
+                  type="url"
+                  placeholder="https://example.com/image.png"
+                  value={url}
+                  autoFocus
+                  onChange={(e) => setUrl(e.target.value)}
+                  disabled={isLoading}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleUrlImport();
+                    }
+                  }}
+                  className="h-10 min-w-0 flex-1 rounded-[4px] bg-zk-raised px-3 text-[13px] text-zk-text placeholder:text-zk-disabled outline-none focus-visible:outline-1 focus-visible:outline-zk-accent"
+                />
+                <button
+                  onClick={handleUrlImport}
+                  disabled={isLoading || !url.trim()}
+                  className="flex h-10 w-24 items-center justify-center rounded-[4px] bg-zk-accent text-[13px] font-semibold text-zk-on-accent hover:brightness-110 disabled:opacity-40"
+                >
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Import"}
+                </button>
               </div>
-              <p className="text-xs text-gray-500">
-                Note: Some URLs may be blocked by CORS policies
-              </p>
+              <p className="text-[12px] text-zk-muted">Some sites block other apps from loading their images.</p>
             </div>
           )}
 
-          {/* Error Display */}
           {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <div role="alert" className="flex items-start gap-2 rounded-[4px] bg-[#3a1f1f] px-3 py-2.5 text-[12px] text-[#ffb4a8]">
+              <AlertCircle className="mt-px h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
-          {/* Success Display */}
-          {importResults.length > 0 &&
-            importResults.every((r) => r.success) && (
-              <div className="flex items-center gap-2 p-3 bg-green-50 text-green-700 rounded-lg text-sm">
-                <CheckCircle className="w-4 h-4 flex-shrink-0" />
-                <span>
-                  {importResults.length === 1
-                    ? "Image imported successfully!"
-                    : `${importResults.length} images imported successfully!`}
-                </span>
-              </div>
-            )}
+          {importResults.length > 0 && importResults.every((r) => r.success) && (
+            <div role="status" className="flex items-center gap-2 rounded-[4px] bg-zk-selected px-3 py-2.5 text-[12px] text-zk-text">
+              <CheckCircle className="h-4 w-4 shrink-0 text-zk-accent" />
+              <span>{importResults.length === 1 ? "Image added to the canvas." : `${importResults.length} images added to the canvas.`}</span>
+            </div>
+          )}
 
-          {/* Actions */}
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={handleClose}>
+          <div className="flex justify-end">
+            <button
+              onClick={handleClose}
+              className="h-9 rounded-[4px] px-4 text-[13px] font-medium text-zk-text-2 hover:bg-zk-raised hover:text-zk-text"
+            >
               Cancel
-            </Button>
+            </button>
           </div>
         </DialogContent>
       </Dialog>
