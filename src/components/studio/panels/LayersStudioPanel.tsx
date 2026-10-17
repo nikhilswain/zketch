@@ -1,32 +1,119 @@
 import type React from "react";
+import { useState } from "react";
 import { observer } from "mobx-react-lite";
-import { LayersIcon } from "@/components/icons";
+import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  CopyIcon,
+  EraserIcon,
+  EyeIcon,
+  EyeOffIcon,
+  FocusIcon,
+  LayersIcon,
+  LockIcon,
+  TrashIcon,
+  UnlockIcon,
+} from "@/components/icons";
 import { useCanvasStore } from "@/hooks/useStores";
-import LayersPanel, { LayersActions, useLayerThumbnail } from "@/components/layers-panel";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import LayersPanel, { DropLine, LayersActions, useLayerDrag, useLayerThumbnail } from "@/components/layers-panel";
 import PanelFrame from "../PanelFrame";
 import { useStudio } from "../StudioContext";
 
-const StripThumb: React.FC<{ layer: any; active: boolean; onSelect: () => void }> = observer(
-  ({ layer, active, onSelect }) => {
+const StripThumb: React.FC<{ layer: any; active: boolean; onSelect: () => void; onExpand: () => void }> = observer(
+  ({ layer, active, onSelect, onExpand }) => {
+    const canvasStore = useCanvasStore();
     const thumbnail = useLayerThumbnail(layer);
+    const { over, props: dragProps } = useLayerDrag(layer.id);
+    const [menuOpen, setMenuOpen] = useState(false);
+    const index = canvasStore.layers.findIndex((l: any) => l.id === layer.id);
+    const isDraw = layer.type === "draw";
     return (
-      <button
-        onClick={onSelect}
-        aria-label={`Layer: ${layer.name}${active ? ", active" : ""}`}
-        aria-pressed={active}
-        className="flex flex-col items-center gap-0.5"
-      >
-        <span
-          className="block h-[30px] w-11 overflow-hidden rounded-[3px] bg-[#FBFAF6]"
-          style={{ opacity: layer.visible ? 1 : 0.35 }}
+      <div {...dragProps} className="relative" onContextMenu={(e) => {
+        e.preventDefault();
+        setMenuOpen(true);
+      }}>
+        <DropLine at={over} />
+        <button
+          onClick={onSelect}
+          aria-label={`Layer: ${layer.name}${active ? ", active" : ""}`}
+          aria-pressed={active}
+          className="flex flex-col items-center gap-0.5"
         >
-          {thumbnail && <img src={thumbnail} alt="" className="h-full w-full object-cover" />}
-        </span>
-        <span
-          className="h-[2px] w-11 rounded-[1px]"
-          style={{ background: active ? "var(--zk-accent)" : "transparent" }}
-        />
-      </button>
+          <span
+            className="block h-[30px] w-11 overflow-hidden rounded-[3px] bg-[#FBFAF6]"
+            style={{ opacity: layer.visible ? 1 : 0.35 }}
+          >
+            {thumbnail && <img src={thumbnail} alt="" draggable={false} className="h-full w-full object-cover" />}
+          </span>
+          <span
+            className="h-[2px] w-11 rounded-[1px]"
+            style={{ background: active ? "var(--zk-accent)" : "transparent" }}
+          />
+        </button>
+        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+          <DropdownMenuTrigger asChild>
+            <span aria-hidden="true" tabIndex={-1} className="pointer-events-none absolute inset-0" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="right" align="start" className="w-44">
+            <DropdownMenuLabel className="truncate text-[12px]">{layer.name}</DropdownMenuLabel>
+            <DropdownMenuItem onClick={() => canvasStore.toggleLayerVisibility(layer.id)}>
+              {layer.visible ? <EyeOffIcon className="mr-2 h-3.5 w-3.5" /> : <EyeIcon className="mr-2 h-3.5 w-3.5" />}
+              {layer.visible ? "Hide" : "Show"}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => canvasStore.toggleLayerLock(layer.id)}>
+              {layer.locked ? <UnlockIcon className="mr-2 h-3.5 w-3.5" /> : <LockIcon className="mr-2 h-3.5 w-3.5" />}
+              {layer.locked ? "Unlock" : "Lock"}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => canvasStore.focusLayer(layer.id)}>
+              <FocusIcon className="mr-2 h-3.5 w-3.5" />
+              {canvasStore.focusedLayerId === layer.id ? "Exit focus" : "Focus (solo)"}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => canvasStore.duplicateLayer(layer.id)}>
+              <CopyIcon className="mr-2 h-3.5 w-3.5" />
+              Duplicate
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => canvasStore.moveLayerUp(layer.id)} disabled={index === canvasStore.layers.length - 1}>
+              <ChevronUpIcon className="mr-2 h-3.5 w-3.5" />
+              Move up
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => canvasStore.moveLayerDown(layer.id)} disabled={index <= 0}>
+              <ChevronDownIcon className="mr-2 h-3.5 w-3.5" />
+              Move down
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onExpand}>
+              <LayersIcon className="mr-2 h-3.5 w-3.5" />
+              Rename, opacity…
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => canvasStore.clearLayer(layer.id)}
+              disabled={!isDraw || (layer.strokeCount ?? 0) === 0 || layer.locked}
+              className="text-orange-600 focus:text-orange-600"
+            >
+              <EraserIcon className="mr-2 h-3.5 w-3.5" />
+              Clear strokes
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => canvasStore.removeLayer(layer.id)}
+              disabled={canvasStore.layerCount <= 1}
+              className="text-destructive focus:text-destructive"
+            >
+              <TrashIcon className="mr-2 h-3.5 w-3.5" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     );
   },
 );
@@ -49,6 +136,7 @@ export const LayersStrip: React.FC<{ onExpand: () => void }> = observer(({ onExp
           layer={layer}
           active={layer.id === canvasStore.activeLayerId}
           onSelect={() => canvasStore.setActiveLayer(layer.id)}
+          onExpand={onExpand}
         />
       ))}
       {layers.length > 8 && (

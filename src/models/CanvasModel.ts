@@ -1224,8 +1224,14 @@ export const CanvasModel = types
         if (newIndex < 0 || newIndex >= self.layers.length) return;
         if (currentIndex === newIndex) return;
 
-        const [layer] = self.layers.splice(currentIndex, 1);
-        self.layers.splice(newIndex, 0, layer);
+        const lo = Math.min(currentIndex, newIndex);
+        const hi = Math.max(currentIndex, newIndex);
+        const snaps = self.layers.slice(lo, hi + 1).map((l) => getSnapshot(l));
+        if (currentIndex < newIndex) snaps.push(snaps.shift()!);
+        else snaps.unshift(snaps.pop()!);
+        snaps.forEach((s, i) => {
+          self.layers[lo + i] = Layer.create(s as any);
+        });
 
         self.saveToHistory();
       },

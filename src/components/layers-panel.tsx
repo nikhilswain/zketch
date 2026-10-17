@@ -261,6 +261,69 @@ export function useLayerThumbnail(layer: any): string {
   return thumbnail;
 }
 
+export const LAYER_DRAG_TYPE = "application/x-zketch-layer";
+
+let draggingLayerId: string | null = null;
+
+export function useLayerDrag(layerId: string, enabled = true) {
+  const canvasStore = useCanvasStore();
+  const [over, setOver] = useState<"before" | "after" | null>(null);
+
+  const drop = (dragId: string, after: boolean) => {
+    const order = [...canvasStore.layers].reverse().map((l) => l.id).filter((id) => id !== dragId);
+    const at = order.indexOf(layerId);
+    if (at === -1) return;
+    order.splice(after ? at + 1 : at, 0, dragId);
+    canvasStore.moveLayer(dragId, order.length - 1 - order.indexOf(dragId));
+  };
+
+  const props: React.HTMLAttributes<HTMLElement> & { draggable: boolean } = {
+    draggable: enabled,
+    onDragStart: (e) => {
+      if (!enabled) return;
+      e.stopPropagation();
+      e.dataTransfer.setData(LAYER_DRAG_TYPE, layerId);
+      e.dataTransfer.effectAllowed = "move";
+      draggingLayerId = layerId;
+    },
+    onDragEnd: () => {
+      draggingLayerId = null;
+      setOver(null);
+    },
+    onDragOver: (e) => {
+      if (!e.dataTransfer.types.includes(LAYER_DRAG_TYPE)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = "move";
+      if (draggingLayerId === layerId) return setOver(null);
+      const r = e.currentTarget.getBoundingClientRect();
+      setOver(e.clientY < r.top + r.height / 2 ? "before" : "after");
+    },
+    onDragLeave: (e) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(null);
+    },
+    onDrop: (e) => {
+      const id = e.dataTransfer.getData(LAYER_DRAG_TYPE);
+      const after = over === "after";
+      setOver(null);
+      if (!id) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (id !== layerId) drop(id, after);
+    },
+  };
+
+  return { over, props };
+}
+
+export const DropLine: React.FC<{ at: "before" | "after" | null }> = ({ at }) =>
+  at ? (
+    <span
+      aria-hidden="true"
+      className={`pointer-events-none absolute inset-x-1 z-10 h-0.5 rounded bg-zk-accent ${at === "before" ? "-top-px" : "-bottom-px"}`}
+    />
+  ) : null;
+
 const LayerItem: React.FC<LayerItemProps> = observer(
   ({
     layer,
@@ -287,8 +350,10 @@ const LayerItem: React.FC<LayerItemProps> = observer(
     const [editName, setEditName] = useState(layer.name);
     const [showOpacity, setShowOpacity] = useState(false);
     const [showAnimation, setShowAnimation] = useState(false);
+    const [menuOpen, setMenuOpen] = useState(false);
     const canvasStore = useCanvasStore();
     const thumbnail = useLayerThumbnail(layer);
+    const { over, props: dragProps } = useLayerDrag(layer.id, !isEditing);
 
     const handleNameSubmit = () => {
       if (editName.trim()) {
@@ -301,10 +366,16 @@ const LayerItem: React.FC<LayerItemProps> = observer(
 
     return (
       <div
+        {...dragProps}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setMenuOpen(true);
+        }}
         className={`group relative mx-1.5 mb-0.5 flex flex-col rounded-[4px] transition-colors ${
           isActive ? "bg-zk-selected" : "hover:bg-zk-raised"
         } ${!layer.visible ? "opacity-50" : ""}`}
       >
+        <DropLine at={over} />
         {/* Main Layer Row */}
         <div className="flex items-center gap-2 p-2">
           {/* Thumbnail Preview */}
@@ -432,7 +503,7 @@ const LayerItem: React.FC<LayerItemProps> = observer(
             </Button>
 
             {/* More Options */}
-            <DropdownMenu>
+            <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
