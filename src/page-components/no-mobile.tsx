@@ -1,47 +1,28 @@
-import { Monitor, Smartphone, Tablet } from "lucide-react";
-
 const NoMobile = () => {
   return (
-    <div className="min-h-screen bg-background">
-      <div className="flex items-center justify-center min-h-screen px-6">
-        <div className="text-center max-w-lg mx-auto space-y-8">
-          {/* Device Icons */}
-          <div className="flex items-center justify-center gap-8 mb-12">
-            <div className="p-4 rounded-lg bg-surface border border-border">
-              <Tablet className="w-8 h-8 text-primary" />
-            </div>
-            <div className="p-4 rounded-lg bg-surface border border-border">
-              <Monitor className="w-8 h-8 text-primary" />
-            </div>
-          </div>
-
-          {/* Mobile Icon with Strike */}
-          <div className="relative mb-12">
-            <div className="p-4 rounded-lg bg-muted inline-block">
-              <Smartphone className="w-8 h-8 text-muted-foreground" />
-            </div>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-16 h-0.5 bg-destructive rotate-45" />
-            </div>
-          </div>
-
-          {/* Content */}
-          <div className="space-y-6">
-            <h1 className="text-3xl font-medium text-foreground">
-              Desktop & Tablet Only
-            </h1>
-
-            <p className="text-lg text-muted-foreground leading-relaxed">
-              This application is optimized for larger screens and is not
-              available on mobile devices.
-            </p>
-
-            <p className="text-base text-muted-foreground">
-              PS — not supporting mobile is my new time-management hack.
-            </p>
-          </div>
-        </div>
-      </div>
+    <div className="flex min-h-screen flex-col bg-zk-surface font-ui text-zk-text">
+      <header className="flex h-16 shrink-0 items-center gap-2.5 px-6">
+        <span className="flex h-8 w-8 items-center justify-center rounded-[4px] bg-zk-accent font-display text-[17px] font-semibold text-zk-on-accent">
+          Z
+        </span>
+        <span className="font-display text-[20px] font-semibold">Zketch</span>
+      </header>
+      <main className="flex flex-1 flex-col justify-center px-6 pb-16">
+        <svg viewBox="0 0 240 90" className="mb-10 w-56" aria-hidden="true">
+          <rect x="4" y="10" width="132" height="76" rx="4" fill="#202024" />
+          <rect x="150" y="18" width="52" height="68" rx="4" fill="#202024" />
+          <rect x="214" y="44" width="22" height="42" rx="3" fill="#2a2a2f" />
+          <path d="M22 62 C 48 30, 74 76, 118 36" stroke="var(--zk-accent)" strokeWidth="5" fill="none" strokeLinecap="round" />
+          <path d="M160 64 C 170 44, 182 72, 192 46" stroke="var(--zk-accent)" strokeWidth="4" fill="none" strokeLinecap="round" />
+          <path d="M209 40 L240 90" stroke="#6e6d72" strokeWidth="2.5" strokeLinecap="round" />
+        </svg>
+        <h1 className="font-display text-[34px] leading-tight font-semibold">Made for bigger screens</h1>
+        <p className="mt-4 max-w-md text-[15px] leading-relaxed text-zk-text-2">
+          Zketch needs room for the canvas and your brushes, so it runs on desktops and tablets. Open it on a computer or a
+          tablet to start drawing.
+        </p>
+        <p className="mt-6 text-[13px] text-zk-muted">PS: not supporting phones is my new time-management hack.</p>
+      </main>
     </div>
   );
 };
