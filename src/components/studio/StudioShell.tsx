@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useCanvasStore } from "@/hooks/useStores";
 import { PanelLeftOpen, PanelRightOpen } from "lucide-react";
@@ -69,16 +69,22 @@ const StudioShell: React.FC<StudioShellProps> = observer(({ topLeft, topRight, o
   const leftClosedOthers = !leftVisible && leftIds.some((id) => id !== "layers");
   const rightClosedOthers = !rightVisible && rightIds.some((id) => id !== "layers");
 
+  const syncLeft = () => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const left = el.getBoundingClientRect().left;
+    if (lastLeft.current !== null && left !== lastLeft.current) {
+      canvasStore.setPan(canvasStore.panX - (left - lastLeft.current), canvasStore.panY);
+    }
+    lastLeft.current = left;
+  };
+
+  useLayoutEffect(syncLeft);
+
   useEffect(() => {
     const el = viewportRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => {
-      const left = el.getBoundingClientRect().left;
-      if (lastLeft.current !== null && left !== lastLeft.current) {
-        canvasStore.setPan(canvasStore.panX - (left - lastLeft.current), canvasStore.panY);
-      }
-      lastLeft.current = left;
-    });
+    const observer = new ResizeObserver(() => syncLeft());
     observer.observe(el);
     return () => observer.disconnect();
   }, [canvasStore]);
@@ -105,18 +111,18 @@ const StudioShell: React.FC<StudioShellProps> = observer(({ topLeft, topRight, o
         <div ref={viewportRef} data-canvas-viewport className="relative min-w-0 flex-1 overflow-hidden">
           {children}
           {overlay && leftVisible && (
-            <div className="absolute inset-y-0 left-0 z-20">
+            <div className="absolute top-14 bottom-0 left-0 z-20">
               <DockArea dock="left" overlay />
             </div>
           )}
           {overlay && rightVisible && (
-            <div className="absolute inset-y-0 right-0 z-20">
+            <div className="absolute top-14 bottom-0 right-0 z-20">
               <DockArea dock="right" overlay />
             </div>
           )}
           {overlay && deckVisible && (
             <div className="absolute inset-x-0 bottom-0 z-20 shadow-[0_-12px_40px_rgba(0,0,0,0.35)]">
-              <DockArea dock="bottom" />
+              <DockArea dock="bottom" overlay />
             </div>
           )}
           <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex items-start justify-between gap-3">

@@ -170,13 +170,13 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
               className="h-6 w-[68px] object-contain"
               style={{ filter: "invert(0.92)" }}
             />
-            <span className="max-w-[110px] truncate text-[13px] font-medium">{brush?.label ?? brushKey}</span>
+            <span className="hidden max-w-[110px] truncate text-[13px] font-medium min-[900px]:inline">{brush?.label ?? brushKey}</span>
             <ChevronUp className="h-3 w-3 text-zk-muted" />
           </button>
           {popover && <BrushPopover onClose={() => setPopover(false)} />}
           {drawing && (
             <>
-              <div className="w-[136px]">
+              <div className="w-[112px] min-[900px]:w-[136px]">
                 <StrokeTrack
                   dense
                   kind="size"
@@ -189,7 +189,7 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
                   onChange={(v) => canvasStore.setPenSize(v)}
                 />
               </div>
-              <div className="w-[136px]">
+              <div className="w-[112px] min-[900px]:w-[136px]">
                 <StrokeTrack
                   dense
                   kind="opacity"

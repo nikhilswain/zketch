@@ -123,7 +123,11 @@ export class CanvasEngine {
     this.resize();
     window.addEventListener("resize", this.resize);
     if (typeof ResizeObserver !== "undefined") {
-      this.resizeObserver = new ResizeObserver(() => this.resize());
+      this.resizeObserver = new ResizeObserver(() => {
+        this.resize();
+        this.render();
+        this.invalid = false;
+      });
       this.resizeObserver.observe(this.root);
     }
     this.loop();

@@ -14,7 +14,7 @@ import { PANELS } from "./panels";
 import { PANEL_DRAG_TYPE, PanelVariantContext } from "./PanelFrame";
 
 const DECK_WIDTHS: Record<PanelId, string> = {
-  brushes: "flex-1 min-w-[420px]",
+  brushes: "flex-1 min-w-[300px]",
   presets: "w-[244px]",
   stroke: "w-[264px]",
   colour: "w-[284px]",
@@ -49,7 +49,10 @@ const DockArea: React.FC<{ dock: DockId; overlay?: boolean }> = observer(({ dock
     setDropAt(null);
     if (!id || !(id in dockLayout.state.panels) || !ref.current) return;
     e.preventDefault();
-    movePanel(id, dock, dropIndex(ref.current, dock, e.clientX, e.clientY));
+    let index = dropIndex(ref.current, dock, e.clientX, e.clientY);
+    const current = ids.indexOf(id);
+    if (current !== -1 && current < index) index -= 1;
+    movePanel(id, dock, index);
   };
 
   const indicator = (i: number) =>
@@ -75,7 +78,7 @@ const DockArea: React.FC<{ dock: DockId; overlay?: boolean }> = observer(({ dock
             ? `flex h-full w-[300px] shrink-0 flex-col overflow-y-auto bg-zk-surface text-zk-text ${
                 dock === "left" ? "border-r" : "border-l"
               } border-zk-hairline ${overlay ? "shadow-[0_0_40px_rgba(0,0,0,0.35)]" : ""}`
-            : "flex h-[212px] shrink-0 border-t border-zk-hairline bg-zk-surface text-zk-text"
+            : "flex h-[212px] shrink-0 overflow-x-auto border-t border-zk-hairline bg-zk-surface text-zk-text"
         }
       >
         {side && (
@@ -92,14 +95,14 @@ const DockArea: React.FC<{ dock: DockId; overlay?: boolean }> = observer(({ dock
         {ids.map((id, i) => {
           const { Component } = PANELS[id];
           return (
-            <div key={id} className={side ? "contents" : "contents"}>
+            <div key={id} className="contents">
               {indicator(i)}
               <div
                 data-panel-slot
                 className={
                   side
                     ? "border-b border-zk-hairline pb-1 last:border-b-0"
-                    : `h-full border-r border-zk-hairline last:border-r-0 ${DECK_WIDTHS[id]}`
+                    : `h-full shrink-0 border-r border-zk-hairline last:border-r-0 ${DECK_WIDTHS[id]}`
                 }
               >
                 <Component />
