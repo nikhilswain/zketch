@@ -29,8 +29,9 @@ import { toast } from "sonner";
 import type { StrokeLike } from "@/engine";
 import type { PlaybackState } from "@/engine/AnimationPlaybackEngine";
 import { reaction } from "mobx";
-import { effectiveExportScale, newPage } from "@/utils/page";
+import { effectiveExportScale, newPage, resizePage } from "@/utils/page";
 import { fitViewToPage } from "@/utils/viewport";
+import PageSizeDialog from "./PageSizeDialog";
 
 interface CanvasViewProps {
   editingDrawingId: string | null;
@@ -50,6 +51,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     const isDrawingMode = canvasStore.activeTool !== "pan";
     const [showExportDialog, setShowExportDialog] = useState(false);
     const [showImportDialog, setShowImportDialog] = useState(false);
+    const [showPageSize, setShowPageSize] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [showClearModal, setShowClearModal] = useState(false);
     // Track the current drawing ID (may differ from prop after first save of new drawing)
@@ -503,6 +505,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               onExport={handleShowExportDialog}
               onClear={handleClear}
               onOpenSettings={() => setShowSettings(true)}
+              onPageSize={() => setShowPageSize(true)}
             />
           }
           topRight={<TopRightBlock onShare={handleShowExportDialog} />}
@@ -557,6 +560,20 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         />
 
         {showSettings && <SettingsPage onClose={() => setShowSettings(false)} />}
+
+        {canvasStore.page && (
+          <PageSizeDialog
+            open={showPageSize}
+            onOpenChange={setShowPageSize}
+            page={{ ...canvasStore.page }}
+            onApply={(width, height) => {
+              const p = canvasStore.page;
+              if (!p) return;
+              canvasStore.setPage(resizePage({ x: p.x, y: p.y, width: p.width, height: p.height }, width, height));
+              requestAnimationFrame(() => fitViewToPage(canvasStore));
+            }}
+          />
+        )}
 
         <ImportDialog
           isOpen={showImportDialog}

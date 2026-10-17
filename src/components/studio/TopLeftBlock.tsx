@@ -25,6 +25,7 @@ interface TopLeftBlockProps {
   onExport: () => void;
   onClear: () => void;
   onOpenSettings: () => void;
+  onPageSize?: () => void;
 }
 
 const BACKGROUNDS = [
@@ -52,7 +53,7 @@ const Tick: React.FC<{ on: boolean }> = ({ on }) => (
 );
 
 const TopLeftBlock: React.FC<TopLeftBlockProps> = observer(
-  ({ drawingName, onNameChange, onNameCommit, saveStatus, onBack, onImport, onExport, onClear, onOpenSettings }) => {
+  ({ drawingName, onNameChange, onNameCommit, saveStatus, onBack, onImport, onExport, onClear, onOpenSettings, onPageSize }) => {
     const canvasStore = useCanvasStore();
     const settingsStore = useSettingsStore();
     const inputRef = useRef<HTMLInputElement>(null);
@@ -90,6 +91,7 @@ const TopLeftBlock: React.FC<TopLeftBlockProps> = observer(
                 ))}
               </DropdownMenuSubContent>
             </DropdownMenuSub>
+            {canvasStore.page && onPageSize && <DropdownMenuItem onClick={onPageSize}>Page size…</DropdownMenuItem>}
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>Touch &amp; stylus</DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
