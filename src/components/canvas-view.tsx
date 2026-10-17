@@ -429,7 +429,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         ExportService.downloadFile(dataUrl, filename);
       } catch (error) {
         console.error("Export failed:", error);
-        alert("Export failed. Please try again.");
+        toast.error("Export failed. Please try again.");
       }
     };
 
