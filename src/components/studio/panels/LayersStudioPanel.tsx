@@ -11,6 +11,7 @@ import {
   FocusIcon,
   LayersIcon,
   LockIcon,
+  PlusIcon,
   TrashIcon,
   UnlockIcon,
 } from "@/components/icons";
@@ -160,6 +161,14 @@ export const LayersStrip: React.FC<{ onExpand: () => void }> = observer(({ onExp
       {layers.length > 8 && (
         <span className="text-[10px] text-zk-muted">+{layers.length - 8}</span>
       )}
+      <button
+        onClick={() => canvasStore.addLayer()}
+        aria-label="Add layer"
+        title="Add layer"
+        className="flex h-[30px] w-11 items-center justify-center rounded-[3px] border border-dashed border-[#4A4A50] text-zk-muted hover:border-zk-text-2 hover:text-zk-text"
+      >
+        <PlusIcon size={14} />
+      </button>
     </div>
   );
 });
