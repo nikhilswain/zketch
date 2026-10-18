@@ -1030,6 +1030,21 @@ export const CanvasModel = types
         return { layerId: layer.id, elementId: data.id as string, createdLayer: created };
       },
 
+      editLabel(containerId: string) {
+        const found = (self as any).findElementById(containerId) as { layer: IDrawLayer; element: any } | null;
+        if (!found) return;
+        const kind = elementKind(found.element);
+        if (kind !== "shape" && kind !== "arrow") return;
+        const existing = (found.layer.elements as any[]).find(
+          (e) => elementKind(e) === "text" && e.containerId === containerId,
+        );
+        if (existing) {
+          self.editingTextId = existing.id;
+          return;
+        }
+        (self as any).addText(0, 0, { containerId, layerId: found.layer.id });
+      },
+
       commitTextEdit(id: string, text: string) {
         self.editingTextId = null;
         const found = (self as any).findElementById(id) as { layer: IDrawLayer; element: any } | null;

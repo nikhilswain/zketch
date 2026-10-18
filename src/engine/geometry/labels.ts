@@ -6,6 +6,8 @@ import { layoutText, type Measure, type TextLayout } from "./textLayout";
 
 export const LABEL_PADDING = 8;
 
+const USABLE_WIDTH: Record<string, number> = { rectangle: 1, circle: 0.72, diamond: 0.55, triangle: 0.55 };
+
 export interface TextPlacement {
   box: Box;
   maxWidth: number | null;
@@ -20,10 +22,15 @@ export function labelPlacement(
 ): TextPlacement | null {
   const kind = elementKind(container);
   if (kind === "shape") {
-    const sb = shapeBox(container as ShapeElementLike);
-    const maxWidth = Math.max(20, sb.width - LABEL_PADDING * 2);
+    const shape = container as ShapeElementLike;
+    const sb = shapeBox(shape);
+    const fit = USABLE_WIDTH[shape.shapeType] ?? 1;
+    const maxWidth = Math.max(20, sb.width * fit - LABEL_PADDING * 2);
     const layout = layoutText(label.text, label.fontSize, label.fontFamily, maxWidth, measure);
-    const c = boxCenter(sb);
+    const center = boxCenter(sb);
+    const drop = shape.shapeType === "triangle" ? sb.height / 6 : 0;
+    const a = (sb.rotation * Math.PI) / 180;
+    const c = { x: center.x - Math.sin(a) * drop, y: center.y + Math.cos(a) * drop };
     return {
       box: { x: c.x - maxWidth / 2, y: c.y - layout.height / 2, width: maxWidth, height: layout.height, rotation: sb.rotation },
       maxWidth,

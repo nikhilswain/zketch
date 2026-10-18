@@ -803,21 +803,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             const shift = shiftDownRef.current;
             const doubleTap = isDoubleTap(pt.x, pt.y);
 
-            if (doubleTap && !shift) {
-              const hit = hitTestSelectableLayers(canvasPoint.x, canvasPoint.y);
-              const target = hit?.elementId ? canvasStore.findElementById(hit.elementId) : null;
-              const kind = target ? elementKind(target.element) : null;
-              if (target && kind === "text") {
-                canvasStore.selectElement(target.layer.id, target.element.id);
-                canvasStore.setEditingText(target.element.id);
-                return;
-              }
-              if (!hit) {
-                canvasStore.addText(canvasPoint.x, canvasPoint.y - (canvasStore.textFontSize * LINE_HEIGHT) / 2);
-                return;
-              }
-            }
-
             const arrow = selectedArrow();
             if (arrow && !shift) {
               const lookup = buildElementLookup(canvasStore.layers as any);
@@ -830,6 +815,26 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               if (handle) {
                 arrowEditRef.current = { handle, moved: false };
                 drawingStartedRef.current = true;
+                return;
+              }
+            }
+
+            if (doubleTap && !shift) {
+              const hit = hitTestSelectableLayers(canvasPoint.x, canvasPoint.y);
+              const target = hit?.elementId ? canvasStore.findElementById(hit.elementId) : null;
+              const kind = target ? elementKind(target.element) : null;
+              if (target && kind === "text") {
+                canvasStore.selectElement(target.layer.id, target.element.id);
+                canvasStore.setEditingText(target.element.id);
+                return;
+              }
+              if (target && (kind === "shape" || kind === "arrow")) {
+                canvasStore.selectElement(target.layer.id, target.element.id);
+                canvasStore.editLabel(target.element.id);
+                return;
+              }
+              if (!hit) {
+                canvasStore.addText(canvasPoint.x, canvasPoint.y - (canvasStore.textFontSize * LINE_HEIGHT) / 2);
                 return;
               }
             }
@@ -1022,6 +1027,10 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             const target = hit?.elementId ? canvasStore.findElementById(hit.elementId) : null;
             if (target && elementKind(target.element) === "text") {
               canvasStore.setEditingText(target.element.id);
+              return;
+            }
+            if (target && (elementKind(target.element) === "shape" || elementKind(target.element) === "arrow")) {
+              canvasStore.editLabel(target.element.id);
               return;
             }
             canvasStore.addText(canvasPoint.x, canvasPoint.y - (canvasStore.textFontSize * LINE_HEIGHT) / 2);
