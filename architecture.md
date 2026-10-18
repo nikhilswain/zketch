@@ -188,26 +188,31 @@ Per frame (`render()`):
      set, and the view it was baked at). The content key is the layer's
      `elements` snapshot array (MST snapshots are structurally shared, so it
      keeps its identity until that layer changes) or, for image layers, a
-     string of blob/geometry/loaded state. A layer re-bakes only when its own
-     key or the pending-erase set changes, or it is animating. If exactly one
-     element was appended (same view, prefix identical, and not a stroke
-     landing under existing shapes), only that element is drawn onto the
-     cached canvas. When only the view changes, the cached bitmap is composited with the view delta while
+     string of blob/geometry/loaded state. A layer re-bakes when its own key,
+     the pending-erase set, the element hidden for text editing, or any element
+     its arrows are bound to (`deps`, which may live on other layers) changes,
+     when web fonts finish loading, or while it is animating. If exactly one
+     element was appended (same view, prefix identical), only that element is
+     drawn onto the cached canvas. When only the view changes, the cached bitmap is composited with the view delta while
      a gesture is in progress (view changed < 150 ms ago) and the bitmap still
      covers the viewport (scale delta 0.5–3×); a crisp re-bake runs once the
      gesture settles (`settleTimer`) or coverage runs out. Live preview frames
      never re-bake committed strokes.
-   - Preview stroke (`setPreviewStroke`) and preview shape (`setPreviewShape`)
-     are drawn last, on top.
-3. `renderOverlay()` — selection outlines, transform handles, marquee, and the
-   eraser circle cursor.
+   - Preview stroke, shape and arrow (`setPreviewStroke/Shape/Arrow`) are drawn
+     last, on top.
+3. `renderOverlay()` — selection outlines, transform handles (arrow handles for a
+   single arrow: both ends and the middle), marquee, bind highlight
+   (`setBindHighlight`) and the eraser circle cursor.
 
-`renderLayer()` for a **draw layer** does a two-pass bake:
-1. All **strokes** first (raster). Eraser strokes switch the context to
-   `globalCompositeOperation = "destination-out"` so they punch holes in that
-   layer only.
-2. All **shape elements** afterwards as vectors (`renderShape` + `traceShape` from
-   `engine/render/`, supporting rounded rect / ellipse / diamond / triangle).
+`renderLayer()` for a **draw layer** calls `renderDrawLayer` (`engine/render/`),
+the one renderer every consumer shares (engine, `ExportService` page and
+infinite paths, `ThumbnailService`, layer thumbnails). It draws every element
+**in array order** (one stacking order, newest on top): strokes via
+`renderStroke` (eraser strokes use `destination-out` and cut whatever lies under
+them on that layer, shapes included), shapes via `renderShape`, arrows via
+`renderArrow`, free text via `renderText`, and each label right after its
+container. `buildElementLookup(layers)` gives arrows and labels an id → element
+map across all layers.
 
 > **Key rule:** erasers are just strokes with `brushStyle: "eraser"`. The engine
 > renders them with the `ink` brush but forces `taperStart/End = 0` and
@@ -387,12 +392,45 @@ emits `onFrame(info, visibleStrokes)`. Shapes are not animated (they stay static
 
 ---
 
+### 4.6 Diagrams: geometry, arrows, text
+
+- `engine/geometry/` is pure (no DOM): `textLayout` (`FONT_STACKS`,
+  `fontString`, `layoutText` with a passed-in `measure`), `outline` (rotated
+  boxes, `outlinePoint` = where a ray to an element's centre meets its outline
+  plus a gap), `arrow` (`resolveArrow`: bound ends aim at the element centre,
+  `bend` becomes a quadratic curve through the middle handle; sampling,
+  distance, sub-curves, arrowheads), `labels` (`labelPlacement` /
+  `textPlacement`: labels wrap inside shapes, sit horizontally on arrows).
+- Arrow ends resolve **at render time**, so they follow a dragged shape every
+  frame; `CanvasModel.syncArrows()` runs at the start of every `saveToHistory`,
+  writes resolved ends back, frees bindings to missing elements and deletes
+  orphaned labels.
+- Fonts: Kalam and JetBrains Mono load with the UI fonts from Google Fonts.
+  `render/fonts.ts` caches `measureText`, requests fonts on first use and
+  re-bakes on `document.fonts` `loadingdone`; export and thumbnails await
+  `ensureFonts` (3 s cap) first.
+- Sketchy look: `render/sketchy.ts` draws `roughjs` generator ops directly on the
+  context, seeded per element and cached per snapshot.
+- Text editing: `components/TextEditorOverlay.tsx` is a textarea laid over the
+  canvas (a sibling of the canvas root) at the element's screen box; the engine
+  hides that element while `CanvasModel.editingTextId` is set. Empty commits
+  delete; one history entry per edit.
+
 ## 5. Data models (`src/models/`)
 
 ### 5.1 Layer model (`LayerModel.ts`)
 
-- `Element` MST union dispatches by presence of `shapeType` → `ShapeElement`,
-  else `Stroke`.
+- `Element` MST union dispatches through `elementKind` (`engine/types.ts`):
+  `kind: "arrow"` → `ArrowElement`, `kind: "text"` → `TextElement`, `shapeType`
+  present → `ShapeElement`, else `Stroke`. Every consumer asks `elementKind` /
+  `isStrokeElement` / `isShapeElement` / `isVectorElement`, never `"shapeType" in`.
+- `ArrowElement` (`ArrowElementModel.ts`): `start`/`end` (last resolved ends),
+  `bend` (midpoint offset / chord length), `startBinding`/`endBinding`
+  (`{elementId}` of a shape or free text on any layer), heads, stroke, `look`,
+  `seed`. `TextElement` (`TextElementModel.ts`): `x`, `y`, `text`, `fontFamily`
+  (hand / sans / mono), `fontSize`, `align`, `color`, `rotation`, `containerId`
+  (set for labels); `width`/`height` are measured views and `setSize` scales the
+  font. `ShapeElement` gains `look` (clean / sketchy) and `seed`.
 - `DrawLayer` = `{ id, name, visible, locked, opacity, type:"draw",
   elements: Element[] }`. Views: `strokeElements`, `shapeElements`,
   `findElement`, `strokeCount`, `shapeCount`. Actions: add/remove/clear
@@ -456,6 +494,12 @@ Important actions (grouped):
 - **Eraser pending deletes**: `markPendingErase`, `clearPendingErase`,
   `commitPendingErase`.
 - **Delete**: `removeElement`, `removeSelectedElements`.
+- **Diagrams**: `addArrow`, `addText`, `editLabel`, `commitTextEdit`,
+  `duplicateSelection` (Ctrl+D; labels travel with containers, bindings inside the
+  copied set are remapped), `reorderSelection("front" | "back")`,
+  `targetDrawLayer(fallback)` (Simple: falls back to the topmost usable draw
+  layer or makes one). Tool defaults: `arrowKind`, heads, `arrowStrokeWidth`,
+  `elementLook` (first-time default sketchy), text family / size / align.
 
 ### 5.3 `VaultModel.ts`
 
@@ -475,7 +519,7 @@ drawings need no migration).
 Persisted to `localStorage` key `drawing-app-settings`: defaults (pen size,
 brush, color, background), export settings (format/quality/transparent/scale),
 UI prefs (autoHideDock/delay/showGrid/snapToGrid), `touchMode`,
-`eraserWholeStroke`, `accent`, `surround` (`light` default / `dark`, the
+`eraserMode`, `accent`, `surround` (`light` default / `dark`, the
 workspace tone around fixed pages).
 
 ---
@@ -537,6 +581,15 @@ Persistence layers:
     overlay it and close on pointer-down on `[data-canvas-root]`.
     Shows the layers strip when the Layers dock is closed and reopen tabs for
     closed sidebars.
+  - **Simple layout** (`layout: "simple"`): no docks, bar or layers strip.
+    `SimpleToolbar` (top centre; keys 1 Select, 2 Rectangle, 3 Diamond,
+    4 Ellipse, 5 Arrow, 6 Line, 7 Pen, 8 Text, 0 Eraser, H Hand, handled in
+    `useKeyboardShortcuts`), `PropertiesCard` (left, only with a tool or a
+    selection) and `ZoomCluster` (bottom left).
+  - `ElementProperties` — one properties body for the Simple card and the
+    Properties panel (formerly Shapes): stroke, fill, width, look, corners,
+    arrowheads, font, size, align, opacity, front/back, duplicate, delete; each
+    change is one undo step.
   - `TopLeftBlock` (back to vault; Z menu: rename, vault, import, export, background, page
     size… for fixed drawings (`PageSizeDialog`, resize around the centre then
     refit), touch & stylus, layout; name input; save status), `TopRightBlock` (undo,
@@ -708,18 +761,21 @@ Ctrl+S save · Ctrl+E export · Ctrl+N new · Ctrl+V vault · B/W/R colors ·
 
 ### 11.2 Eraser
 
-Two modes (Settings → `eraserWholeStroke`, toggled in the bottom bar while erasing):
+Three modes (`SettingsModel.eraserMode`; picked with `EraserModePicker` in the
+bottom bar, the Simple card and Settings):
 
-- **Pixel (default, off)** — eraser is committed as a stroke with
-  `brushStyle:"eraser"`; engine renders it `destination-out` on the layer.
-  Shapes and (in whole-stroke mode) strokes the circular cursor passes over are
-  added to `pendingEraserDeletes` → rendered at 25% alpha; on pointer-up
-  `commitPendingErase()` splices them (one history entry). Note: even in pixel
-  mode, **shapes** are fade-deleted (they aren't erased by destination-out).
-- **Whole-stroke (on)** — no eraser stroke is committed; everything hovered
-  fades and is deleted on release.
+- **Whole elements (`element`, default)** — no eraser stroke is committed;
+  anything the cursor touches on the active layer (strokes by segment distance,
+  shapes and text by rotated box, arrows by curve distance) is added to
+  `pendingEraserDeletes` → rendered at 25% alpha; on pointer-up
+  `commitPendingErase()` splices them (one history entry).
+- **Pixels (`pixel`)** — the eraser is committed as a stroke with
+  `brushStyle:"eraser"`; `destination-out` cuts whatever lies under it on that
+  layer, shapes included.
+- **Smart (`smart`)** — the eraser stroke cuts brush strokes like Pixels, and
+  shapes, arrows and free text it touches are fade-deleted whole.
 
-The eraser preview stroke is suppressed in whole-stroke mode (the fade is the
+The eraser preview stroke is suppressed in Whole elements mode (the fade is the
 feedback). The circular cursor overlay is drawn only when
 `activeTool==="brush" && currentBrushStyle==="eraser" && !space && !locked`.
 
@@ -783,7 +839,7 @@ While animating, `canvasLocked` blocks all drawing/import.
 | Add a brush | implement in `engine/brushes/*`, register in `BrushRegistry.registerDefaultBrushes()`, add the key to `BRUSH_STYLES` (`engine/types.ts`), set `category`, `strokeSettings` (and `strokeDefaults` if not neutral), run `npm run brushes:previews`. Export/thumbnail parity is automatic. |
 | Add a shape kind | `ShapeLayerModel.ts` enum + factory, `CanvasModel` state, `CanvasEngine.tracePath`, `ExportService.traceShape`, `ThumbnailService.renderShape`, `layers-panel` thumbnail, dock picker |
 | Change selection/transform behavior | `drawing-canvas.tsx` (group refs + handlers) + `CanvasModel` selection actions + `TransformController` |
-| Change eraser behavior | `drawing-canvas.tsx` (pending scan), `CanvasEngine.renderStroke`, `CanvasModel.commitPendingErase`, `SettingsModel.eraserWholeStroke` |
+| Change eraser behavior | `drawing-canvas.tsx` (pending scan), `CanvasEngine.renderStroke`, `CanvasModel.commitPendingErase`, `SettingsModel.eraserMode` |
 | Persistence format change | `VaultModel` interfaces, `CanvasModel.loadLayers` migration, `canvas-view.performSave`, `DexieService` version bump |
 | Export format/parity | `ExportService`, `ThumbnailService`, `export-dialog.tsx` |
 | Keyboard shortcut | `utils/keyBindings.ts` + `hooks/useKeyboardShortcuts.ts` |
