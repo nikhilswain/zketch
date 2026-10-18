@@ -78,7 +78,11 @@ export function renderArrow(
   if (labelBox) clipOutBox(ctx, labelBox);
   const body = arrowBody(a, r);
   if (drawBody) drawBody(ctx, body);
-  else if (a.look === "sketchy") drawSketchyCurve(ctx, a, body, a.seed, a.strokeColor, a.strokeWidth);
+  else if (a.look === "sketchy")
+    drawSketchyCurve(ctx, a, body, a.seed, a.strokeColor, a.strokeWidth, {
+      startCapped: a.startHead !== "none",
+      endCapped: a.endHead !== "none",
+    });
   else {
     ctx.beginPath();
     traceCurve(ctx, body);

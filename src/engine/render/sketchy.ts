@@ -5,85 +5,82 @@ import { brushRegistry } from "./BrushRegistry";
 import { renderStroke } from "./renderStroke";
 import { seededRandom } from "./seededRandom";
 
-const STEP = 5;
+const STEP = 4;
 
-type Line = { points: Vec[]; pressures: number[]; closed: boolean };
+type Line = { points: Vec[]; pressures: number[]; taperStart: number; taperEnd: number };
 
-const shapeCache = new WeakMap<object, { key: string; line: Line }>();
+const shapeCache = new WeakMap<object, { key: string; lines: Line[]; fill: Vec[] }>();
 const curveCache = new WeakMap<object, { key: string; line: Line }>();
 
 function rng(seed: number) {
-  let n = (seed % 2147483647) || 1;
+  let n = (Math.abs(Math.floor(seed)) % 2147483647) || 1;
   return () => seededRandom(n++);
 }
 
-function waves(seed: number) {
+function bowed(a: Vec, b: Vec, bow: number): Vec[] {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len;
+  const ny = dx / len;
+  const n = Math.max(2, Math.ceil(len / STEP));
+  return Array.from({ length: n + 1 }, (_, i) => {
+    const t = i / n;
+    const off = bow * Math.sin(Math.PI * t);
+    return { x: a.x + dx * t + nx * off, y: a.y + dy * t + ny * off };
+  });
+}
+
+function pressureProfile(count: number, r: () => number) {
+  const tilt = (r() - 0.5) * 0.08;
+  return Array.from({ length: count }, (_, i) => {
+    const t = count > 1 ? i / (count - 1) : 0;
+    return 0.47 + 0.08 * Math.sin(Math.PI * t) + tilt * (t - 0.5);
+  });
+}
+
+function edgeStrokes(corners: Vec[], width: number, seed: number): Line[] {
   const r = rng(seed);
-  return [2, 3, 5].map((k) => ({ k, phase: r() * Math.PI * 2, amp: (0.55 + r() * 0.45) / Math.sqrt(k) }));
+  const n = corners.length;
+  const over = 3 + width * 0.8;
+  return corners.map((a, i) => {
+    const b = corners[(i + 1) % n];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len;
+    const uy = dy / len;
+    const jitter = () => (r() - 0.5) * 1.6;
+    const ea = over * (0.4 + r() * 0.6);
+    const eb = over * (0.4 + r() * 0.6);
+    const sa = { x: a.x - ux * ea + jitter(), y: a.y - uy * ea + jitter() };
+    const sb = { x: b.x + ux * eb + jitter(), y: b.y + uy * eb + jitter() };
+    const bow = (r() < 0.5 ? -1 : 1) * Math.min(len * 0.012, 3) * (0.5 + r() * 0.5);
+    const points = bowed(sa, sb, bow);
+    return { points, pressures: pressureProfile(points.length, r), taperStart: width * 1.2, taperEnd: width * 1.6 };
+  });
 }
 
-function wave(ws: { k: number; phase: number; amp: number }[], u: number) {
-  return ws.reduce((sum, w) => sum + w.amp * Math.sin(Math.PI * 2 * w.k * u + w.phase), 0);
+function ellipseStroke(s: ShapeElementLike, width: number): Line {
+  const r = rng(s.seed ?? 1);
+  const cx = s.x + s.width / 2;
+  const cy = s.y + s.height / 2;
+  const rx = s.width / 2;
+  const ry = s.height / 2;
+  const start = -Math.PI / 2 - 0.6 + r() * 1.2;
+  const sweep = Math.PI * 2 + 0.25 + r() * 0.2;
+  const shrink = 0.025 + r() * 0.02;
+  const n = Math.max(40, Math.round((Math.PI * (rx + ry)) / STEP));
+  const points = Array.from({ length: n + 1 }, (_, i) => {
+    const t = i / n;
+    const a = start + sweep * t;
+    const k = 1 + shrink * 0.5 - shrink * t;
+    return { x: cx + Math.cos(a) * rx * k, y: cy + Math.sin(a) * ry * k };
+  });
+  return { points, pressures: pressureProfile(points.length, r), taperStart: width * 1.2, taperEnd: width * 2 };
 }
 
-function lengthOf(points: Vec[], closed: boolean) {
-  let len = 0;
-  for (let i = 1; i < points.length; i++) len += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
-  if (closed && points.length > 1) {
-    const a = points[points.length - 1];
-    len += Math.hypot(points[0].x - a.x, points[0].y - a.y);
-  }
-  return len;
-}
-
-function resample(points: Vec[], closed: boolean): Vec[] {
-  const src = closed ? [...points, points[0]] : points;
-  const out: Vec[] = [src[0]];
-  for (let i = 1; i < src.length; i++) {
-    const a = src[i - 1];
-    const b = src[i];
-    const d = Math.hypot(b.x - a.x, b.y - a.y);
-    const n = Math.max(1, Math.ceil(d / STEP));
-    for (let j = 1; j <= n; j++) out.push({ x: a.x + ((b.x - a.x) * j) / n, y: a.y + ((b.y - a.y) * j) / n });
-  }
-  if (closed) out.pop();
-  return out;
-}
-
-function wobble(points: Vec[], closed: boolean, seed: number, amplitude: number): Line {
-  const pts = resample(points, closed);
-  const total = lengthOf(pts, closed) || 1;
-  const shape = waves(seed);
-  const press = waves(seed + 7);
-  const out: Vec[] = [];
-  const pressures: number[] = [];
-  let s = 0;
-  for (let i = 0; i < pts.length; i++) {
-    if (i > 0) s += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
-    const u = s / total;
-    const prev = pts[i === 0 ? (closed ? pts.length - 1 : 0) : i - 1];
-    const next = pts[i === pts.length - 1 ? (closed ? 0 : i) : i + 1];
-    const tx = next.x - prev.x;
-    const ty = next.y - prev.y;
-    const tl = Math.hypot(tx, ty) || 1;
-    const envelope = closed ? 1 : Math.sin(Math.PI * u);
-    const d = amplitude * envelope * wave(shape, u);
-    out.push({ x: pts[i].x - (ty / tl) * d, y: pts[i].y + (tx / tl) * d });
-    pressures.push(0.5 + 0.09 * wave(press, u));
-  }
-  return { points: out, pressures, closed };
-}
-
-function roundedRect(x: number, y: number, w: number, h: number, r: number): Vec[] {
-  const k = Math.max(0, Math.min(r, w / 2, h / 2));
-  if (k < 0.5) {
-    return [
-      { x, y },
-      { x: x + w, y },
-      { x: x + w, y: y + h },
-      { x, y: y + h },
-    ];
-  }
+function roundedRect(x: number, y: number, w: number, h: number, k: number): Vec[] {
   const corner = (cx: number, cy: number, from: number) =>
     Array.from({ length: 7 }, (_, i) => {
       const a = from + (i / 6) * (Math.PI / 2);
@@ -97,78 +94,66 @@ function roundedRect(x: number, y: number, w: number, h: number, r: number): Vec
   ];
 }
 
-function roundedPolygon(corners: Vec[], radius: number): Vec[] {
-  const n = corners.length;
-  const out: Vec[] = [];
-  for (let i = 0; i < n; i++) {
-    const prev = corners[(i + n - 1) % n];
-    const cur = corners[i];
-    const next = corners[(i + 1) % n];
-    const lp = Math.hypot(prev.x - cur.x, prev.y - cur.y);
-    const ln = Math.hypot(next.x - cur.x, next.y - cur.y);
-    const r = Math.min(radius, lp / 3, ln / 3);
-    const a = { x: cur.x + ((prev.x - cur.x) / lp) * r, y: cur.y + ((prev.y - cur.y) / lp) * r };
-    const b = { x: cur.x + ((next.x - cur.x) / ln) * r, y: cur.y + ((next.y - cur.y) / ln) * r };
-    for (let j = 0; j <= 4; j++) {
-      const t = j / 4;
-      const u = 1 - t;
-      out.push({ x: u * u * a.x + 2 * u * t * cur.x + t * t * b.x, y: u * u * a.y + 2 * u * t * cur.y + t * t * b.y });
-    }
+function roundedRectStroke(s: ShapeElementLike, k: number, width: number): Line {
+  const r = rng(s.seed ?? 1);
+  const loop = roundedRect(s.x, s.y, s.width, s.height, k);
+  const dense: Vec[] = [];
+  for (let i = 0; i < loop.length; i++) {
+    dense.push(...bowed(loop[i], loop[(i + 1) % loop.length], 0).slice(0, -1));
   }
-  const seam = { x: (out[4].x + out[5].x) / 2, y: (out[4].y + out[5].y) / 2 };
-  return [seam, ...out.slice(5), ...out.slice(0, 5)];
+  const extra = Math.max(4, Math.round(dense.length * 0.04));
+  const drift = 1 + width * 0.25;
+  const points = [...dense, ...dense.slice(0, extra).map((p, i) => ({ x: p.x, y: p.y + (drift * (i + 1)) / extra }))];
+  return { points, pressures: pressureProfile(points.length, r), taperStart: width * 1.2, taperEnd: width * 2 };
 }
 
-function shapeOutline(s: ShapeElementLike): Vec[] {
+function polygonFor(s: ShapeElementLike): Vec[] {
   const { x, y, width: w, height: h } = s;
-  switch (s.shapeType) {
-    case "circle": {
-      const n = Math.max(32, Math.round((Math.PI * (w + h)) / 2 / STEP));
-      return Array.from({ length: n }, (_, i) => {
-        const a = (i / n) * Math.PI * 2 - Math.PI / 2;
-        return { x: x + w / 2 + (Math.cos(a) * w) / 2, y: y + h / 2 + (Math.sin(a) * h) / 2 };
-      });
-    }
-    case "diamond":
-      return roundedPolygon(
-        [
-          { x: x + w / 2, y },
-          { x: x + w, y: y + h / 2 },
-          { x: x + w / 2, y: y + h },
-          { x, y: y + h / 2 },
-        ],
-        Math.max(3, Math.min(s.cornerRadius, 10)),
-      );
-    case "triangle":
-      return roundedPolygon(
-        [
-          { x: x + w / 2, y },
-          { x: x + w, y: y + h },
-          { x, y: y + h },
-        ],
-        Math.max(3, Math.min(s.cornerRadius, 10)),
-      );
-    default:
-      return roundedRect(x, y, w, h, s.cornerRadius);
+  if (s.shapeType === "diamond") {
+    return [
+      { x: x + w / 2, y },
+      { x: x + w, y: y + h / 2 },
+      { x: x + w / 2, y: y + h },
+      { x, y: y + h / 2 },
+    ];
   }
+  if (s.shapeType === "triangle") {
+    return [
+      { x: x + w / 2, y },
+      { x: x + w, y: y + h },
+      { x, y: y + h },
+    ];
+  }
+  return [
+    { x, y },
+    { x: x + w, y },
+    { x: x + w, y: y + h },
+    { x, y: y + h },
+  ];
+}
+
+function ellipseFill(s: ShapeElementLike): Vec[] {
+  const n = 48;
+  return Array.from({ length: n }, (_, i) => {
+    const a = (i / n) * Math.PI * 2;
+    return { x: s.x + s.width / 2 + (Math.cos(a) * s.width) / 2, y: s.y + s.height / 2 + (Math.sin(a) * s.height) / 2 };
+  });
 }
 
 function strokeOf(line: Line, color: string, width: number): StrokeLike {
-  const pts = line.closed ? [...line.points, ...line.points.slice(0, 3)] : line.points;
-  const pr = line.closed ? [...line.pressures, ...line.pressures.slice(0, 3)] : line.pressures;
   return {
     id: "sketch",
-    points: pts.map((p, i) => ({ x: p.x, y: p.y, pressure: pr[i] })),
+    points: line.points.map((p, i) => ({ x: p.x, y: p.y, pressure: line.pressures[i] ?? 0.5 })),
     color,
-    size: width * 1.2,
+    size: width * 1.15,
     opacity: 1,
     brushStyle: "ink",
     timestamp: 0,
-    thinning: 0.35,
-    smoothing: 0.3,
+    thinning: 0.3,
+    smoothing: 0.4,
     streamline: 0,
-    taperStart: 0,
-    taperEnd: 0,
+    taperStart: line.taperStart,
+    taperEnd: line.taperEnd,
     input: "pen",
   };
 }
@@ -180,26 +165,42 @@ function trace(ctx: CanvasRenderingContext2D, points: Vec[]) {
 }
 
 export function drawSketchyShape(ctx: CanvasRenderingContext2D, s: ShapeElementLike) {
-  const key = `${s.shapeType}|${s.x}|${s.y}|${s.width}|${s.height}|${s.cornerRadius}|${s.seed}`;
+  const width = s.strokeWidth;
+  const key = `${s.shapeType}|${s.x}|${s.y}|${s.width}|${s.height}|${s.cornerRadius}|${width}|${s.seed}`;
   let hit = shapeCache.get(s);
   if (!hit || hit.key !== key) {
-    const outline = shapeOutline(s);
-    const amplitude = Math.max(0.6, Math.min(2.2, lengthOf(outline, true) * 0.0035));
-    hit = { key, line: wobble(outline, true, s.seed ?? 1, amplitude) };
+    const k = Math.max(0, Math.min(s.cornerRadius, s.width / 2, s.height / 2));
+    let lines: Line[];
+    let fill: Vec[];
+    if (s.shapeType === "circle") {
+      lines = [ellipseStroke(s, width)];
+      fill = ellipseFill(s);
+    } else if (s.shapeType === "rectangle" && k >= 4) {
+      lines = [roundedRectStroke(s, k, width)];
+      fill = roundedRect(s.x, s.y, s.width, s.height, k);
+    } else {
+      const corners = polygonFor(s);
+      lines = edgeStrokes(corners, width, s.seed ?? 1);
+      fill = corners;
+    }
+    hit = { key, lines, fill };
     shapeCache.set(s, hit);
   }
   if (s.fillColor) {
     ctx.fillStyle = s.fillColor;
-    trace(ctx, hit.line.points);
+    trace(ctx, hit.fill);
     ctx.fill();
   }
-  if (s.strokeColor !== "transparent" && s.strokeWidth > 0) {
-    renderStroke(ctx, strokeOf(hit.line, s.strokeColor, s.strokeWidth), brushRegistry);
+  if (s.strokeColor !== "transparent" && width > 0) {
+    for (const line of hit.lines) renderStroke(ctx, strokeOf(line, s.strokeColor, width), brushRegistry);
   }
 }
 
-function curvePoints(r: ResolvedArrow): Vec[] {
-  const approx = Math.hypot(r.control.x - r.start.x, r.control.y - r.start.y) + Math.hypot(r.end.x - r.control.x, r.end.y - r.control.y);
+function curvePoints(r: ResolvedArrow, bow: number): Vec[] {
+  const straight = Math.hypot(r.control.x - (r.start.x + r.end.x) / 2, r.control.y - (r.start.y + r.end.y) / 2) < 1;
+  if (straight) return bowed(r.start, r.end, bow);
+  const approx =
+    Math.hypot(r.control.x - r.start.x, r.control.y - r.start.y) + Math.hypot(r.end.x - r.control.x, r.end.y - r.control.y);
   const n = Math.max(2, Math.ceil(approx / STEP));
   return Array.from({ length: n + 1 }, (_, i) => {
     const t = i / n;
@@ -218,13 +219,24 @@ export function drawSketchyCurve(
   seed: number,
   stroke: string,
   strokeWidth: number,
+  ends: { startCapped: boolean; endCapped: boolean } = { startCapped: false, endCapped: true },
 ) {
-  const key = `${r.start.x}|${r.start.y}|${r.control.x}|${r.control.y}|${r.end.x}|${r.end.y}|${seed}`;
+  const key = `${r.start.x}|${r.start.y}|${r.control.x}|${r.control.y}|${r.end.x}|${r.end.y}|${seed}|${strokeWidth}|${ends.startCapped}|${ends.endCapped}`;
   let hit = curveCache.get(owner);
   if (!hit || hit.key !== key) {
-    const pts = curvePoints(r);
-    const amplitude = Math.max(0.5, Math.min(1.6, lengthOf(pts, false) * 0.005));
-    hit = { key, line: wobble(pts, false, seed, amplitude) };
+    const rand = rng(seed);
+    const len = Math.hypot(r.end.x - r.start.x, r.end.y - r.start.y);
+    const bow = (rand() < 0.5 ? -1 : 1) * Math.min(len * 0.01, 2.5) * (0.5 + rand() * 0.5);
+    const points = curvePoints(r, bow);
+    hit = {
+      key,
+      line: {
+        points,
+        pressures: pressureProfile(points.length, rand),
+        taperStart: ends.startCapped ? 0 : strokeWidth * 1.2,
+        taperEnd: ends.endCapped ? 0 : strokeWidth * 1.6,
+      },
+    };
     curveCache.set(owner, hit);
   }
   renderStroke(ctx, strokeOf(hit.line, stroke, strokeWidth), brushRegistry);
@@ -240,9 +252,15 @@ export function drawSketchyHead(ctx: CanvasRenderingContext2D, head: HeadShape, 
   if (head.type === "polygon") {
     trace(ctx, head.points);
     ctx.fill();
+    ctx.lineJoin = "round";
+    ctx.lineWidth = strokeWidth;
+    ctx.stroke();
+    return;
   }
-  const pts = head.type === "polygon" ? [...head.points, head.points[0]] : head.points;
-  const line: Line = { points: resample(pts, false), pressures: [], closed: false };
-  line.pressures = line.points.map(() => 0.5);
-  renderStroke(ctx, strokeOf(line, stroke, strokeWidth), brushRegistry);
+  const [left, tip, right] = head.points;
+  for (const arm of [left, right]) {
+    const points = bowed(tip, arm, 0);
+    const line: Line = { points, pressures: points.map(() => 0.5), taperStart: 0, taperEnd: strokeWidth * 0.5 };
+    renderStroke(ctx, strokeOf(line, stroke, strokeWidth), brushRegistry);
+  }
 }

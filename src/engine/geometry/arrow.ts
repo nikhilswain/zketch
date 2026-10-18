@@ -117,7 +117,7 @@ export function subCurve(r: ResolvedArrow, t0: number, t1: number): ResolvedArro
   return { start: s, end: e, control, mid: curvePoint(r, (t0 + t1) / 2) };
 }
 
-export const headSize = (strokeWidth: number) => Math.max(10, strokeWidth * 3);
+export const headSize = (strokeWidth: number) => Math.max(14, 10 + strokeWidth * 2.6);
 
 export function headInset(kind: ArrowHead, strokeWidth: number) {
   if (kind === "triangle") return headSize(strokeWidth) * 0.7;

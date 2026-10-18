@@ -409,11 +409,12 @@ emits `onFrame(info, visibleStrokes)`. Shapes are not animated (they stay static
   `render/fonts.ts` caches `measureText`, requests fonts on first use and
   re-bakes on `document.fonts` `loadingdone`; export and thumbnails await
   `ensureFonts` (3 s cap) first.
-- Sketchy look: `render/sketchy.ts` samples the shape outline (or the arrow curve),
-  adds a seeded low-frequency wobble (periodic around closed shapes, fading to
-  zero at arrow ends so heads line up) and draws it as one stroke with the Pen
-  (`ink`) brush, with gentle pressure variation; fills use the same wobbled
-  outline. Polygon corners are slightly rounded and the seam starts mid-edge.
+- Sketchy look: `render/sketchy.ts` draws with the Pen (`ink`) brush the way a
+  quick marker sketch looks: each straight edge is its own stroke with one gentle
+  bow and a small overshoot past the corners (pen lifts taper), rounded
+  rectangles and ellipses are one stroke whose end runs slightly past its start,
+  thickness swells a little mid-stroke. Arrow bodies bow once and end flush with
+  the heads; open heads are two arms drawn from the tip. All seeded per element.
 - Arrow bend is measured against the raw chord (bound ends use the element
   centres), so dragging the middle handle never feeds back into the clipped ends.
 - Text editing: `components/TextEditorOverlay.tsx` is a textarea laid over the
