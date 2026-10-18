@@ -1,14 +1,1 @@
- <svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ff6ec4" />
-      <stop offset="100%" stop-color="#7873f5" />
-    </linearGradient>
-  </defs>
-
-  <circle cx="100" cy="100" r="100" fill="url(#grad)" />
-
-  <!-- Flowing ZK -->
-  <path d="M60 70 Q100 40 140 70 Q100 100 60 130 Q100 160 140 130" 
-        stroke="white" stroke-width="14" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="32" height="32"><path d="M14 66 C26 30 46 30 50 50 C54 70 72 70 86 34" transform="translate(-7 4)" fill="none" stroke="#FF6B5B" stroke-opacity="0.4" stroke-width="14" stroke-linecap="round"/><path d="M14 66 C26 30 46 30 50 50 C54 70 72 70 86 34" fill="none" stroke="#FF6B5B" stroke-width="14" stroke-linecap="round"/></svg>
