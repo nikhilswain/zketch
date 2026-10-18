@@ -2,6 +2,12 @@ import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import {
+  AlignCenterIcon,
+  AlignLeftIcon,
+  AlignRightIcon,
+  ArrowIcon,
+  LineIcon,
+  TextIcon,
   ChevronDownIcon,
   ChevronUpIcon,
   CircleIcon,
@@ -27,6 +33,7 @@ import {
 } from "@/utils/dockLayout";
 import type { ShapeKind } from "@/models/ShapeLayerModel";
 import EraserModePicker from "./EraserModePicker";
+import { FAMILIES, HEADS, SIZES, Segmented } from "./ElementProperties";
 import StrokeTrack from "./StrokeTrack";
 import { PanelVariantContext } from "./PanelFrame";
 import { BrushLibrary } from "./panels/BrushesPanel";
@@ -95,6 +102,21 @@ const BrushPopover: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   );
 };
 
+const LookPicker: React.FC = observer(() => {
+  const canvasStore = useCanvasStore();
+  return (
+    <Segmented
+      label="Look"
+      options={[
+        { id: "clean", label: "Clean" },
+        { id: "sketchy", label: "Sketchy" },
+      ]}
+      value={canvasStore.elementLook as "clean" | "sketchy"}
+      onPick={(v) => canvasStore.setElementLook(v)}
+    />
+  );
+});
+
 const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
   const canvasStore = useCanvasStore();
   const settingsStore = useSettingsStore();
@@ -160,6 +182,19 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
         </ToolButton>
         <ToolButton label="Shapes (5)" active={tool === "shape"} onClick={() => canvasStore.setActiveTool("shape")}>
           <ShapesIcon className="h-[18px] w-[18px]" />
+        </ToolButton>
+        <ToolButton
+          label="Arrow (A)"
+          active={tool === "arrow"}
+          onClick={() => {
+            canvasStore.setArrowKind("arrow");
+            canvasStore.setActiveTool("arrow");
+          }}
+        >
+          <ArrowIcon className="h-[18px] w-[18px]" />
+        </ToolButton>
+        <ToolButton label="Text (T)" active={tool === "text"} onClick={() => canvasStore.setActiveTool("text")}>
+          <TextIcon className="h-[18px] w-[18px]" />
         </ToolButton>
         <ToolButton label="Pan (or hold Space)" active={tool === "pan"} onClick={() => canvasStore.setActiveTool("pan")}>
           <HandIcon className="h-[18px] w-[18px]" />
@@ -263,10 +298,74 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
               onChange={(v) => canvasStore.setShapeStrokeWidth(v)}
             />
           </div>
+          <LookPicker />
         </div>
       )}
 
-      {(drawing || erasing || tool === "shape") && <Divider />}
+      {tool === "arrow" && (
+        <div className="flex items-center gap-3">
+          <Segmented
+            label="Arrow or line"
+            options={[
+              { id: "arrow", label: "Arrow", icon: <ArrowIcon size={16} /> },
+              { id: "line", label: "Line", icon: <LineIcon size={16} /> },
+            ]}
+            value={canvasStore.arrowKind as "arrow" | "line"}
+            onPick={(v) => canvasStore.setArrowKind(v)}
+          />
+          {canvasStore.arrowKind === "arrow" && (
+            <Segmented
+              label="End head"
+              options={HEADS}
+              value={canvasStore.arrowEndHead as any}
+              onPick={(v) => canvasStore.setArrowHeads(canvasStore.arrowStartHead as any, v)}
+            />
+          )}
+          <div className="w-[136px]">
+            <StrokeTrack
+              dense
+              kind="size"
+              label="Stroke"
+              value={canvasStore.arrowStrokeWidth}
+              display={`${canvasStore.arrowStrokeWidth} px`}
+              min={1}
+              max={50}
+              step={1}
+              onChange={(v) => canvasStore.setArrowStrokeWidth(v)}
+            />
+          </div>
+          <LookPicker />
+        </div>
+      )}
+
+      {tool === "text" && (
+        <div className="flex items-center gap-3">
+          <Segmented
+            label="Font"
+            options={FAMILIES.map((f) => ({ id: f.id, label: f.label, style: { fontFamily: f.font } }))}
+            value={canvasStore.textFontFamily as any}
+            onPick={(v) => canvasStore.setTextFontFamily(v)}
+          />
+          <Segmented
+            label="Text size"
+            options={SIZES.map((s) => ({ id: s.value, label: s.label }))}
+            value={canvasStore.textFontSize}
+            onPick={(v) => canvasStore.setTextFontSize(v)}
+          />
+          <Segmented
+            label="Text align"
+            options={[
+              { id: "left", label: "Left", icon: <AlignLeftIcon size={16} /> },
+              { id: "center", label: "Centre", icon: <AlignCenterIcon size={16} /> },
+              { id: "right", label: "Right", icon: <AlignRightIcon size={16} /> },
+            ]}
+            value={canvasStore.textAlign as any}
+            onPick={(v) => canvasStore.setTextAlign(v)}
+          />
+        </div>
+      )}
+
+      {(drawing || erasing || tool === "shape" || tool === "arrow" || tool === "text") && <Divider />}
       <div className="flex items-center gap-1.5">
         <button
           aria-label={`Colour ${canvasStore.currentColor}. Show colour panel`}

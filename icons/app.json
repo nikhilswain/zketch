@@ -53,5 +53,13 @@
   "check-circle",
   "masonry",
   "arrow-left",
-  "sort"
+  "sort",
+  "arrow",
+  "line",
+  "text",
+  "align-left",
+  "align-center",
+  "align-right",
+  "layer-up",
+  "layer-down"
 ]

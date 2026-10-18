@@ -13,5 +13,5 @@ export const PANELS: Record<PanelId, { title: string; Component: FC }> = {
   stroke: { title: "Stroke", Component: StrokePanel },
   colour: { title: "Colour", Component: ColourPanel },
   layers: { title: "Layers", Component: LayersStudioPanel },
-  shapes: { title: "Shapes", Component: ShapesPanel },
+  shapes: { title: "Properties", Component: ShapesPanel },
 };

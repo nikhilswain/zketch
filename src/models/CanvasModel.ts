@@ -335,6 +335,35 @@ export const CanvasModel = types
       return null;
     },
     // All selected shape elements (for bulk color / opacity edits).
+    get selectedDrawElements() {
+      const out: any[] = [];
+      for (const ref of self.selectedElements) {
+        if (!ref.elementId) continue;
+        const layer = self.layers.find((l) => l.id === ref.layerId);
+        if (!layer || layer.type !== "draw") continue;
+        const element = (layer as any).findElement(ref.elementId);
+        if (element) out.push(element);
+      }
+      return out;
+    },
+    get selectedArrowElements() {
+      return (self as any).selectedDrawElements.filter((e: any) => elementKind(e) === "arrow");
+    },
+    get selectedTextTargets() {
+      const ids = new Set<string>();
+      const out: any[] = [];
+      for (const e of (self as any).selectedDrawElements) {
+        if (elementKind(e) === "text") out.push(e);
+        else ids.add(e.id);
+      }
+      for (const layer of self.layers) {
+        if (layer.type !== "draw") continue;
+        for (const e of (layer as any).elements) {
+          if (elementKind(e) === "text" && e.containerId && ids.has(e.containerId)) out.push(e);
+        }
+      }
+      return out;
+    },
     get selectedShapeElements() {
       const out: any[] = [];
       for (const ref of self.selectedElements) {
@@ -679,6 +708,10 @@ export const CanvasModel = types
         const strokes = self.selectedStrokes as any[];
         for (const strokeEl of strokes) {
           strokeEl.setColor(color);
+        }
+        if (self.colorTarget !== "fill") {
+          for (const a of (self as any).selectedArrowElements) a.setStrokeColor(color);
+          for (const t of (self as any).selectedDrawElements) if (elementKind(t) === "text") t.setColor(color);
         }
       },
       setColorTarget(target: "stroke" | "fill") {
