@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+import { dockLayout } from "@/utils/dockLayout";
+import { SIMPLE_KEYS, pickSimpleTool } from "@/components/studio/SimpleToolbar";
 import { useCanvasStore } from "../hooks/useStores";
 import { KeyBindingManager, KEY_BINDINGS } from "../utils/keyBindings";
 import { lastBrush, selectBrush } from "../utils/brushMemory";
@@ -150,6 +152,18 @@ export const useKeyboardShortcuts = (
         e.target instanceof HTMLTextAreaElement ||
         (e.target instanceof HTMLElement && e.target.isContentEditable)
       ) {
+        return;
+      }
+
+      if (
+        dockLayout.state.layout === "simple" &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        !e.metaKey &&
+        SIMPLE_KEYS[e.key.toLowerCase()]
+      ) {
+        e.preventDefault();
+        pickSimpleTool(canvasStore, SIMPLE_KEYS[e.key.toLowerCase()]);
         return;
       }
 

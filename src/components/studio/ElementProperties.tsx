@@ -88,7 +88,7 @@ export function Segmented<T extends string | number>({
   );
 }
 
-const Swatches: React.FC<{ value: string | null; onPick: (hex: string | null) => void; allowNone?: boolean; label: string }> = ({
+export const Swatches: React.FC<{ value: string | null; onPick: (hex: string | null) => void; allowNone?: boolean; label: string }> = ({
   value,
   onPick,
   allowNone,

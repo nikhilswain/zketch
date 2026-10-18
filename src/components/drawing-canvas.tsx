@@ -33,6 +33,7 @@ import {
   LINE_HEIGHT,
 } from "@/engine/geometry";
 import TextEditorOverlay from "./TextEditorOverlay";
+import { dockLayout } from "@/utils/dockLayout";
 import { buildElementLookup } from "@/engine/render/lookup";
 import { hitArrowHandle, type ArrowHandle } from "@/engine/arrowHandles";
 import { measureText } from "@/engine/render/fonts";
@@ -793,6 +794,15 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       manager.setCallbacks({
         onDrawStart: (pt, pointerType) => {
           if (canvasLocked) return;
+          const creating =
+            canvasStore.activeTool === "shape" ||
+            canvasStore.activeTool === "arrow" ||
+            canvasStore.activeTool === "text" ||
+            (canvasStore.activeTool === "brush" && canvasStore.currentBrushStyle !== "eraser");
+          if (dockLayout.state.layout === "simple" && creating) {
+            const target = canvasStore.targetDrawLayer(true);
+            if (target?.created) toast("Added a new layer to draw on");
+          }
           const root = rootRef.current;
           if (!root) return;
 

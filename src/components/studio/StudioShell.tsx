@@ -19,6 +19,9 @@ import DockArea from "./DockArea";
 import DockSlot from "./DockSlot";
 import { PANEL_DRAG_TYPE } from "./PanelFrame";
 import BottomBar from "./BottomBar";
+import SimpleToolbar from "./SimpleToolbar";
+import PropertiesCard from "./PropertiesCard";
+import ZoomCluster from "./ZoomCluster";
 import { LayersStrip } from "./panels/LayersStudioPanel";
 
 interface StudioShellProps {
@@ -109,6 +112,7 @@ function useOverlayDocks() {
 const StudioShell: React.FC<StudioShellProps> = observer(({ topLeft, topRight, onFit, children }) => {
   const overlay = useOverlayDocks();
   const rowRef = useRef<HTMLDivElement>(null);
+  const simple = dockLayout.state.layout === "simple";
   const s = dockLayout.state;
   const leftIds = panelsIn("left");
   const rightIds = panelsIn("right");
@@ -138,6 +142,35 @@ const StudioShell: React.FC<StudioShellProps> = observer(({ topLeft, topRight, o
     el.addEventListener("pointerdown", onDown, true);
     return () => el.removeEventListener("pointerdown", onDown, true);
   }, [overlay]);
+
+  if (simple) {
+    return (
+      <div className="fixed inset-0 flex flex-col bg-zk-surface font-ui">
+        <div ref={rowRef} className="relative flex min-h-0 flex-1">
+          <div className="absolute inset-0 overflow-hidden">{children}</div>
+          <div data-canvas-viewport className="pointer-events-none relative min-w-0 flex-1 overflow-hidden">
+            <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex items-start justify-between gap-3">
+              {topLeft}
+              {topRight}
+            </div>
+            <div
+              className={`pointer-events-none absolute z-10 flex ${
+                overlay ? "inset-x-3 top-16 justify-start" : "top-3 left-1/2 max-w-[calc(100%-860px)] min-w-0 -translate-x-1/2 justify-center"
+              }`}
+            >
+              <SimpleToolbar />
+            </div>
+            <div className={`pointer-events-none absolute left-3 z-10 ${overlay ? "top-[7.5rem]" : "top-16"}`}>
+              <PropertiesCard />
+            </div>
+            <div className="pointer-events-none absolute bottom-3 left-3 z-10">
+              <ZoomCluster onFit={onFit} />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 flex flex-col bg-zk-surface font-ui">

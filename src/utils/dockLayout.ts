@@ -2,7 +2,7 @@ import { observable, runInAction } from "mobx";
 
 export type PanelId = "brushes" | "presets" | "stroke" | "colour" | "layers" | "shapes";
 export type DockId = "left" | "right" | "bottom";
-export type LayoutId = "bottom" | "sidebars" | "minimal" | "custom";
+export type LayoutId = "bottom" | "sidebars" | "minimal" | "simple" | "custom";
 
 export const PANEL_IDS: PanelId[] = [
   "brushes",
@@ -86,7 +86,7 @@ function restore(): DockState {
       deckOpen: parsed.deckOpen === true,
       leftOpen: parsed.leftOpen === true,
       rightOpen: parsed.rightOpen !== false,
-      layout: ["bottom", "sidebars", "minimal", "custom"].includes(parsed.layout)
+      layout: ["bottom", "sidebars", "minimal", "simple", "custom"].includes(parsed.layout)
         ? parsed.layout
         : "bottom",
     };

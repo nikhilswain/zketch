@@ -43,6 +43,7 @@ const LAYOUTS = [
   { id: "bottom", label: "Bottom deck" },
   { id: "sidebars", label: "Sidebars" },
   { id: "minimal", label: "Minimal" },
+  { id: "simple", label: "Simple" },
 ] as const;
 
 const Tick: React.FC<{ on: boolean }> = ({ on }) => (

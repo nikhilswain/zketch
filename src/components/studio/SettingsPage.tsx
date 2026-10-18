@@ -21,6 +21,7 @@ const LAYOUTS: { id: Exclude<LayoutId, "custom">; label: string; hint: string }[
   { id: "bottom", label: "Bottom deck", hint: "Brushes, presets, stroke and colour open above the bar; layers on the right." },
   { id: "sidebars", label: "Sidebars", hint: "Layers on the left, everything else in a right sidebar. The bottom stays one slim bar." },
   { id: "minimal", label: "Minimal", hint: "Just the bar and a layers strip. The brush chip opens brushes in a popover." },
+  { id: "simple", label: "Simple", hint: "One toolbar on top and a small properties card, like a whiteboard. Number keys pick tools." },
 ];
 
 const SURROUNDS: { id: SurroundTone; label: string }[] = [
@@ -50,7 +51,7 @@ function Schematic({ id }: { id: Exclude<LayoutId, "custom"> }) {
   const panel = "rounded-[2px] bg-zk-divider";
   return (
     <div className="relative h-20 w-full overflow-hidden rounded-[4px] bg-[#FBFAF6]">
-      <div className="absolute inset-x-0 bottom-0 h-2 bg-zk-surface" />
+      {id !== "simple" && <div className="absolute inset-x-0 bottom-0 h-2 bg-zk-surface" />}
       {id === "bottom" && (
         <>
           <div className={`absolute inset-x-0 bottom-2 h-6 ${panel}`} />
@@ -64,6 +65,12 @@ function Schematic({ id }: { id: Exclude<LayoutId, "custom"> }) {
         </>
       )}
       {id === "minimal" && <div className={`absolute top-3 right-1.5 h-8 w-3 ${panel}`} />}
+      {id === "simple" && (
+        <>
+          <div className={`absolute top-1.5 left-1/2 h-2.5 w-16 -translate-x-1/2 ${panel}`} />
+          <div className={`absolute top-6 left-1.5 h-9 w-6 ${panel}`} />
+        </>
+      )}
     </div>
   );
 }
