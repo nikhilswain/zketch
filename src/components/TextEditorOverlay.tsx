@@ -6,6 +6,8 @@ import { fontString, labelPlacement, layoutText, LINE_HEIGHT } from "@/engine/ge
 import { buildElementLookup } from "@/engine/render/lookup";
 import { measureText, requestFont } from "@/engine/render/fonts";
 
+export const activeTextEditor: { commit: (() => void) | null } = { commit: null };
+
 interface TextEditorOverlayProps {
   onDone: (id: string, kept: boolean) => void;
 }
@@ -32,15 +34,22 @@ const TextEditorOverlay: React.FC<TextEditorOverlayProps> = observer(({ onDone }
     if (el) requestFont(el.fontFamily);
   }, [el?.fontFamily]);
 
-  if (!id || !el) return null;
-
   const commit = () => {
-    if (done.current) return;
+    if (!id || done.current) return;
     done.current = true;
     const kept = !!value.trim();
     canvasStore.commitTextEdit(id, value);
     onDone(id, kept);
   };
+
+  useEffect(() => {
+    activeTextEditor.commit = commit;
+    return () => {
+      if (activeTextEditor.commit === commit) activeTextEditor.commit = null;
+    };
+  });
+
+  if (!id || !el) return null;
 
   const zoom = canvasStore.zoom;
   const isLabel = !!el.containerId;
@@ -61,8 +70,9 @@ const TextEditorOverlay: React.FC<TextEditorOverlayProps> = observer(({ onDone }
     box = { ...box, width: layout.width, height: layout.height };
   }
 
-  const width = (wrap ?? box.width + el.fontSize) * zoom;
-  const left = (wrap !== null ? box.x + box.width / 2 - wrap / 2 : box.x) * zoom + canvasStore.panX;
+  const pad = wrap === null ? el.fontSize / 2 : 0;
+  const width = (box.width + pad * 2) * zoom;
+  const left = (box.x - pad) * zoom + canvasStore.panX;
 
   return (
     <div className="pointer-events-none absolute inset-0 z-[1] overflow-hidden">
@@ -89,6 +99,8 @@ const TextEditorOverlay: React.FC<TextEditorOverlayProps> = observer(({ onDone }
           top: box.y * zoom + canvasStore.panY,
           width,
           height: box.height * zoom,
+          paddingLeft: pad * zoom,
+          paddingRight: pad * zoom,
           font: fontString(el.fontFamily, el.fontSize * zoom),
           lineHeight: `${el.fontSize * LINE_HEIGHT * zoom}px`,
           color: el.color,

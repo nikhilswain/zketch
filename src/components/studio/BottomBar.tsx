@@ -315,6 +315,14 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
           />
           {canvasStore.arrowKind === "arrow" && (
             <Segmented
+              label="Start head"
+              options={HEADS}
+              value={canvasStore.arrowStartHead as any}
+              onPick={(v) => canvasStore.setArrowHeads(v, canvasStore.arrowEndHead as any)}
+            />
+          )}
+          {canvasStore.arrowKind === "arrow" && (
+            <Segmented
               label="End head"
               options={HEADS}
               value={canvasStore.arrowEndHead as any}

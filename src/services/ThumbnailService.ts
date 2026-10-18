@@ -91,6 +91,7 @@ export class ThumbnailService {
 
     // Collect all strokes and image layers from visible layers
     const visibleLayers = layers.filter((l) => l.visible !== false);
+    await ensureFonts(fontFamiliesIn(visibleLayers as any));
 
     // Calculate bounds including both strokes and images
     const bounds = page ? null : this.calculateBoundsForLayers(visibleLayers);
@@ -109,7 +110,6 @@ export class ThumbnailService {
         }
       : this.calculateTransform(bounds!, width, height);
 
-    await ensureFonts(fontFamiliesIn(visibleLayers as any));
     // Load all images first
     const imageCache = new Map<string, HTMLImageElement>();
     for (const layer of visibleLayers) {

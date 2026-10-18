@@ -32,7 +32,7 @@ import {
   textPlacement,
   LINE_HEIGHT,
 } from "@/engine/geometry";
-import TextEditorOverlay from "./TextEditorOverlay";
+import TextEditorOverlay, { activeTextEditor } from "./TextEditorOverlay";
 import { dockLayout } from "@/utils/dockLayout";
 import { buildElementLookup } from "@/engine/render/lookup";
 import { hitArrowHandle, type ArrowHandle } from "@/engine/arrowHandles";
@@ -114,7 +114,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       endBind: string | null;
     } | null>(null);
     const ctrlDownRef = useRef(false);
-    const arrowEditRef = useRef<{ handle: ArrowHandle; moved: boolean } | null>(null);
+    const arrowEditRef = useRef<{ handle: ArrowHandle; moved: boolean; x: number; y: number } | null>(null);
     const lastTapRef = useRef<{ t: number; x: number; y: number } | null>(null);
     const marqueeRef = useRef<{
       startX: number;
@@ -128,6 +128,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       lastY: number;
       hasMoved: boolean;
     } | null>(null);
+    const DRAG_THRESHOLD_PX = 4;
     // Per-element snapshot taken at the start of a group resize/rotate.
     // Strokes carry their original point list + size so we can transform points freshly each frame.
     type GroupSnap = {
@@ -794,6 +795,11 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       manager.setCallbacks({
         onDrawStart: (pt, pointerType) => {
           if (canvasLocked) return;
+          if (canvasStore.editingTextId) {
+            if (activeTextEditor.commit) activeTextEditor.commit();
+            else canvasStore.setEditingText(null);
+            return;
+          }
           const creating =
             canvasStore.activeTool === "shape" ||
             canvasStore.activeTool === "arrow" ||
@@ -823,7 +829,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                 return;
               }
               if (handle) {
-                arrowEditRef.current = { handle, moved: false };
+                arrowEditRef.current = { handle, moved: false, x: canvasPoint.x, y: canvasPoint.y };
                 drawingStartedRef.current = true;
                 return;
               }
@@ -1089,6 +1095,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           if (groupDragRef.current) {
             const dx = canvasPoint.x - groupDragRef.current.lastX;
             const dy = canvasPoint.y - groupDragRef.current.lastY;
+            if (!groupDragRef.current.hasMoved && Math.hypot(dx, dy) * canvasStore.zoom < DRAG_THRESHOLD_PX) return;
             if (dx !== 0 || dy !== 0) {
               canvasStore.moveSelectedBy(dx, dy);
               groupDragRef.current.lastX = canvasPoint.x;
@@ -1115,6 +1122,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             const edit = arrowEditRef.current;
             const arrow = selectedArrow();
             if (!arrow) return;
+            if (!edit.moved && Math.hypot(canvasPoint.x - edit.x, canvasPoint.y - edit.y) * canvasStore.zoom < DRAG_THRESHOLD_PX) return;
             edit.moved = true;
             const p = { x: canvasPoint.x, y: canvasPoint.y };
             if (edit.handle === "mid") {

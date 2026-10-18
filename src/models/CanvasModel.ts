@@ -395,6 +395,7 @@ export const CanvasModel = types
         maxX = -Infinity,
         maxY = -Infinity;
       let any = false;
+      let lookup: ReturnType<typeof buildElementLookup> | undefined;
       for (const ref of self.selectedElements) {
         const layer = self.layers.find((l) => l.id === ref.layerId);
         if (!layer) continue;
@@ -428,7 +429,8 @@ export const CanvasModel = types
           const el = (layer as any).findElement(ref.elementId);
           const kind = el ? elementKind(el) : null;
           if (el && (kind === "arrow" || kind === "text")) {
-            const b = elementBounds(el, buildElementLookup(self.layers as any));
+            lookup ??= buildElementLookup(self.layers as any);
+            const b = elementBounds(el, lookup);
             if (b) {
               bx = b.minX;
               by = b.minY;
@@ -787,6 +789,7 @@ export const CanvasModel = types
           );
       },
       clear() {
+        self.editingTextId = null;
         // Clear legacy strokes
         self.clearStrokes();
 
@@ -991,7 +994,10 @@ export const CanvasModel = types
         for (const layer of self.layers) {
           if (layer.type !== "draw") continue;
           const orphans = ((layer as IDrawLayer).elements as any[]).filter(
-            (el) => elementKind(el) === "text" && el.containerId && !containers.has(el.containerId),
+            (el) =>
+              elementKind(el) === "text" &&
+              el.id !== self.editingTextId &&
+              ((el.containerId && !containers.has(el.containerId)) || !el.text.trim()),
           );
           orphans.forEach((el) => (layer as IDrawLayer).removeElement(el.id));
         }
@@ -1041,26 +1047,32 @@ export const CanvasModel = types
 
       duplicateSelection() {
         const byLayer = new Map<string, Set<string>>();
+        const selectedIds = new Set<string>();
         for (const ref of self.selectedElements) {
           if (!ref.elementId) continue;
           if (!byLayer.has(ref.layerId)) byLayer.set(ref.layerId, new Set());
           byLayer.get(ref.layerId)!.add(ref.elementId);
+          selectedIds.add(ref.elementId);
         }
         if (byLayer.size === 0) return;
-        const nextSelection: { layerId: string; elementId: string }[] = [];
+        const picked: { layer: IDrawLayer; snap: any }[] = [];
         byLayer.forEach((ids, layerId) => {
           const layer = self.layers.find((l) => l.id === layerId) as IDrawLayer | undefined;
           if (!layer || layer.type !== "draw" || layer.locked) return;
-          const picked = (layer.elements as any[]).filter(
-            (el) => ids.has(el.id) || (elementKind(el) === "text" && el.containerId && ids.has(el.containerId)),
-          );
-          const clones = cloneElements(picked.map((el) => getSnapshot(el)), 16, 16, false);
-          clones.forEach((c) => {
-            layer.elements.push(c);
-            if (!(elementKind(c) === "text" && c.containerId)) nextSelection.push({ layerId, elementId: c.id });
-          });
+          for (const el of layer.elements as any[]) {
+            if (ids.has(el.id) || (elementKind(el) === "text" && el.containerId && selectedIds.has(el.containerId))) {
+              picked.push({ layer, snap: getSnapshot(el) });
+            }
+          }
         });
-        if (nextSelection.length === 0) return;
+        if (picked.length === 0) return;
+        const clones = cloneElements(picked.map((p) => p.snap), 16, 16, false);
+        const nextSelection: { layerId: string; elementId: string }[] = [];
+        clones.forEach((c, i) => {
+          const layer = picked[i].layer;
+          layer.elements.push(c);
+          if (!(elementKind(c) === "text" && c.containerId)) nextSelection.push({ layerId: layer.id, elementId: c.id });
+        });
         self.selectedElements.clear();
         nextSelection.forEach((r) => self.selectedElements.push(r));
         self.interactionMode = "transform";
@@ -1177,6 +1189,7 @@ export const CanvasModel = types
           endHead: line ? "none" : (self.arrowEndHead as ArrowHead),
           strokeColor: self.currentColor,
           strokeWidth: self.arrowStrokeWidth,
+          opacity: self.shapeOpacity,
           look: self.elementLook as ElementLook,
         });
         target.layer.elements.push(data as any);
@@ -1916,6 +1929,7 @@ export const CanvasModel = types
         }>,
         activeLayerId?: string,
       ) {
+        self.editingTextId = null;
         self.layers.clear();
         self.focusedLayerId = null;
 

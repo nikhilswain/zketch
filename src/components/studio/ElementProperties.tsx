@@ -1,5 +1,5 @@
 import type React from "react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useCanvasStore } from "@/hooks/useStores";
 import { elementKind } from "@/engine/types";
@@ -16,6 +16,7 @@ import {
 } from "@/components/icons";
 import StrokeTrack from "./StrokeTrack";
 import { SWATCHES } from "./panels/ColourPanel";
+import HsvPicker from "./HsvPicker";
 
 type Variant = "card" | "panel";
 
@@ -88,37 +89,54 @@ export function Segmented<T extends string | number>({
   );
 }
 
-export const Swatches: React.FC<{ value: string | null; onPick: (hex: string | null) => void; allowNone?: boolean; label: string }> = ({
-  value,
-  onPick,
-  allowNone,
-  label,
-}) => (
-  <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-1.5">
-    {allowNone && (
-      <button
-        role="radio"
-        aria-checked={value === null}
-        aria-label="No fill"
-        onClick={() => onPick(null)}
-        className={`relative h-6 w-6 overflow-hidden rounded-[3px] bg-zk-raised ${value === null ? "ring-2 ring-zk-accent" : ""}`}
-      >
-        <span className="absolute top-1/2 left-1/2 h-px w-8 -translate-x-1/2 -translate-y-1/2 -rotate-45 bg-[#E5644D]" />
-      </button>
-    )}
-    {SWATCHES.slice(0, 7).map((s) => (
-      <button
-        key={s.hex}
-        role="radio"
-        aria-checked={value?.toLowerCase() === s.hex.toLowerCase()}
-        aria-label={s.name}
-        onClick={() => onPick(s.hex)}
-        className={`h-6 w-6 rounded-[3px] ${value?.toLowerCase() === s.hex.toLowerCase() ? "ring-2 ring-zk-accent ring-offset-1 ring-offset-zk-surface" : ""}`}
-        style={{ backgroundColor: s.hex, boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.12)" }}
-      />
-    ))}
-  </div>
-);
+export const Swatches: React.FC<{
+  value: string | null;
+  onPick: (hex: string | null, live?: boolean) => void;
+  allowNone?: boolean;
+  label: string;
+}> = ({ value, onPick, allowNone, label }) => {
+  const [open, setOpen] = useState(false);
+  const isSwatch = !!value && SWATCHES.slice(0, 7).some((s) => s.hex.toLowerCase() === value.toLowerCase());
+  return (
+    <div className="flex flex-col gap-2">
+      <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-1.5">
+        {allowNone && (
+          <button
+            role="radio"
+            aria-checked={value === null}
+            aria-label="No fill"
+            onClick={() => onPick(null)}
+            className={`relative h-6 w-6 overflow-hidden rounded-[3px] bg-zk-raised ${value === null ? "ring-2 ring-zk-accent" : ""}`}
+          >
+            <span className="absolute top-1/2 left-1/2 h-px w-8 -translate-x-1/2 -translate-y-1/2 -rotate-45 bg-[#E5644D]" />
+          </button>
+        )}
+        {SWATCHES.slice(0, 7).map((s) => (
+          <button
+            key={s.hex}
+            role="radio"
+            aria-checked={value?.toLowerCase() === s.hex.toLowerCase()}
+            aria-label={s.name}
+            onClick={() => onPick(s.hex)}
+            className={`h-6 w-6 rounded-[3px] ${value?.toLowerCase() === s.hex.toLowerCase() ? "ring-2 ring-zk-accent ring-offset-1 ring-offset-zk-surface" : ""}`}
+            style={{ backgroundColor: s.hex, boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.12)" }}
+          />
+        ))}
+        <button
+          aria-label={`Custom ${label.toLowerCase()}`}
+          aria-expanded={open}
+          title="Custom colour"
+          onClick={() => setOpen((v) => !v)}
+          className={`h-6 w-6 rounded-[3px] p-[3px] ${value && !isSwatch ? "ring-2 ring-zk-accent ring-offset-1 ring-offset-zk-surface" : ""}`}
+          style={{ background: "conic-gradient(#E5644D, #D99A3A, #6F8F5A, #8FB1D9, #6B4A6E, #E5644D)" }}
+        >
+          <span className="block h-full w-full rounded-[2px]" style={{ backgroundColor: value ?? "transparent" }} />
+        </button>
+      </div>
+      {open && <HsvPicker value={value ?? "#1F1F24"} onChange={(hex) => onPick(hex, true)} size={120} />}
+    </div>
+  );
+};
 
 const ElementProperties: React.FC<{ variant: Variant }> = observer(({ variant }) => {
   const canvasStore = useCanvasStore();
@@ -182,11 +200,11 @@ const ElementProperties: React.FC<{ variant: Variant }> = observer(({ variant })
           <Swatches
             label="Stroke colour"
             value={strokeColor}
-            onPick={(hex) => {
+            onPick={(hex, live) => {
               if (!hex) return;
               canvasStore.setColorTarget("stroke");
               canvasStore.setColor(hex);
-              if (hasSelection) commit();
+              if (hasSelection) (live ? commitSoon : commit)();
             }}
           />
         </Row>
@@ -198,17 +216,37 @@ const ElementProperties: React.FC<{ variant: Variant }> = observer(({ variant })
             label="Fill colour"
             allowNone
             value={fill}
-            onPick={(hex) => {
+            onPick={(hex, live) => {
               if (hasSelection) {
                 shapes.forEach((s) => s.setFillColor(hex));
-                commit();
+                (live ? commitSoon : commit)();
               } else canvasStore.setShapeFillColor(hex);
             }}
           />
         </Row>
       )}
 
-      {showLook && (
+      {showLook && variant === "panel" && (
+        <StrokeTrack
+          compact
+          kind="size"
+          label="Stroke width"
+          value={width ?? 4}
+          display={`${width ?? 4} px`}
+          min={1}
+          max={50}
+          step={1}
+          onChange={(v) => {
+            if (hasSelection) {
+              vectors.forEach((e) => e.setStrokeWidth(v));
+              commitSoon();
+            } else if (tool === "arrow") canvasStore.setArrowStrokeWidth(v);
+            else canvasStore.setShapeStrokeWidth(v);
+          }}
+        />
+      )}
+
+      {showLook && variant === "card" && (
         <Row label="Stroke width">
           <Segmented
             label="Stroke width"
@@ -245,7 +283,26 @@ const ElementProperties: React.FC<{ variant: Variant }> = observer(({ variant })
         </Row>
       )}
 
-      {showCorners && (
+      {showCorners && variant === "panel" && (
+        <StrokeTrack
+          compact
+          kind="size"
+          label="Corner radius"
+          value={corners}
+          display={`${corners} px`}
+          min={0}
+          max={64}
+          step={1}
+          onChange={(v) => {
+            if (hasSelection) {
+              rectangles.forEach((s) => s.setCornerRadius(v));
+              commitSoon();
+            } else canvasStore.setShapeCornerRadius(v);
+          }}
+        />
+      )}
+
+      {showCorners && variant === "card" && (
         <Row label="Corners">
           <Segmented
             label="Corners"
@@ -340,6 +397,25 @@ const ElementProperties: React.FC<{ variant: Variant }> = observer(({ variant })
               }}
             />
           </Row>
+          {variant === "panel" && (
+            <StrokeTrack
+              compact
+              kind="size"
+              label="Text size"
+              value={Math.round(size)}
+              display={`${Math.round(size)} px`}
+              min={8}
+              max={160}
+              step={1}
+              onChange={(v) => {
+                canvasStore.setTextFontSize(v);
+                if (hasSelection) {
+                  texts.forEach((t) => t.setFontSize(v));
+                  commitSoon();
+                }
+              }}
+            />
+          )}
           {(!hasSelection || texts.some((t) => !t.containerId)) && (
             <Row label="Align">
               <Segmented
