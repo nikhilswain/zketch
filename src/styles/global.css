@@ -164,3 +164,39 @@
     user-select: none !important;
   }
 }
+
+@keyframes zk-swoosh {
+  from {
+    stroke-dashoffset: 101;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.zk-mark path {
+  stroke-dasharray: 100 101;
+  stroke-dashoffset: 0;
+}
+
+.zk-logo-hover:hover .zk-mark-animated path,
+.zk-mark-animated:hover path {
+  animation: zk-swoosh 650ms cubic-bezier(0.25, 0.7, 0.2, 1) both;
+}
+
+.zk-logo-hover:hover .zk-mark-animated .zk-mark-ghost1,
+.zk-mark-animated:hover .zk-mark-ghost1 {
+  animation-delay: 90ms;
+}
+
+.zk-logo-hover:hover .zk-mark-animated .zk-mark-ghost2,
+.zk-mark-animated:hover .zk-mark-ghost2 {
+  animation-delay: 180ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zk-logo-hover:hover .zk-mark-animated path,
+  .zk-mark-animated:hover path {
+    animation: none;
+  }
+}

@@ -1,4 +1,5 @@
 import type React from "react";
+import ZketchMark from "@/components/ZketchMark";
 import { useState } from "react";
 import { CheckIcon, DownloadIcon, LinkIcon, LoaderIcon } from "@/components/icons";
 import { toast } from "sonner";
@@ -18,10 +19,8 @@ function fileName(drawing: ShareData) {
 }
 
 const Mark: React.FC = () => (
-  <a href="/" className="flex items-center gap-2.5" aria-label="Zketch home">
-    <span className="flex h-8 w-8 items-center justify-center rounded-[4px] bg-zk-accent font-display text-[17px] font-semibold text-zk-on-accent">
-      Z
-    </span>
+  <a href="/" className="zk-logo-hover flex items-center gap-2.5" aria-label="Zketch home">
+    <ZketchMark size={32} />
     <span className="font-display text-[20px] font-semibold text-zk-text">Zketch</span>
   </a>
 );

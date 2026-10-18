@@ -1,10 +1,10 @@
+import ZketchMark from "@/components/ZketchMark";
+
 const NoMobile = () => {
   return (
     <div className="flex min-h-screen flex-col bg-zk-surface font-ui text-zk-text">
-      <header className="flex h-16 shrink-0 items-center gap-2.5 px-6">
-        <span className="flex h-8 w-8 items-center justify-center rounded-[4px] bg-zk-accent font-display text-[17px] font-semibold text-zk-on-accent">
-          Z
-        </span>
+      <header className="zk-logo-hover flex h-16 shrink-0 items-center gap-2.5 px-6">
+        <ZketchMark size={32} />
         <span className="font-display text-[20px] font-semibold">Zketch</span>
       </header>
       <main className="flex flex-1 flex-col justify-center px-6 pb-16">

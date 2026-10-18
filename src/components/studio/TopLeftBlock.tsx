@@ -1,4 +1,5 @@
 import type React from "react";
+import ZketchMark from "@/components/ZketchMark";
 import { useRef } from "react";
 import { observer } from "mobx-react-lite";
 import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, LoaderIcon } from "@/components/icons";
@@ -74,10 +75,10 @@ const TopLeftBlock: React.FC<TopLeftBlockProps> = observer(
           <DropdownMenuTrigger asChild>
             <button
               aria-label="Drawing menu"
-              className="flex h-8 items-center gap-1 rounded-[4px] pr-1 hover:bg-zk-hover"
+              className="zk-logo-hover flex h-8 items-center gap-1 rounded-[4px] pr-1 hover:bg-zk-hover"
             >
-              <span className="flex h-7 w-7 items-center justify-center rounded-[4px] bg-zk-accent font-display text-[16px] font-semibold text-zk-on-accent">
-                Z
+              <span className="flex h-7 w-7 items-center justify-center">
+                <ZketchMark size={26} />
               </span>
               <ChevronDownIcon className="h-3 w-3 text-zk-muted" />
             </button>

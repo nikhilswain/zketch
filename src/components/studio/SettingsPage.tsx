@@ -1,4 +1,5 @@
 import type React from "react";
+import ZketchMark from "@/components/ZketchMark";
 import { useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { CheckIcon, CloseIcon } from "@/components/icons";
@@ -208,8 +209,8 @@ const SettingsPage: React.FC<{ onClose: () => void }> = observer(({ onClose }) =
             )}
             <div className="mt-6 flex items-center gap-4 rounded-[6px] bg-zk-raised/60 p-4">
               <span className="text-[12px] text-zk-muted">Preview</span>
-              <span className="flex h-7 w-7 items-center justify-center rounded-[4px] bg-zk-accent font-display text-[15px] font-semibold text-zk-on-accent">
-                Z
+              <span className="zk-logo-hover flex h-7 w-7 items-center justify-center">
+                <ZketchMark size={26} />
               </span>
               <span className="h-8 rounded-[4px] bg-zk-accent px-3.5 text-[13px] leading-8 font-semibold text-zk-on-accent">Share</span>
               <span className="h-1.5 w-28 rounded-[2px] bg-zk-hover">

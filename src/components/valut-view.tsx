@@ -1,4 +1,5 @@
 import { isStrokeElement } from "@/engine/types";
+import ZketchMark from "@/components/ZketchMark";
 import type React from "react";
 import { useState, useEffect } from "react";
 import { observer } from "mobx-react-lite";
@@ -313,10 +314,8 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
   return (
     <div className="min-h-screen bg-zk-surface font-ui text-zk-text">
       <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-zk-hairline bg-zk-surface/95 px-6 backdrop-blur sm:px-10">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-[4px] bg-zk-accent font-display text-[17px] font-semibold text-zk-on-accent">
-            Z
-          </span>
+        <div className="zk-logo-hover flex items-center gap-2.5">
+          <ZketchMark size={32} />
           <span className="font-display text-[20px] font-semibold">Zketch</span>
         </div>
         <div className="flex items-center gap-2">
