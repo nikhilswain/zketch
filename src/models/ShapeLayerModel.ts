@@ -6,7 +6,8 @@ import {
 } from "mobx-state-tree";
 
 export type ShapeKind = "rectangle" | "circle" | "diamond" | "triangle";
-export type ElementLook = "clean" | "sketchy";
+export const ELEMENT_LOOKS = ["clean", "sketchy", "pencil", "crayon", "charcoal"] as const;
+export type ElementLook = (typeof ELEMENT_LOOKS)[number];
 
 export const newSeed = () => Math.floor(Math.random() * 2 ** 31);
 
@@ -30,7 +31,7 @@ export const ShapeElement = types
     cornerRadius: types.optional(types.number, 8),
     fillColor: types.optional(types.maybeNull(types.string), null),
     opacity: types.optional(types.number, 1),
-    look: types.optional(types.enumeration("ElementLook", ["clean", "sketchy"]), "clean"),
+    look: types.optional(types.enumeration("ElementLook", [...ELEMENT_LOOKS]), "clean"),
     seed: types.optional(types.number, () => newSeed()),
   })
   .views((self) => ({

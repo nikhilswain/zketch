@@ -15,7 +15,7 @@ import {
   type ILayerSnapshot,
   type IDrawLayer,
 } from "./LayerModel";
-import { createShapeElement, type ElementLook, type ShapeKind } from "./ShapeLayerModel";
+import { createShapeElement, ELEMENT_LOOKS, type ElementLook, type ShapeKind } from "./ShapeLayerModel";
 import { createArrowElement, type ArrowHead } from "./ArrowElementModel";
 import { createTextElement, type FontFamilyId, type TextAlign } from "./TextElementModel";
 import { buildElementLookup } from "@/engine/render/lookup";
@@ -138,7 +138,7 @@ export const CanvasModel = types
     arrowStartHead: types.optional(types.enumeration("ArrowHeadDefault", ["none", "arrow", "triangle", "dot"]), "none"),
     arrowEndHead: types.optional(types.enumeration("ArrowHeadDefault", ["none", "arrow", "triangle", "dot"]), "arrow"),
     arrowStrokeWidth: types.optional(types.number, 4),
-    elementLook: types.optional(types.enumeration("ElementLookDefault", ["clean", "sketchy"]), "sketchy"),
+    elementLook: types.optional(types.enumeration("ElementLookDefault", [...ELEMENT_LOOKS]), "sketchy"),
     textFontFamily: types.optional(types.enumeration("TextFontDefault", ["hand", "sans", "mono"]), "hand"),
     textFontSize: types.optional(types.number, 24),
     textAlign: types.optional(types.enumeration("TextAlignDefault", ["left", "center", "right"]), "left"),

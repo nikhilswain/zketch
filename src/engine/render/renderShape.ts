@@ -30,7 +30,7 @@ export function renderShape(ctx: CanvasRenderingContext2D, shape: ShapeElementLi
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
-  if (shape.look === "sketchy") {
+  if (shape.look && shape.look !== "clean") {
     ctx.strokeStyle = strokeColor;
     ctx.fillStyle = fillColor ?? strokeColor;
     ctx.lineWidth = strokeWidth;

@@ -1,5 +1,5 @@
 import { types, type Instance, type SnapshotIn } from "mobx-state-tree";
-import { newSeed, type ElementLook } from "./ShapeLayerModel";
+import { ELEMENT_LOOKS, newSeed, type ElementLook } from "./ShapeLayerModel";
 
 export type ArrowHead = "none" | "arrow" | "triangle" | "dot";
 export type ArrowEnd = "start" | "end";
@@ -22,7 +22,7 @@ export const ArrowElement = types
     strokeColor: types.optional(types.string, "#000000"),
     strokeWidth: types.optional(types.number, 4),
     opacity: types.optional(types.number, 1),
-    look: types.optional(types.enumeration("ElementLook", ["clean", "sketchy"]), "clean"),
+    look: types.optional(types.enumeration("ElementLook", [...ELEMENT_LOOKS]), "clean"),
     seed: types.optional(types.number, () => newSeed()),
   })
   .actions((self) => ({

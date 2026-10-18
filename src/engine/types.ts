@@ -120,7 +120,8 @@ export interface ShapeElementLike {
   seed?: number;
 }
 
-export type ElementLook = "clean" | "sketchy";
+export const ELEMENT_LOOKS = ["clean", "sketchy", "pencil", "crayon", "charcoal"] as const;
+export type ElementLook = (typeof ELEMENT_LOOKS)[number];
 export type ArrowHead = "none" | "arrow" | "triangle" | "dot";
 export type FontFamilyId = "hand" | "sans" | "mono";
 export type TextAlign = "left" | "center" | "right";

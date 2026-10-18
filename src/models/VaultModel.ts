@@ -1,4 +1,5 @@
 import { types, type Instance, type SnapshotIn } from "mobx-state-tree";
+import type { ElementLook } from "./ShapeLayerModel";
 import { DexieService } from "@/services/DexieService";
 import { BlobStorageService } from "@/services/BlobStorageService";
 import { Stroke, PageModel } from "./CanvasModel";
@@ -54,7 +55,7 @@ export interface IShapeElementData {
   cornerRadius: number;
   fillColor: string | null;
   opacity: number;
-  look?: "clean" | "sketchy";
+  look?: ElementLook;
   seed?: number;
 }
 
@@ -71,7 +72,7 @@ export interface IArrowElementData {
   strokeColor: string;
   strokeWidth: number;
   opacity: number;
-  look: "clean" | "sketchy";
+  look: ElementLook;
   seed: number;
 }
 

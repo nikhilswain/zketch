@@ -1,4 +1,4 @@
-import type { ShapeElementLike, StrokeLike } from "../types";
+import type { BrushStyle, ElementLook, ShapeElementLike, StrokeLike } from "../types";
 import type { HeadShape, ResolvedArrow } from "../geometry/arrow";
 import type { Vec } from "../geometry/outline";
 import { brushRegistry } from "./BrushRegistry";
@@ -55,7 +55,7 @@ function edgeStrokes(corners: Vec[], width: number, seed: number): Line[] {
     const eb = over * (0.4 + r() * 0.6);
     const sa = { x: a.x - ux * ea + jitter(), y: a.y - uy * ea + jitter() };
     const sb = { x: b.x + ux * eb + jitter(), y: b.y + uy * eb + jitter() };
-    const bow = (r() < 0.5 ? -1 : 1) * Math.min(len * 0.012, 3) * (0.5 + r() * 0.5);
+    const bow = (r() < 0.5 ? -1 : 1) * Math.min(len * 0.018, 4.5) * (0.6 + r() * 0.4);
     const points = bowed(sa, sb, bow);
     return { points, pressures: pressureProfile(points.length, r), taperStart: width * 1.2, taperEnd: width * 1.6 };
   });
@@ -94,16 +94,54 @@ function roundedRect(x: number, y: number, w: number, h: number, k: number): Vec
   ];
 }
 
-function roundedRectStroke(s: ShapeElementLike, k: number, width: number): Line {
-  const r = rng(s.seed ?? 1);
-  const loop = roundedRect(s.x, s.y, s.width, s.height, k);
-  const dense: Vec[] = [];
-  for (let i = 0; i < loop.length; i++) {
-    dense.push(...bowed(loop[i], loop[(i + 1) % loop.length], 0).slice(0, -1));
+function roundedLoopStroke(corners: Vec[], radius: number, width: number, seed: number): Line {
+  const r = rng(seed);
+  const n = corners.length;
+  const fillets = corners.map((cur, i) => {
+    const prev = corners[(i + n - 1) % n];
+    const next = corners[(i + 1) % n];
+    const lp = Math.hypot(prev.x - cur.x, prev.y - cur.y) || 1;
+    const ln = Math.hypot(next.x - cur.x, next.y - cur.y) || 1;
+    const k = Math.min(radius * (0.6 + r() * 0.8), lp / 3, ln / 3);
+    const a = { x: cur.x + ((prev.x - cur.x) / lp) * k, y: cur.y + ((prev.y - cur.y) / lp) * k };
+    const b = { x: cur.x + ((next.x - cur.x) / ln) * k, y: cur.y + ((next.y - cur.y) / ln) * k };
+    return Array.from({ length: 7 }, (_, j) => {
+      const t = j / 6;
+      const u = 1 - t;
+      return { x: u * u * a.x + 2 * u * t * cur.x + t * t * b.x, y: u * u * a.y + 2 * u * t * cur.y + t * t * b.y };
+    });
+  });
+  const loop: Vec[] = [];
+  for (let i = 0; i < n; i++) {
+    const from = fillets[i][fillets[i].length - 1];
+    const to = fillets[(i + 1) % n][0];
+    const len = Math.hypot(to.x - from.x, to.y - from.y);
+    const bow = (r() < 0.5 ? -1 : 1) * Math.min(len * 0.018, 4.5) * (0.6 + r() * 0.4);
+    const edge = bowed(from, to, bow);
+    if (i === 0) {
+      const mid = Math.floor(edge.length / 2);
+      loop.push(...edge.slice(mid));
+    } else loop.push(...edge);
+    loop.push(...fillets[(i + 1) % n].slice(1, -1));
   }
-  const extra = Math.max(4, Math.round(dense.length * 0.04));
-  const drift = 1 + width * 0.25;
-  const points = [...dense, ...dense.slice(0, extra).map((p, i) => ({ x: p.x, y: p.y + (drift * (i + 1)) / extra }))];
+  const first = fillets[0][fillets[0].length - 1];
+  const to = fillets[1 % n][0];
+  const head = bowed(first, to, 0);
+  const lead = head.slice(0, Math.floor(head.length / 2) + 1);
+  const extra = Math.max(4, Math.round(lead.length * 0.35));
+  const drift = 1 + width * 0.35;
+  const ex = to.x - first.x;
+  const ey = to.y - first.y;
+  const el = Math.hypot(ex, ey) || 1;
+  const nx = -ey / el;
+  const ny = ex / el;
+  const closing = [...lead, ...lead.slice(lead.length - 1).flatMap((p) =>
+    Array.from({ length: extra }, (_, i) => {
+      const t = (i + 1) / extra;
+      return { x: p.x + (ex / el) * STEP * (i + 1) - nx * drift * t, y: p.y + (ey / el) * STEP * (i + 1) - ny * drift * t };
+    }),
+  )];
+  const points = [...loop, ...closing];
   return { points, pressures: pressureProfile(points.length, r), taperStart: width * 1.2, taperEnd: width * 2 };
 }
 
@@ -140,14 +178,22 @@ function ellipseFill(s: ShapeElementLike): Vec[] {
   });
 }
 
-function strokeOf(line: Line, color: string, width: number): StrokeLike {
+export const LOOK_BRUSHES: Record<Exclude<ElementLook, "clean">, { brush: BrushStyle; scale: number }> = {
+  sketchy: { brush: "ink", scale: 1.15 },
+  pencil: { brush: "pencil", scale: 2.5 },
+  crayon: { brush: "crayon", scale: 5 },
+  charcoal: { brush: "charcoal", scale: 2.8 },
+};
+
+function strokeOf(line: Line, color: string, width: number, look: ElementLook = "sketchy"): StrokeLike {
+  const spec = LOOK_BRUSHES[look as Exclude<ElementLook, "clean">] ?? LOOK_BRUSHES.sketchy;
   return {
     id: "sketch",
     points: line.points.map((p, i) => ({ x: p.x, y: p.y, pressure: line.pressures[i] ?? 0.5 })),
     color,
-    size: width * 1.15,
+    size: width * spec.scale,
     opacity: 1,
-    brushStyle: "ink",
+    brushStyle: spec.brush,
     timestamp: 0,
     thinning: 0.3,
     smoothing: 0.4,
@@ -175,9 +221,10 @@ export function drawSketchyShape(ctx: CanvasRenderingContext2D, s: ShapeElementL
     if (s.shapeType === "circle") {
       lines = [ellipseStroke(s, width)];
       fill = ellipseFill(s);
-    } else if (s.shapeType === "rectangle" && k >= 4) {
-      lines = [roundedRectStroke(s, k, width)];
-      fill = roundedRect(s.x, s.y, s.width, s.height, k);
+    } else if (k >= 4) {
+      const corners = polygonFor(s);
+      lines = [roundedLoopStroke(corners, k, width, s.seed ?? 1)];
+      fill = s.shapeType === "rectangle" ? roundedRect(s.x, s.y, s.width, s.height, k) : corners;
     } else {
       const corners = polygonFor(s);
       lines = edgeStrokes(corners, width, s.seed ?? 1);
@@ -192,7 +239,7 @@ export function drawSketchyShape(ctx: CanvasRenderingContext2D, s: ShapeElementL
     ctx.fill();
   }
   if (s.strokeColor !== "transparent" && width > 0) {
-    for (const line of hit.lines) renderStroke(ctx, strokeOf(line, s.strokeColor, width), brushRegistry);
+    for (const line of hit.lines) renderStroke(ctx, strokeOf(line, s.strokeColor, width, s.look), brushRegistry);
   }
 }
 
@@ -220,6 +267,7 @@ export function drawSketchyCurve(
   stroke: string,
   strokeWidth: number,
   ends: { startCapped: boolean; endCapped: boolean } = { startCapped: false, endCapped: true },
+  look: ElementLook = "sketchy",
 ) {
   const key = `${r.start.x}|${r.start.y}|${r.control.x}|${r.control.y}|${r.end.x}|${r.end.y}|${seed}|${strokeWidth}|${ends.startCapped}|${ends.endCapped}`;
   let hit = curveCache.get(owner);
@@ -239,10 +287,16 @@ export function drawSketchyCurve(
     };
     curveCache.set(owner, hit);
   }
-  renderStroke(ctx, strokeOf(hit.line, stroke, strokeWidth), brushRegistry);
+  renderStroke(ctx, strokeOf(hit.line, stroke, strokeWidth, look), brushRegistry);
 }
 
-export function drawSketchyHead(ctx: CanvasRenderingContext2D, head: HeadShape, stroke: string, strokeWidth: number) {
+export function drawSketchyHead(
+  ctx: CanvasRenderingContext2D,
+  head: HeadShape,
+  stroke: string,
+  strokeWidth: number,
+  look: ElementLook = "sketchy",
+) {
   if (head.type === "circle") {
     ctx.beginPath();
     ctx.arc(head.center.x, head.center.y, head.radius, 0, Math.PI * 2);
@@ -261,6 +315,6 @@ export function drawSketchyHead(ctx: CanvasRenderingContext2D, head: HeadShape, 
   for (const arm of [left, right]) {
     const points = bowed(tip, arm, 0);
     const line: Line = { points, pressures: points.map(() => 0.5), taperStart: 0, taperEnd: strokeWidth * 0.5 };
-    renderStroke(ctx, strokeOf(line, stroke, strokeWidth), brushRegistry);
+    renderStroke(ctx, strokeOf(line, stroke, strokeWidth, look), brushRegistry);
   }
 }

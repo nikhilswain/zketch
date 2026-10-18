@@ -34,6 +34,8 @@ import {
 import type { ShapeKind } from "@/models/ShapeLayerModel";
 import EraserModePicker from "./EraserModePicker";
 import { FAMILIES, HEADS, SIZES, Segmented } from "./ElementProperties";
+import LookPicker from "./LookPicker";
+import type { ElementLook } from "@/engine/types";
 import StrokeTrack from "./StrokeTrack";
 import { PanelVariantContext } from "./PanelFrame";
 import { BrushLibrary } from "./panels/BrushesPanel";
@@ -102,18 +104,12 @@ const BrushPopover: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   );
 };
 
-const LookPicker: React.FC = observer(() => {
+const ToolLook: React.FC = observer(() => {
   const canvasStore = useCanvasStore();
   return (
-    <Segmented
-      label="Look"
-      options={[
-        { id: "clean", label: "Clean" },
-        { id: "sketchy", label: "Sketchy" },
-      ]}
-      value={canvasStore.elementLook as "clean" | "sketchy"}
-      onPick={(v) => canvasStore.setElementLook(v)}
-    />
+    <div className="w-[230px]">
+      <LookPicker value={canvasStore.elementLook as ElementLook} onPick={(v) => canvasStore.setElementLook(v)} />
+    </div>
   );
 });
 
@@ -298,7 +294,7 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
               onChange={(v) => canvasStore.setShapeStrokeWidth(v)}
             />
           </div>
-          <LookPicker />
+          <ToolLook />
         </div>
       )}
 
@@ -342,7 +338,7 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
               onChange={(v) => canvasStore.setArrowStrokeWidth(v)}
             />
           </div>
-          <LookPicker />
+          <ToolLook />
         </div>
       )}
 

@@ -78,11 +78,17 @@ export function renderArrow(
   if (labelBox) clipOutBox(ctx, labelBox);
   const body = arrowBody(a, r);
   if (drawBody) drawBody(ctx, body);
-  else if (a.look === "sketchy")
-    drawSketchyCurve(ctx, a, body, a.seed, a.strokeColor, a.strokeWidth, {
-      startCapped: a.startHead !== "none",
-      endCapped: a.endHead !== "none",
-    });
+  else if (a.look && a.look !== "clean")
+    drawSketchyCurve(
+      ctx,
+      a,
+      body,
+      a.seed,
+      a.strokeColor,
+      a.strokeWidth,
+      { startCapped: a.startHead !== "none", endCapped: a.endHead !== "none" },
+      a.look,
+    );
   else {
     ctx.beginPath();
     traceCurve(ctx, body);
@@ -91,7 +97,7 @@ export function renderArrow(
   ctx.restore();
   for (const head of arrowHeads(a, r)) {
     if (!head) continue;
-    if (a.look === "sketchy") drawSketchyHead(ctx, head, a.strokeColor, a.strokeWidth);
+    if (a.look && a.look !== "clean") drawSketchyHead(ctx, head, a.strokeColor, a.strokeWidth, a.look);
     else drawHead(ctx, head);
   }
   ctx.restore();

@@ -15,6 +15,8 @@ import {
   TrashIcon,
 } from "@/components/icons";
 import StrokeTrack from "./StrokeTrack";
+import LookPicker from "./LookPicker";
+import type { ElementLook } from "@/engine/types";
 import { SWATCHES } from "./panels/ColourPanel";
 import HsvPicker from "./HsvPicker";
 
@@ -177,8 +179,8 @@ const ElementProperties: React.FC<{ variant: Variant }> = observer(({ variant })
       : canvasStore.shapeStrokeWidth;
   const look = hasSelection ? (vectors[0]?.look ?? null) : canvasStore.elementLook;
   const fill = hasSelection ? (shapes[0]?.fillColor ?? null) : canvasStore.shapeFillColor;
-  const rectangles = hasSelection ? shapes.filter((s) => s.shapeType === "rectangle") : [];
-  const showCorners = hasSelection ? rectangles.length > 0 : tool === "shape" && canvasStore.currentShapeType === "rectangle";
+  const rectangles = hasSelection ? shapes.filter((s) => s.shapeType !== "circle") : [];
+  const showCorners = hasSelection ? rectangles.length > 0 : tool === "shape" && canvasStore.currentShapeType !== "circle";
   const corners = hasSelection ? rectangles[0]?.cornerRadius ?? 0 : canvasStore.shapeCornerRadius;
   const startHead = hasSelection ? arrows[0]?.startHead : canvasStore.arrowKind === "line" ? "none" : canvasStore.arrowStartHead;
   const endHead = hasSelection ? arrows[0]?.endHead : canvasStore.arrowKind === "line" ? "none" : canvasStore.arrowEndHead;
@@ -275,13 +277,8 @@ const ElementProperties: React.FC<{ variant: Variant }> = observer(({ variant })
 
       {showLook && (
         <Row label="Look">
-          <Segmented
-            label="Look"
-            options={[
-              { id: "clean", label: "Clean" },
-              { id: "sketchy", label: "Sketchy" },
-            ]}
-            value={look as "clean" | "sketchy" | null}
+          <LookPicker
+            value={look as ElementLook | null}
             onPick={(v) => {
               canvasStore.setElementLook(v);
               if (hasSelection) {
