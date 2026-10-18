@@ -41,9 +41,10 @@ const TOUCH = [
 ] as const;
 
 const ERASER = [
-  { whole: false, label: "Pixel eraser", hint: "Rubs out the parts of strokes it touches; shapes it touches are deleted." },
-  { whole: true, label: "Whole strokes", hint: "Any stroke or shape the eraser touches fades, and is deleted when you lift." },
-];
+  { mode: "element", label: "Whole elements", hint: "Anything the eraser touches fades, and is deleted when you lift." },
+  { mode: "pixel", label: "Pixels", hint: "Rubs out only the parts it touches, shapes included." },
+  { mode: "smart", label: "Smart", hint: "Rubs out brush strokes like Pixels; removes shapes, arrows and text whole." },
+] as const;
 
 function Schematic({ id }: { id: Exclude<LayoutId, "custom"> }) {
   const panel = "rounded-[2px] bg-zk-divider";
@@ -267,9 +268,9 @@ const SettingsPage: React.FC<{ onClose: () => void }> = observer(({ onClose }) =
               ))}
             </div>
             <h3 className="mt-6 mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-zk-muted">Eraser</h3>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               {ERASER.map((e) => (
-                <Option key={e.label} selected={settings.eraserWholeStroke === e.whole} label={e.label} hint={e.hint} onClick={() => settings.setEraserWholeStroke(e.whole)} />
+                <Option key={e.label} selected={settings.eraserMode === e.mode} label={e.label} hint={e.hint} onClick={() => settings.setEraserMode(e.mode)} />
               ))}
             </div>
           </Section>

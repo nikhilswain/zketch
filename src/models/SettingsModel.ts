@@ -37,9 +37,7 @@ export const SettingsModel = types
       types.enumeration("TouchMode", ["auto", "stylus-only", "touch-draw"]),
       "auto",
     ),
-    // Eraser mode: false = pixel eraser (destination-out, current behavior), true = object eraser
-    // (deletes whole strokes/shapes, fade preview, commit on release).
-    eraserWholeStroke: types.optional(types.boolean, false),
+    eraserMode: types.optional(types.enumeration("EraserMode", ["element", "pixel", "smart"]), "element"),
     accent: types.optional(types.string, "#FF6B5B"),
     surround: types.optional(types.enumeration("SurroundTone", ["light", "dark"]), "light"),
   })
@@ -72,7 +70,7 @@ export const SettingsModel = types
           showGrid: self.showGrid,
           snapToGrid: self.snapToGrid,
           touchMode: self.touchMode,
-          eraserWholeStroke: self.eraserWholeStroke,
+          eraserMode: self.eraserMode,
           accent: self.accent,
           surround: self.surround,
         };
@@ -109,8 +107,9 @@ export const SettingsModel = types
           self.showGrid = settings.showGrid ?? self.showGrid;
           self.snapToGrid = settings.snapToGrid ?? self.snapToGrid;
           self.touchMode = settings.touchMode ?? self.touchMode;
-          self.eraserWholeStroke =
-            settings.eraserWholeStroke ?? self.eraserWholeStroke;
+          if (["element", "pixel", "smart"].includes(settings.eraserMode)) {
+            self.eraserMode = settings.eraserMode;
+          }
           if (
             typeof settings.accent === "string" &&
             /^#[0-9a-fA-F]{6}$/.test(settings.accent)
@@ -170,8 +169,8 @@ export const SettingsModel = types
         self.touchMode = mode;
         saveToStorage();
       },
-      setEraserWholeStroke(v: boolean) {
-        self.eraserWholeStroke = v;
+      setEraserMode(mode: "element" | "pixel" | "smart") {
+        self.eraserMode = mode;
         saveToStorage();
       },
       setSurround(tone: "light" | "dark") {

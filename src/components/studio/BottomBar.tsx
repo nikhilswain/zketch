@@ -26,6 +26,7 @@ import {
   setDeckOpen,
 } from "@/utils/dockLayout";
 import type { ShapeKind } from "@/models/ShapeLayerModel";
+import EraserModePicker from "./EraserModePicker";
 import StrokeTrack from "./StrokeTrack";
 import { PanelVariantContext } from "./PanelFrame";
 import { BrushLibrary } from "./panels/BrushesPanel";
@@ -231,18 +232,7 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
               onChange={(v) => canvasStore.setEraserSize(v)}
             />
           </div>
-          <label
-            title="On: anything the eraser touches is deleted whole. Off: rubs out only the parts it touches."
-            className="flex cursor-pointer items-center gap-2 text-[13px] text-zk-text-2"
-          >
-            <input
-              type="checkbox"
-              checked={settingsStore.eraserWholeStroke}
-              onChange={(e) => settingsStore.setEraserWholeStroke(e.target.checked)}
-              className="h-4 w-4 accent-[var(--zk-accent)]"
-            />
-            Whole strokes
-          </label>
+          <EraserModePicker />
         </div>
       )}
 

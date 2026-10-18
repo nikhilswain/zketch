@@ -573,7 +573,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         // In whole-stroke eraser mode, the fade preview is the feedback — no destination-out path.
         const suppressPreview =
           canvasStore.currentBrushStyle === "eraser" &&
-          settingsStore.eraserWholeStroke;
+          settingsStore.eraserMode === "element";
         if (currentPoints.length > 1 && !suppressPreview) {
           const temp: StrokeLike = {
             id: strokeIdRef.current || "temp",
@@ -614,7 +614,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       canvasStore.currentSize,
       canvasStore.eraserSize,
       canvasStore.brushSettings.opacity,
-      settingsStore.eraserWholeStroke,
+      settingsStore.eraserMode,
     ]);
 
     useEffect(() => {
@@ -1178,69 +1178,29 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           // marked they stay faded until release (commits the delete) or cancel.
           if (canvasStore.currentBrushStyle === "eraser") {
             const eraserR = canvasStore.eraserSize / 2;
-            const eraserRSq = eraserR * eraserR;
-            const wholeStroke = settingsStore.eraserWholeStroke;
+            const mode = settingsStore.eraserMode;
             const activeLayer = canvasStore.activeLayer as any;
             if (activeLayer && activeLayer.type === "draw" && !activeLayer.locked) {
+              const lookup = buildElementLookup(canvasStore.layers as any);
+              const p = { x: canvasPoint.x, y: canvasPoint.y };
               for (const el of activeLayer.elements) {
                 if (!el) continue;
                 if (canvasStore.pendingEraserDeletes.has(el.id)) continue;
-                if (isShapeElement(el)) {
-                  const nx = Math.max(el.x, Math.min(canvasPoint.x, el.x + el.width));
-                  const ny = Math.max(el.y, Math.min(canvasPoint.y, el.y + el.height));
-                  const ddx = canvasPoint.x - nx;
-                  const ddy = canvasPoint.y - ny;
-                  if (ddx * ddx + ddy * ddy <= eraserRSq) {
-                    canvasStore.markPendingErase(el.id);
+                const kind = elementKind(el);
+                let hit = false;
+                if (kind === "stroke") {
+                  hit = mode === "element" && strokeHit(el, p.x, p.y, eraserR);
+                } else if (mode !== "pixel") {
+                  if (kind === "shape") {
+                    hit = pointInBox(shapeBox(el), p, eraserR + (el.strokeWidth ?? 0) / 2);
+                  } else if (kind === "arrow") {
+                    hit = curveDistance(resolveArrow(el, lookup, measureText), p) <= eraserR + el.strokeWidth / 2;
+                  } else if (kind === "text" && !el.containerId) {
+                    const placement = textPlacement(el, lookup, measureText);
+                    hit = !!placement && pointInBox(placement.box, p, eraserR);
                   }
-                } else if (wholeStroke && el.points && el.points.length > 0) {
-                  // Stroke: distance from eraser center to nearest segment ≤ R + size/2.
-                  const tol = (el.size ?? 1) / 2 + eraserR;
-                  const tolSq = tol * tol;
-                  // AABB pre-filter.
-                  let xMin = Infinity, yMin = Infinity, xMax = -Infinity, yMax = -Infinity;
-                  for (const p of el.points) {
-                    if (p.x < xMin) xMin = p.x;
-                    if (p.y < yMin) yMin = p.y;
-                    if (p.x > xMax) xMax = p.x;
-                    if (p.y > yMax) yMax = p.y;
-                  }
-                  if (
-                    canvasPoint.x < xMin - tol ||
-                    canvasPoint.x > xMax + tol ||
-                    canvasPoint.y < yMin - tol ||
-                    canvasPoint.y > yMax + tol
-                  )
-                    continue;
-                  let hit = false;
-                  if (el.points.length === 1) {
-                    const p = el.points[0];
-                    const dx = canvasPoint.x - p.x;
-                    const dy = canvasPoint.y - p.y;
-                    hit = dx * dx + dy * dy <= tolSq;
-                  } else {
-                    for (let k = 0; k < el.points.length - 1; k++) {
-                      const p1 = el.points[k];
-                      const p2 = el.points[k + 1];
-                      const dx = p2.x - p1.x;
-                      const dy = p2.y - p1.y;
-                      const lenSq = dx * dx + dy * dy;
-                      let t = lenSq === 0
-                        ? 0
-                        : ((canvasPoint.x - p1.x) * dx + (canvasPoint.y - p1.y) * dy) / lenSq;
-                      t = Math.max(0, Math.min(1, t));
-                      const cxp = p1.x + t * dx;
-                      const cyp = p1.y + t * dy;
-                      const ddx = canvasPoint.x - cxp;
-                      const ddy = canvasPoint.y - cyp;
-                      if (ddx * ddx + ddy * ddy <= tolSq) {
-                        hit = true;
-                        break;
-                      }
-                    }
-                  }
-                  if (hit) canvasStore.markPendingErase(el.id);
                 }
+                if (hit) canvasStore.markPendingErase(el.id);
               }
               engineRef.current?.invalidate();
             }
@@ -1448,7 +1408,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       if (prevIsDrawingRef.current && !isDrawing) {
         const isObjectEraser =
           canvasStore.currentBrushStyle === "eraser" &&
-          settingsStore.eraserWholeStroke;
+          settingsStore.eraserMode === "element";
 
         if (currentPoints.length > 1 && !isObjectEraser) {
           const endTime = Date.now();
