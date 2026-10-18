@@ -1,4 +1,6 @@
 import { types, type Instance, type SnapshotIn } from "mobx-state-tree";
+import { layoutText } from "@/engine/geometry/textLayout";
+import { measureText } from "@/engine/render/fonts";
 
 export type FontFamilyId = "hand" | "sans" | "mono";
 export type TextAlign = "left" | "center" | "right";
@@ -18,6 +20,19 @@ export const TextElement = types
     rotation: types.optional(types.number, 0),
     containerId: types.optional(types.maybeNull(types.string), null),
   })
+  .views((self) => ({
+    get layout() {
+      return layoutText(self.text, self.fontSize, self.fontFamily as FontFamilyId, null, measureText);
+    },
+  }))
+  .views((self) => ({
+    get width() {
+      return self.layout.width;
+    },
+    get height() {
+      return self.layout.height;
+    },
+  }))
   .actions((self) => ({
     setText(t: string) {
       self.text = t;
@@ -47,6 +62,10 @@ export const TextElement = types
     },
     setRotation(deg: number) {
       self.rotation = ((deg % 360) + 360) % 360;
+    },
+    setSize(_width: number, height: number) {
+      const current = self.layout.height;
+      if (current > 0 && height > 0) self.fontSize = Math.max(4, Math.min(512, (self.fontSize * height) / current));
     },
   }));
 

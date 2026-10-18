@@ -297,6 +297,7 @@ export interface EngineConfig {
   } | null;
   // Element IDs the eraser is hovering over but hasn't committed yet (rendered faded).
   getPendingEraserDeletes?: () => Set<string>;
+  getHiddenElementId?: () => string | null;
   // Optional: provide per-brush rendering options (size, smoothing, taper, etc.)
   getBrushOptions?: (
     brush: BrushStyle,

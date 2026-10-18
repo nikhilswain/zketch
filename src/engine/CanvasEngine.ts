@@ -9,7 +9,7 @@ import { renderDrawLayer } from "./render/renderDrawLayer";
 import { buildElementLookup, type ElementLookup } from "./render/lookup";
 import { measureText, onFontsReady } from "./render/fonts";
 import { renderArrow } from "./render/renderArrow";
-import { bindableBox, boxCorners, isBindable, resolveArrow } from "./geometry";
+import { bindableBox, boxCorners, freeTextBox, isBindable, resolveArrow } from "./geometry";
 import { renderArrowHandles } from "./arrowHandles";
 import { drawImageLayer } from "./render/renderImage";
 import {
@@ -47,6 +47,7 @@ export class CanvasEngine {
   private display: HTMLCanvasElement; // Final composited result (renamed from fg)
   private ui: HTMLCanvasElement;
   private lookup: ElementLookup = new Map();
+  private hidden: string | null = null;
 
   private bgCtx: CanvasRenderingContext2D;
   private displayCtx: CanvasRenderingContext2D;
@@ -69,6 +70,7 @@ export class CanvasEngine {
       zoom: number;
       animating: boolean;
       deps: unknown[];
+      hidden: string | null;
     }
   > = new Map();
   private stopFontListener: (() => void) | null = null;
@@ -454,6 +456,7 @@ export class CanvasEngine {
 
     const dpr = window.devicePixelRatio || 1;
     const pending = this.config.getPendingEraserDeletes?.();
+    this.hidden = this.config.getHiddenElementId?.() ?? null;
 
     const margin = this.overscanDevicePx() / dpr;
     const viewW = this.display.width / dpr;
@@ -484,6 +487,7 @@ export class CanvasEngine {
         !isAnimating &&
         !bake.animating &&
         bake.pending === pending &&
+        bake.hidden === this.hidden &&
         bake.content === content &&
         sameDeps(bake.deps, deps);
       const reusable =
@@ -497,6 +501,7 @@ export class CanvasEngine {
         !isAnimating &&
         !bake.animating &&
         bake.pending === pending &&
+        bake.hidden === this.hidden &&
         sameDeps(bake.deps, deps) &&
         this.appendedElement(bake.content, elements);
 
@@ -547,6 +552,7 @@ export class CanvasEngine {
           zoom,
           animating: isAnimating,
           deps,
+          hidden: this.hidden,
         });
       }
 
@@ -652,6 +658,7 @@ export class CanvasEngine {
         getBrushOptions: this.config.getBrushOptions,
         pending,
         lookup: this.lookup,
+        hidden: this.hidden,
       });
     }
   }
@@ -778,7 +785,9 @@ export class CanvasEngine {
         if (el && elementKind(el) === "arrow") continue;
         if (el) {
           element = el;
-          if (isShapeElement(el)) {
+          if (elementKind(el) === "text") {
+            bbox = freeTextBox(el as any, measureText);
+          } else if (isShapeElement(el)) {
             bbox = el as any;
           } else if ((el as any).points && (el as any).points.length > 0) {
             // Stroke: AABB of its points (no rotation).
@@ -901,6 +910,8 @@ export class CanvasEngine {
         transformable = layer as TransformableLayer;
       } else if (element && isShapeElement(element)) {
         transformable = element as TransformableLayer;
+      } else if (element && elementKind(element) === "text" && !element.containerId) {
+        transformable = freeTextBox(element, measureText) as TransformableLayer;
       }
       if (!transformable) return;
       transformController.renderHandles(ctx, transformable, this.pz, dpr, pad);

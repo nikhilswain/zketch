@@ -17,7 +17,7 @@ import {
 } from "./LayerModel";
 import { createShapeElement, type ElementLook, type ShapeKind } from "./ShapeLayerModel";
 import { createArrowElement, type ArrowHead } from "./ArrowElementModel";
-import type { FontFamilyId, TextAlign } from "./TextElementModel";
+import { createTextElement, type FontFamilyId, type TextAlign } from "./TextElementModel";
 import { buildElementLookup } from "@/engine/render/lookup";
 import { elementBounds } from "@/engine/render/elementBounds";
 import { measureText } from "@/engine/render/fonts";
@@ -150,6 +150,7 @@ export const CanvasModel = types
     maxHistorySize: 50,
     renderVersion: 0, // force re-renders
     isInteracting: false,
+    editingTextId: null as string | null,
     // Element IDs currently faded for "pending erase". Committed (deleted) on drag-end.
     pendingEraserDeletes: new Set<string>(),
   }))
@@ -328,6 +329,7 @@ export const CanvasModel = types
       if (layer.type === "draw" && ref.elementId) {
         const element = (layer as any).findElement(ref.elementId);
         if (element && isShapeElement(element)) return element;
+        if (element && elementKind(element) === "text" && !element.containerId) return element;
       }
       return null;
     },
@@ -986,6 +988,61 @@ export const CanvasModel = types
         return elementId
           ? { layerId: drawLayer.id, elementId, createdLayer: target.created }
           : null;
+      },
+
+      setEditingText(id: string | null) {
+        self.editingTextId = id;
+      },
+
+      findElementById(id: string): { layer: IDrawLayer; element: any } | null {
+        for (const layer of self.layers) {
+          if (layer.type !== "draw") continue;
+          const element = (layer as IDrawLayer).findElement(id);
+          if (element) return { layer: layer as IDrawLayer, element };
+        }
+        return null;
+      },
+
+      addText(
+        x: number,
+        y: number,
+        options: { fallback?: boolean; containerId?: string | null; layerId?: string } = {},
+      ): { layerId: string; elementId: string; createdLayer: boolean } | null {
+        let layer: IDrawLayer | null = null;
+        let created = false;
+        if (options.layerId) {
+          layer = self.layers.find((l) => l.id === options.layerId) as IDrawLayer;
+        } else {
+          const target = (self as any).targetDrawLayer(options.fallback ?? false) as { layer: IDrawLayer; created: boolean } | null;
+          layer = target?.layer ?? null;
+          created = !!target?.created;
+        }
+        if (!layer) return null;
+        const data = createTextElement(x, y, "", {
+          fontFamily: self.textFontFamily as FontFamilyId,
+          fontSize: self.textFontSize,
+          align: options.containerId ? "center" : (self.textAlign as TextAlign),
+          color: self.currentColor,
+          containerId: options.containerId ?? null,
+        });
+        layer.elements.push(data as any);
+        self.editingTextId = data.id as string;
+        return { layerId: layer.id, elementId: data.id as string, createdLayer: created };
+      },
+
+      commitTextEdit(id: string, text: string) {
+        self.editingTextId = null;
+        const found = (self as any).findElementById(id) as { layer: IDrawLayer; element: any } | null;
+        if (!found) return;
+        const before = found.element.text as string;
+        if (!text.trim()) {
+          found.layer.removeElement(id);
+          if (before) self.saveToHistory();
+          return;
+        }
+        if (text === before) return;
+        found.element.setText(text);
+        self.saveToHistory();
       },
 
       addArrow(

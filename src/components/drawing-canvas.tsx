@@ -30,7 +30,9 @@ import {
   resolveArrow,
   shapeBox,
   textPlacement,
+  LINE_HEIGHT,
 } from "@/engine/geometry";
+import TextEditorOverlay from "./TextEditorOverlay";
 import { buildElementLookup } from "@/engine/render/lookup";
 import { hitArrowHandle, type ArrowHandle } from "@/engine/arrowHandles";
 import { measureText } from "@/engine/render/fonts";
@@ -214,6 +216,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               }
             : null,
         getPendingEraserDeletes: () => canvasStore.pendingEraserDeletes,
+        getHiddenElementId: () => canvasStore.editingTextId,
         // Use a dynamic brush options builder bound to the latest settings
         getBrushOptions: (brush, size) =>
           createGetBrushOptions(canvasStore.brushSettings as any)(
@@ -294,6 +297,15 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         end();
       };
     }, [canvasStore]);
+
+    useEffect(
+      () =>
+        reaction(
+          () => canvasStore.editingTextId,
+          () => engineRef.current?.invalidate(),
+        ),
+      [canvasStore],
+    );
 
     useEffect(
       () =>
@@ -606,7 +618,13 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     ]);
 
     useEffect(() => {
+      const isTyping = (e: KeyboardEvent) => {
+        const t = e.target as HTMLElement | null;
+        return !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+      };
+
       const handleKeyDown = (e: KeyboardEvent) => {
+        if (isTyping(e)) return;
         if (e.code === "Space" && !e.repeat) {
           e.preventDefault();
           setSpacePressed(true);
@@ -635,6 +653,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       };
 
       const handleKeyUp = (e: KeyboardEvent) => {
+        if (isTyping(e)) return;
         if (e.code === "Space") {
           e.preventDefault();
           setSpacePressed(false);
@@ -784,6 +803,21 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             const shift = shiftDownRef.current;
             const doubleTap = isDoubleTap(pt.x, pt.y);
 
+            if (doubleTap && !shift) {
+              const hit = hitTestSelectableLayers(canvasPoint.x, canvasPoint.y);
+              const target = hit?.elementId ? canvasStore.findElementById(hit.elementId) : null;
+              const kind = target ? elementKind(target.element) : null;
+              if (target && kind === "text") {
+                canvasStore.selectElement(target.layer.id, target.element.id);
+                canvasStore.setEditingText(target.element.id);
+                return;
+              }
+              if (!hit) {
+                canvasStore.addText(canvasPoint.x, canvasPoint.y - (canvasStore.textFontSize * LINE_HEIGHT) / 2);
+                return;
+              }
+            }
+
             const arrow = selectedArrow();
             if (arrow && !shift) {
               const lookup = buildElementLookup(canvasStore.layers as any);
@@ -875,7 +909,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                               { x: el.end.x, y: el.end.y },
                             ],
                           });
-                        } else if (isShapeElement(el)) {
+                        } else if (isShapeElement(el) || elementKind(el) === "text") {
                           snap.push({
                             layerId: ref.layerId,
                             elementId: ref.elementId,
@@ -979,6 +1013,18 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               additive: false,
             };
             drawingStartedRef.current = true;
+            return;
+          }
+
+          if (canvasStore.activeTool === "text") {
+            if (canvasStore.editingTextId) return;
+            const hit = hitTestSelectableLayers(canvasPoint.x, canvasPoint.y);
+            const target = hit?.elementId ? canvasStore.findElementById(hit.elementId) : null;
+            if (target && elementKind(target.element) === "text") {
+              canvasStore.setEditingText(target.element.id);
+              return;
+            }
+            canvasStore.addText(canvasPoint.x, canvasPoint.y - (canvasStore.textFontSize * LINE_HEIGHT) / 2);
             return;
           }
 
@@ -1615,7 +1661,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             );
             single.setRotation(result.rotation);
           } else if (["nw", "ne", "se", "sw"].includes(transformHandle)) {
-            const maintainAspect = !e.shiftKey;
+            const maintainAspect = !e.shiftKey || elementKind(single) === "text";
             result = transformController.applyResize(
               transformHandle as "nw" | "ne" | "se" | "sw",
               { x: localX, y: localY },
@@ -1813,6 +1859,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       }
 
       if (canvasStore.activeTool === "select") return "cursor-default";
+      if (canvasStore.activeTool === "text") return "cursor-text";
       // Eraser cursor is only hidden while the brush tool is actually using the eraser.
       if (
         canvasStore.activeTool === "brush" &&
@@ -1856,7 +1903,16 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       canvasLocked,
     ]);
 
+    const handleTextDone = (id: string, kept: boolean) => {
+      if (!kept) return;
+      const found = canvasStore.findElementById(id);
+      if (!found) return;
+      canvasStore.setActiveTool("select");
+      canvasStore.selectElement(found.layer.id, found.element.containerId ?? found.element.id);
+    };
+
     return (
+      <>
       <div
         ref={rootRef}
         data-canvas-root
@@ -1882,6 +1938,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
           zIndex: 0,
         }}
       />
+      <TextEditorOverlay onDone={handleTextDone} />
+      </>
     );
   },
 );

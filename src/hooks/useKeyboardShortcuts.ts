@@ -146,7 +146,8 @@ export const useKeyboardShortcuts = (
       // Don't trigger shortcuts when typing in inputs
       if (
         e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target instanceof HTMLElement && e.target.isContentEditable)
       ) {
         return;
       }
