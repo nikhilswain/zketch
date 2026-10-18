@@ -11,7 +11,7 @@ import {
 } from "../geometry/arrow";
 import type { Box } from "../geometry/outline";
 import type { Measure } from "../geometry/textLayout";
-import { drawSketchyCurve } from "./sketchy";
+import { drawSketchyCurve, drawSketchyHead } from "./sketchy";
 
 export function traceCurve(ctx: CanvasRenderingContext2D, r: ResolvedArrow) {
   ctx.moveTo(r.start.x, r.start.y);
@@ -85,6 +85,10 @@ export function renderArrow(
     ctx.stroke();
   }
   ctx.restore();
-  for (const head of arrowHeads(a, r)) drawHead(ctx, head);
+  for (const head of arrowHeads(a, r)) {
+    if (!head) continue;
+    if (a.look === "sketchy") drawSketchyHead(ctx, head, a.strokeColor, a.strokeWidth);
+    else drawHead(ctx, head);
+  }
   ctx.restore();
 }

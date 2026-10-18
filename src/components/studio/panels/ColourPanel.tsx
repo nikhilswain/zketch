@@ -24,7 +24,9 @@ const ColourBody: React.FC = observer(() => {
   const variant = usePanelVariant();
   const shapes = canvasStore.selectedShapeElements as any[];
   const previewShape = shapes[0] ?? null;
-  const colour = canvasStore.currentColor;
+  const shown = canvasStore.displayColor;
+  const colour = shown ?? canvasStore.currentColor;
+  const canClear = shapes.length > 0 || canvasStore.activeTool === "shape";
 
   const setTarget = (t: "stroke" | "fill") => {
     canvasStore.setColorTarget(t);
@@ -69,17 +71,30 @@ const ColourBody: React.FC = observer(() => {
 
   const swatches = (
     <div className={`grid gap-1 ${variant === "deck" ? "grid-cols-4" : "grid-cols-6"}`}>
+      {canClear && (
+        <button
+          aria-label={canvasStore.colorTarget === "fill" ? "No fill" : "No stroke"}
+          aria-pressed={shown === null}
+          onClick={() => canvasStore.clearSelectionColor()}
+          className="relative aspect-square overflow-hidden rounded-[3px] bg-zk-raised"
+          style={{
+            boxShadow: shown === null ? "0 0 0 2px var(--zk-surface), 0 0 0 3px #ECEBE7" : "inset 0 0 0 1px rgba(255,255,255,0.08)",
+          }}
+        >
+          <span className="absolute top-1/2 left-1/2 h-px w-[140%] -translate-x-1/2 -translate-y-1/2 -rotate-45 bg-[#E5644D]" />
+        </button>
+      )}
       {SWATCHES.map((s) => (
         <button
           key={s.hex}
           aria-label={s.name}
-          aria-pressed={colour.toUpperCase() === s.hex}
+          aria-pressed={shown?.toUpperCase() === s.hex}
           onClick={() => canvasStore.setColor(s.hex)}
           className="aspect-square rounded-[3px]"
           style={{
             backgroundColor: s.hex,
             boxShadow:
-              colour.toUpperCase() === s.hex
+              shown?.toUpperCase() === s.hex
                 ? "0 0 0 2px var(--zk-surface), 0 0 0 3px #ECEBE7"
                 : "inset 0 0 0 1px rgba(255,255,255,0.08)",
           }}
@@ -103,7 +118,7 @@ const ColourBody: React.FC = observer(() => {
   return (
     <div className="flex flex-col gap-2.5 px-3 pb-3">
       {target}
-      <HsvPicker value={colour} onChange={(hex) => canvasStore.setColor(hex)} size={270} />
+      <HsvPicker value={colour} onChange={(hex) => canvasStore.setColor(hex)} size="fill" />
       {swatches}
     </div>
   );

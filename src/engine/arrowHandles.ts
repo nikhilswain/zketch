@@ -14,10 +14,16 @@ export function arrowHandlePositions(r: ResolvedArrow): Record<ArrowHandle, Vec>
 export function hitArrowHandle(r: ResolvedArrow, p: Vec, zoom: number): ArrowHandle | null {
   const radius = (ARROW_HANDLE_RADIUS + 3) / zoom;
   const pos = arrowHandlePositions(r);
-  for (const h of ["start", "end", "mid"] as const) {
-    if (Math.hypot(p.x - pos[h].x, p.y - pos[h].y) <= radius) return h;
+  let best: ArrowHandle | null = null;
+  let bestDist = radius;
+  for (const h of ["mid", "start", "end"] as const) {
+    const d = Math.hypot(p.x - pos[h].x, p.y - pos[h].y);
+    if (d <= bestDist) {
+      best = h;
+      bestDist = d;
+    }
   }
-  return null;
+  return best;
 }
 
 export function renderArrowHandles(ctx: CanvasRenderingContext2D, r: ResolvedArrow, pz: PanZoom) {

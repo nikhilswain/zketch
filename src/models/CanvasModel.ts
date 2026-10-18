@@ -22,7 +22,9 @@ import { buildElementLookup } from "@/engine/render/lookup";
 import { elementBounds } from "@/engine/render/elementBounds";
 import { cloneElements } from "@/utils/cloneElements";
 import { measureText } from "@/engine/render/fonts";
-import { isBindable, resolveArrow } from "@/engine/geometry";
+import { isBindable, LABEL_PADDING, labelPlacement, resolveArrow } from "@/engine/geometry";
+
+const LABEL_HEIGHT_FIT: Record<string, number> = { rectangle: 1, circle: 0.72, diamond: 0.55, triangle: 0.55 };
 // Import shared models and re-export for backward compatibility
 import { Point, Stroke, BrushSettings } from "./SharedModels";
 export { Point, Stroke, BrushSettings } from "./SharedModels";
@@ -131,6 +133,7 @@ export const CanvasModel = types
     shapeCornerRadius: types.optional(types.number, 8),
     shapeOpacity: types.optional(types.number, 1),
     shapeFillColor: types.optional(types.maybeNull(types.string), null),
+    shapeStrokeNone: types.optional(types.boolean, false),
     arrowKind: types.optional(types.enumeration("ArrowKind", ["arrow", "line"]), "arrow"),
     arrowStartHead: types.optional(types.enumeration("ArrowHeadDefault", ["none", "arrow", "triangle", "dot"]), "none"),
     arrowEndHead: types.optional(types.enumeration("ArrowHeadDefault", ["none", "arrow", "triangle", "dot"]), "arrow"),
@@ -363,6 +366,21 @@ export const CanvasModel = types
         }
       }
       return out;
+    },
+    get displayColor(): string | null {
+      const first = (self as any).selectedDrawElements[0];
+      if (!first) {
+        if (self.colorTarget === "fill" && self.activeTool === "shape") return self.shapeFillColor;
+        return self.currentColor;
+      }
+      const kind = elementKind(first);
+      if (kind === "shape") {
+        if (self.colorTarget === "fill") return first.fillColor;
+        return first.strokeColor === "transparent" ? null : first.strokeColor;
+      }
+      if (kind === "text") return first.color;
+      if (kind === "arrow") return first.strokeColor;
+      return first.color ?? self.currentColor;
     },
     get selectedShapeElements() {
       const out: any[] = [];
@@ -699,6 +717,7 @@ export const CanvasModel = types
       },
       setColor(color: string) {
         self.currentColor = color;
+        if (self.colorTarget !== "fill") self.shapeStrokeNone = false;
         const shapes = self.selectedShapeElements as any[];
         for (const shapeEl of shapes) {
           if (self.colorTarget === "fill") {
@@ -713,7 +732,7 @@ export const CanvasModel = types
         }
         if (self.colorTarget !== "fill") {
           for (const a of (self as any).selectedArrowElements) a.setStrokeColor(color);
-          for (const t of (self as any).selectedDrawElements) if (elementKind(t) === "text") t.setColor(color);
+          for (const t of (self as any).selectedTextTargets) t.setColor(color);
         }
       },
       setColorTarget(target: "stroke" | "fill") {
@@ -937,6 +956,17 @@ export const CanvasModel = types
       setShapeFillColor(c: string | null) {
         self.shapeFillColor = c;
       },
+      setShapeStrokeNone(none: boolean) {
+        self.shapeStrokeNone = none;
+      },
+      clearSelectionColor() {
+        const shapes = self.selectedShapeElements as any[];
+        if (self.colorTarget === "fill") {
+          if (shapes.length) shapes.forEach((s) => s.setFillColor(null));
+          else self.shapeFillColor = null;
+        } else if (shapes.length) shapes.forEach((s) => s.setStrokeColor("transparent"));
+        else self.shapeStrokeNone = true;
+      },
       setArrowKind(k: "arrow" | "line") {
         self.arrowKind = k;
       },
@@ -1031,7 +1061,7 @@ export const CanvasModel = types
         if (!target) return null;
         const drawLayer = target.layer;
         const shapeData = createShapeElement(shapeType, x, y, width, height, {
-          strokeColor: self.currentColor,
+          strokeColor: self.shapeStrokeNone ? "transparent" : self.currentColor,
           strokeWidth: self.shapeStrokeWidth,
           cornerRadius: self.shapeCornerRadius,
           opacity: self.shapeOpacity,
@@ -1143,6 +1173,21 @@ export const CanvasModel = types
         return { layerId: layer.id, elementId: data.id as string, createdLayer: created };
       },
 
+      fitLabelContainer(label: any) {
+        if (!label?.containerId) return;
+        const found = (self as any).findElementById(label.containerId) as { element: any } | null;
+        const shape = found?.element;
+        if (!shape || elementKind(shape) !== "shape") return;
+        const placement = labelPlacement(shape, label, undefined, measureText);
+        if (!placement) return;
+        const fit = LABEL_HEIGHT_FIT[shape.shapeType] ?? 1;
+        const needed = Math.ceil((placement.layout.height + LABEL_PADDING * 2) / fit);
+        if (shape.height >= needed) return;
+        const cy = shape.y + shape.height / 2;
+        shape.setSize(shape.width, needed);
+        shape.setPosition(shape.x, cy - needed / 2);
+      },
+
       editLabel(containerId: string) {
         const found = (self as any).findElementById(containerId) as { layer: IDrawLayer; element: any } | null;
         if (!found) return;
@@ -1170,6 +1215,7 @@ export const CanvasModel = types
         }
         if (text === before) return;
         found.element.setText(text);
+        (self as any).fitLabelContainer(found.element);
         self.saveToHistory();
       },
 
@@ -1177,9 +1223,9 @@ export const CanvasModel = types
         start: { x: number; y: number },
         end: { x: number; y: number },
         bindings: { start: string | null; end: string | null },
-        fallback = false,
+        seed?: number,
       ): { layerId: string; elementId: string; createdLayer: boolean } | null {
-        const target = (self as any).targetDrawLayer(fallback) as { layer: IDrawLayer; created: boolean } | null;
+        const target = (self as any).targetDrawLayer(false) as { layer: IDrawLayer; created: boolean } | null;
         if (!target) return null;
         const line = self.arrowKind === "line";
         const data = createArrowElement(start, end, {
@@ -1192,6 +1238,7 @@ export const CanvasModel = types
           opacity: self.shapeOpacity,
           look: self.elementLook as ElementLook,
         });
+        if (seed !== undefined) (data as any).seed = seed;
         target.layer.elements.push(data as any);
         self.saveToHistory();
         return { layerId: target.layer.id, elementId: data.id as string, createdLayer: target.created };

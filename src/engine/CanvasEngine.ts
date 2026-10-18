@@ -765,7 +765,10 @@ export class CanvasEngine {
     const refs = this.config.getSelectedElements?.() ?? [];
     if (refs.length === 0) return;
     // Multi-select: union handles already convey the selection — skip per-element outlines.
-    if (refs.length > 1) return;
+    if (refs.length > 1) {
+      this.renderArrowOutlines(ctx, refs);
+      return;
+    }
     // When an anchor is rendering the bbox (single-stroke), no extra outline needed.
     if (this.config.getSelectionAnchor?.()) return;
     const layers = this.config.getLayers?.() || [];
@@ -832,6 +835,29 @@ export class CanvasEngine {
       }
       ctx.strokeRect(screenX, screenY, screenW, screenH);
       ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  private renderArrowOutlines(ctx: CanvasRenderingContext2D, refs: { layerId: string; elementId: string | null }[]) {
+    ctx.save();
+    ctx.strokeStyle = overlayAccent();
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    for (const ref of refs) {
+      const el = ref.elementId ? this.lookup.get(ref.elementId) : null;
+      if (!el || elementKind(el) !== "arrow") continue;
+      const r = resolveArrow(el as any, this.lookup, measureText);
+      const z = this.pz.zoom;
+      ctx.beginPath();
+      ctx.moveTo(r.start.x * z + this.pz.panX, r.start.y * z + this.pz.panY);
+      ctx.quadraticCurveTo(
+        r.control.x * z + this.pz.panX,
+        r.control.y * z + this.pz.panY,
+        r.end.x * z + this.pz.panX,
+        r.end.y * z + this.pz.panY,
+      );
+      ctx.stroke();
     }
     ctx.restore();
   }

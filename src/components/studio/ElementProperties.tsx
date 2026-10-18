@@ -99,14 +99,14 @@ export const Swatches: React.FC<{
   const isSwatch = !!value && SWATCHES.slice(0, 7).some((s) => s.hex.toLowerCase() === value.toLowerCase());
   return (
     <div className="flex flex-col gap-2">
-      <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-1.5">
+      <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-1">
         {allowNone && (
           <button
             role="radio"
             aria-checked={value === null}
-            aria-label="No fill"
+            aria-label="None"
             onClick={() => onPick(null)}
-            className={`relative h-6 w-6 overflow-hidden rounded-[3px] bg-zk-raised ${value === null ? "ring-2 ring-zk-accent" : ""}`}
+            className={`relative h-[22px] w-[22px] overflow-hidden rounded-[3px] bg-zk-raised ${value === null ? "ring-2 ring-zk-accent" : ""}`}
           >
             <span className="absolute top-1/2 left-1/2 h-px w-8 -translate-x-1/2 -translate-y-1/2 -rotate-45 bg-[#E5644D]" />
           </button>
@@ -118,7 +118,7 @@ export const Swatches: React.FC<{
             aria-checked={value?.toLowerCase() === s.hex.toLowerCase()}
             aria-label={s.name}
             onClick={() => onPick(s.hex)}
-            className={`h-6 w-6 rounded-[3px] ${value?.toLowerCase() === s.hex.toLowerCase() ? "ring-2 ring-zk-accent ring-offset-1 ring-offset-zk-surface" : ""}`}
+            className={`h-[22px] w-[22px] rounded-[3px] ${value?.toLowerCase() === s.hex.toLowerCase() ? "ring-2 ring-zk-accent ring-offset-1 ring-offset-zk-surface" : ""}`}
             style={{ backgroundColor: s.hex, boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.12)" }}
           />
         ))}
@@ -127,13 +127,13 @@ export const Swatches: React.FC<{
           aria-expanded={open}
           title="Custom colour"
           onClick={() => setOpen((v) => !v)}
-          className={`h-6 w-6 rounded-[3px] p-[3px] ${value && !isSwatch ? "ring-2 ring-zk-accent ring-offset-1 ring-offset-zk-surface" : ""}`}
+          className={`h-[22px] w-[22px] rounded-[3px] p-[3px] ${value && !isSwatch ? "ring-2 ring-zk-accent ring-offset-1 ring-offset-zk-surface" : ""}`}
           style={{ background: "conic-gradient(#E5644D, #D99A3A, #6F8F5A, #8FB1D9, #6B4A6E, #E5644D)" }}
         >
           <span className="block h-full w-full rounded-[2px]" style={{ backgroundColor: value ?? "transparent" }} />
         </button>
       </div>
-      {open && <HsvPicker value={value ?? "#1F1F24"} onChange={(hex) => onPick(hex, true)} size={120} />}
+      {open && <HsvPicker value={value ?? "#1F1F24"} onChange={(hex) => onPick(hex, true)} size="fill" />}
     </div>
   );
 };
@@ -163,9 +163,13 @@ const ElementProperties: React.FC<{ variant: Variant }> = observer(({ variant })
   };
 
   const first = selected[0];
-  const strokeColor = hasSelection
+  const rawStroke = hasSelection
     ? (first?.strokeColor ?? first?.color ?? canvasStore.currentColor)
-    : canvasStore.currentColor;
+    : canvasStore.shapeStrokeNone && tool === "shape"
+      ? "transparent"
+      : canvasStore.currentColor;
+  const strokeColor = rawStroke === "transparent" ? null : rawStroke;
+  const strokeCanBeNone = showShape && !showArrow && !(hasSelection && (kinds.has("text") || kinds.has("stroke")));
   const width = hasSelection
     ? (vectors[0]?.strokeWidth ?? null)
     : tool === "arrow"
@@ -199,9 +203,15 @@ const ElementProperties: React.FC<{ variant: Variant }> = observer(({ variant })
         <Row label="Stroke">
           <Swatches
             label="Stroke colour"
+            allowNone={strokeCanBeNone}
             value={strokeColor}
             onPick={(hex, live) => {
-              if (!hex) return;
+              if (!hex) {
+                canvasStore.setColorTarget("stroke");
+                canvasStore.clearSelectionColor();
+                if (hasSelection) commit();
+                return;
+              }
               canvasStore.setColorTarget("stroke");
               canvasStore.setColor(hex);
               if (hasSelection) (live ? commitSoon : commit)();

@@ -155,15 +155,15 @@ const StudioShell: React.FC<StudioShellProps> = observer(({ topLeft, topRight, o
             </div>
             <div
               className={`pointer-events-none absolute z-10 flex ${
-                overlay ? "inset-x-3 top-16 justify-start" : "top-3 left-1/2 max-w-[calc(100%-860px)] min-w-0 -translate-x-1/2 justify-center"
+                overlay ? "inset-x-3 bottom-3 justify-center" : "bottom-3 left-1/2 max-w-[calc(100%-440px)] min-w-0 -translate-x-1/2 justify-center"
               }`}
             >
               <SimpleToolbar />
             </div>
-            <div className={`pointer-events-none absolute left-3 z-10 ${overlay ? "top-[7.5rem]" : "top-16"}`}>
+            <div className="pointer-events-none absolute top-16 left-3 z-10">
               <PropertiesCard />
             </div>
-            <div className="pointer-events-none absolute bottom-3 left-3 z-10">
+            <div className={`pointer-events-none absolute left-3 z-10 ${overlay ? "bottom-16" : "bottom-3"}`}>
               <ZoomCluster onFit={onFit} />
             </div>
           </div>

@@ -409,8 +409,13 @@ emits `onFrame(info, visibleStrokes)`. Shapes are not animated (they stay static
   `render/fonts.ts` caches `measureText`, requests fonts on first use and
   re-bakes on `document.fonts` `loadingdone`; export and thumbnails await
   `ensureFonts` (3 s cap) first.
-- Sketchy look: `render/sketchy.ts` draws `roughjs` generator ops directly on the
-  context, seeded per element and cached per snapshot.
+- Sketchy look: `render/sketchy.ts` samples the shape outline (or the arrow curve),
+  adds a seeded low-frequency wobble (periodic around closed shapes, fading to
+  zero at arrow ends so heads line up) and draws it as one stroke with the Pen
+  (`ink`) brush, with gentle pressure variation; fills use the same wobbled
+  outline. Polygon corners are slightly rounded and the seam starts mid-edge.
+- Arrow bend is measured against the raw chord (bound ends use the element
+  centres), so dragging the middle handle never feeds back into the clipped ends.
 - Text editing: `components/TextEditorOverlay.tsx` is a textarea laid over the
   canvas (a sibling of the canvas root) at the element's screen box; the engine
   hides that element while `CanvasModel.editingTextId` is set. Empty commits
@@ -582,7 +587,7 @@ Persistence layers:
     Shows the layers strip when the Layers dock is closed and reopen tabs for
     closed sidebars.
   - **Simple layout** (`layout: "simple"`): no docks, bar or layers strip.
-    `SimpleToolbar` (top centre; keys 1 Select, 2 Rectangle, 3 Diamond,
+    `SimpleToolbar` (bottom centre, the Zketch signature; keys 1 Select, 2 Rectangle, 3 Diamond,
     4 Ellipse, 5 Arrow, 6 Line, 7 Pen, 8 Text, 0 Eraser, H Hand, handled in
     `useKeyboardShortcuts`), `PropertiesCard` (left, only with a tool or a
     selection) and `ZoomCluster` (bottom left).

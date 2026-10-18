@@ -52,7 +52,7 @@ export function hsvToHex({ h, s, v }: Hsv): string {
 interface HsvPickerProps {
   value: string;
   onChange: (hex: string) => void;
-  size?: number;
+  size?: number | "fill";
 }
 
 const HsvPicker: React.FC<HsvPickerProps> = ({ value, onChange, size = 132 }) => {
@@ -106,7 +106,7 @@ const HsvPicker: React.FC<HsvPickerProps> = ({ value, onChange, size = 132 }) =>
   const hueHex = hsvToHex({ h: hsv.h, s: 1, v: 1 });
 
   return (
-    <div className="flex flex-col gap-2" style={{ width: size }}>
+    <div className="flex flex-col gap-2" style={{ width: size === "fill" ? "100%" : size }}>
       <div
         ref={square}
         role="slider"
@@ -128,7 +128,7 @@ const HsvPicker: React.FC<HsvPickerProps> = ({ value, onChange, size = 132 }) =>
         }}
         className="relative cursor-crosshair rounded-[4px] outline-none focus-visible:ring-2 focus-visible:ring-zk-accent/60"
         style={{
-          height: Math.round(size * 0.78),
+          ...(size === "fill" ? { aspectRatio: "1 / 0.78" } : { height: Math.round(size * 0.78) }),
           touchAction: "none",
           background: `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, ${hueHex})`,
         }}

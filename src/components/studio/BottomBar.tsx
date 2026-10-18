@@ -376,11 +376,14 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
       {(drawing || erasing || tool === "shape" || tool === "arrow" || tool === "text") && <Divider />}
       <div className="flex items-center gap-1.5">
         <button
-          aria-label={`Colour ${canvasStore.currentColor}. Show colour panel`}
+          aria-label={`Colour ${canvasStore.displayColor ?? "none"}. Show colour panel`}
           onClick={() => revealPanel("colour")}
           className="h-7 w-7 rounded-[4px]"
           style={{
-            backgroundColor: canvasStore.currentColor,
+            backgroundColor: canvasStore.displayColor ?? "transparent",
+            backgroundImage: canvasStore.displayColor
+              ? undefined
+              : "linear-gradient(45deg, transparent 46%, #E5644D 46%, #E5644D 54%, transparent 54%)",
             boxShadow: "0 0 0 1px var(--zk-surface), 0 0 0 2px #ECEBE7",
           }}
         />

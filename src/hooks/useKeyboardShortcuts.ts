@@ -155,16 +155,13 @@ export const useKeyboardShortcuts = (
         return;
       }
 
-      if (
-        dockLayout.state.layout === "simple" &&
-        !e.ctrlKey &&
-        !e.altKey &&
-        !e.metaKey &&
-        SIMPLE_KEYS[e.key.toLowerCase()]
-      ) {
-        e.preventDefault();
-        pickSimpleTool(canvasStore, SIMPLE_KEYS[e.key.toLowerCase()]);
-        return;
+      if (dockLayout.state.layout === "simple" && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        const simpleTool = SIMPLE_KEYS[e.key.toLowerCase()];
+        if (simpleTool || /^[0-9]$/.test(e.key)) {
+          e.preventDefault();
+          if (simpleTool) pickSimpleTool(canvasStore, simpleTool);
+          return;
+        }
       }
 
       // While the shape tool is active, 1–4 pick the shape kind instead of brushes/select.

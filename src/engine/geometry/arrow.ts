@@ -7,6 +7,8 @@ export interface ResolvedArrow {
   end: Vec;
   control: Vec;
   mid: Vec;
+  rawStart?: Vec;
+  rawEnd?: Vec;
 }
 
 type Lookup = Map<string, ElementLike>;
@@ -41,18 +43,15 @@ export function resolveArrow(a: ArrowElementLike, lookup: Lookup | undefined, me
   const gap = bindGap(a.strokeWidth);
   const sRaw = sb ? boxCenter(bindableBox(sb, measure)) : a.start;
   const eRaw = eb ? boxCenter(bindableBox(eb, measure)) : a.end;
-  let s = sRaw;
-  let e = eRaw;
-  let mid = midFromBend(sRaw, eRaw, a.bend);
   const curved = Math.abs(a.bend) > 1e-4;
-  for (let i = 0; i < 2; i++) {
-    const towardStart = curved ? mid : e;
-    const towardEnd = curved ? mid : s;
-    if (sb) s = outlinePoint(sb, towardStart, gap, measure);
-    if (eb) e = outlinePoint(eb, towardEnd, gap, measure);
-    mid = midFromBend(s, e, a.bend);
+  const mid = midFromBend(sRaw, eRaw, a.bend);
+  const s = sb ? outlinePoint(sb, curved ? mid : eRaw, gap, measure) : sRaw;
+  const e = eb ? outlinePoint(eb, curved ? mid : sRaw, gap, measure) : eRaw;
+  if (!curved) {
+    const m = { x: (s.x + e.x) / 2, y: (s.y + e.y) / 2 };
+    return { start: s, end: e, mid: m, control: m, rawStart: sRaw, rawEnd: eRaw };
   }
-  return { start: s, end: e, mid, control: controlFromMid(s, e, mid) };
+  return { start: s, end: e, mid, control: controlFromMid(s, e, mid), rawStart: sRaw, rawEnd: eRaw };
 }
 
 export function curvePoint(r: ResolvedArrow, t: number): Vec {

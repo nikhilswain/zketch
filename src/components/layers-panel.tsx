@@ -41,6 +41,7 @@ import LayerAnimationControls from "@/components/layer-animation-controls";
 import type { StrokeLike } from "@/engine";
 import { renderDrawLayer } from "@/engine/render/renderDrawLayer";
 import { elementBounds } from "@/engine/render/elementBounds";
+import { onFontsReady } from "@/engine/render/fonts";
 import type { PlaybackState } from "@/engine/AnimationPlaybackEngine";
 
 // Generate a small thumbnail preview of a draw layer (strokes + shapes).
@@ -167,6 +168,8 @@ interface LayerItemProps {
 }
 
 export function useLayerThumbnail(layer: any): string {
+  const [fontTick, setFontTick] = useState(0);
+  useEffect(() => onFontsReady(() => setFontTick((t) => t + 1)), []);
   const canvasStore = useCanvasStore();
   const [thumbnail, setThumbnail] = useState<string>("");
   const thumbnailTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -239,7 +242,7 @@ export function useLayerThumbnail(layer: any): string {
         clearTimeout(thumbnailTimeoutRef.current);
       }
     };
-  }, [layerId, elementCount, shapeSig]);
+  }, [layerId, elementCount, shapeSig, fontTick]);
   return thumbnail;
 }
 

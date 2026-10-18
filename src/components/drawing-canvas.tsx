@@ -112,6 +112,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       end: { x: number; y: number };
       startBind: string | null;
       endBind: string | null;
+      seed: number;
     } | null>(null);
     const ctrlDownRef = useRef(false);
     const arrowEditRef = useRef<{ handle: ArrowHandle; moved: boolean; x: number; y: number } | null>(null);
@@ -144,6 +145,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       size?: number;
       isArrow?: boolean;
       ends?: Array<{ x: number; y: number }>;
+      fontSize?: number;
     };
     const groupTransformRef = useRef<GroupSnap[] | null>(null);
     // InputManager is mounted once; route live values via refs so its closures stay current.
@@ -367,7 +369,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         strokeWidth: canvasStore.arrowStrokeWidth,
         opacity: 1,
         look: canvasStore.elementLook as ElementLook,
-        seed: 1,
+        seed: ref.seed,
       };
     };
 
@@ -682,8 +684,14 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         }
       };
 
+      const handleBlur = () => {
+        ctrlDownRef.current = false;
+        shiftDownRef.current = false;
+      };
+
       window.addEventListener("keydown", handleKeyDown);
       window.addEventListener("keyup", handleKeyUp);
+      window.addEventListener("blur", handleBlur);
       window.addEventListener("wheel", handleGlobalWheel, {
         passive: false,
         capture: true,
@@ -692,6 +700,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       return () => {
         window.removeEventListener("keydown", handleKeyDown);
         window.removeEventListener("keyup", handleKeyUp);
+        window.removeEventListener("blur", handleBlur);
         window.removeEventListener("wheel", handleGlobalWheel, true);
       };
     }, []);
@@ -850,7 +859,11 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                 return;
               }
               if (!hit) {
-                canvasStore.addText(canvasPoint.x, canvasPoint.y - (canvasStore.textFontSize * LINE_HEIGHT) / 2);
+                const made = canvasStore.addText(canvasPoint.x, canvasPoint.y - (canvasStore.textFontSize * LINE_HEIGHT) / 2, {
+                  fallback: dockLayout.state.layout === "simple",
+                });
+                if (!made) toast("This layer is locked");
+                else if (made.createdLayer) toast("Added a new layer to draw on");
                 return;
               }
             }
@@ -939,6 +952,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                             width: el.width,
                             height: el.height,
                             rotation: el.rotation ?? 0,
+                            fontSize: el.fontSize,
                           });
                         } else if (el.points && el.points.length > 0) {
                           // Compute stroke bbox + capture points.
@@ -1049,7 +1063,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               canvasStore.editLabel(target.element.id);
               return;
             }
-            canvasStore.addText(canvasPoint.x, canvasPoint.y - (canvasStore.textFontSize * LINE_HEIGHT) / 2);
+            const made = canvasStore.addText(canvasPoint.x, canvasPoint.y - (canvasStore.textFontSize * LINE_HEIGHT) / 2);
+            if (!made) toast("This layer is locked");
+            else if (made.createdLayer) toast("Added a new layer to draw on");
             return;
           }
 
@@ -1060,6 +1076,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               end: p,
               startBind: ctrlDownRef.current ? null : hitTestBindable(p.x, p.y),
               endBind: null,
+              seed: Math.floor(Math.random() * 2 ** 31),
             };
             drawingStartedRef.current = true;
             return;
@@ -1127,7 +1144,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             const p = { x: canvasPoint.x, y: canvasPoint.y };
             if (edit.handle === "mid") {
               const r = resolveArrow(arrow, buildElementLookup(canvasStore.layers as any), measureText);
-              arrow.setBend(bendFromMid(r.start, r.end, p));
+              arrow.setBend(bendFromMid(r.rawStart ?? r.start, r.rawEnd ?? r.end, p));
               return;
             }
             const other = edit.handle === "start" ? arrow.endBinding : arrow.startBinding;
@@ -1282,7 +1299,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             engineRef.current?.setBindHighlight(null);
             const dist = Math.hypot(ref.end.x - ref.start.x, ref.end.y - ref.start.y) * canvasStore.zoom;
             if (dist >= 5) {
-              const created = canvasStore.addArrow(ref.start, ref.end, { start: ref.startBind, end: ref.endBind });
+              const created = canvasStore.addArrow(ref.start, ref.end, { start: ref.startBind, end: ref.endBind }, ref.seed);
+              if (created?.createdLayer) toast("Added a new layer to draw on");
               if (created) {
                 canvasStore.setActiveTool("select");
                 canvasStore.selectElement(created.layerId, created.elementId);
@@ -1311,6 +1329,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                 w,
                 h,
               );
+              if (created?.createdLayer) toast("Added a new layer to draw on");
               if (created) {
                 // Hand off to the Select tool so the user can immediately transform the new shape.
                 canvasStore.setActiveTool("select");
@@ -1794,6 +1813,11 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               const lx = (ecx - oldCenter.x) * unCos - (ecy - oldCenter.y) * unSin;
               const ly = (ecx - oldCenter.x) * unSin + (ecy - oldCenter.y) * unCos;
               const { wx, wy } = localScale(lx, ly);
+              if (elementKind(target) === "text") {
+                if (Math.abs(sx - sy) < 0.001 && s.fontSize) target.setFontSize(s.fontSize * sx);
+                target.setPosition(wx - target.width / 2, wy - target.height / 2);
+                continue;
+              }
               const newW = Math.max(1, s.width * sx);
               const newH = Math.max(1, s.height * sy);
               target.setPosition(wx - newW / 2, wy - newH / 2);
