@@ -302,6 +302,17 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       };
     }, [canvasStore]);
 
+    useEffect(() => {
+      const root = rootRef.current;
+      if (!root) return;
+      const blurInput = () => {
+        const active = document.activeElement;
+        if (active instanceof HTMLInputElement) active.blur();
+      };
+      root.addEventListener("pointerdown", blurInput, true);
+      return () => root.removeEventListener("pointerdown", blurInput, true);
+    }, []);
+
     useEffect(
       () =>
         reaction(

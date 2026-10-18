@@ -1,6 +1,6 @@
 import type React from "react";
 import ZketchMark from "@/components/ZketchMark";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, LoaderIcon } from "@/components/icons";
 import { useCanvasStore, useSettingsStore } from "@/hooks/useStores";
@@ -59,6 +59,21 @@ const TopLeftBlock: React.FC<TopLeftBlockProps> = observer(
     const settingsStore = useSettingsStore();
     const inputRef = useRef<HTMLInputElement>(null);
     const enterCommitted = useRef(false);
+    const renameRequested = useRef(false);
+    const originalName = useRef("");
+    const [editing, setEditing] = useState(false);
+
+    const finishEditing = () => {
+      enterCommitted.current = true;
+      onNameCommit(true);
+      inputRef.current?.blur();
+    };
+
+    const cancelEditing = () => {
+      enterCommitted.current = true;
+      onNameChange(originalName.current);
+      inputRef.current?.blur();
+    };
 
     return (
       <div className="pointer-events-auto flex h-10 items-center gap-1 rounded-[6px] bg-zk-surface pr-2 pl-1.5 text-zk-text">
@@ -83,8 +98,18 @@ const TopLeftBlock: React.FC<TopLeftBlockProps> = observer(
               <ChevronDownIcon className="h-3 w-3 text-zk-muted" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-60">
-            <DropdownMenuItem onClick={() => inputRef.current?.select()}>Rename</DropdownMenuItem>
+          <DropdownMenuContent
+            align="start"
+            className="w-60"
+            onCloseAutoFocus={(e) => {
+              if (!renameRequested.current) return;
+              renameRequested.current = false;
+              e.preventDefault();
+              inputRef.current?.focus();
+              inputRef.current?.select();
+            }}
+          >
+            <DropdownMenuItem onClick={() => (renameRequested.current = true)}>Rename</DropdownMenuItem>
             <DropdownMenuItem onClick={onBack}>Back to vault</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onImport}>Import image…</DropdownMenuItem>
@@ -140,15 +165,20 @@ const TopLeftBlock: React.FC<TopLeftBlockProps> = observer(
           aria-label="Drawing name"
           value={drawingName}
           onChange={(e) => onNameChange(e.target.value)}
+          onFocus={() => {
+            originalName.current = drawingName;
+            setEditing(true);
+          }}
           onKeyDown={(e) => {
             e.stopPropagation();
-            if (e.key === "Enter") {
-              enterCommitted.current = true;
-              onNameCommit(true);
-              e.currentTarget.blur();
+            if (e.key === "Enter") finishEditing();
+            if (e.key === "Escape") {
+              e.preventDefault();
+              cancelEditing();
             }
           }}
           onBlur={() => {
+            setEditing(false);
             if (enterCommitted.current) {
               enterCommitted.current = false;
               return;
@@ -157,10 +187,22 @@ const TopLeftBlock: React.FC<TopLeftBlockProps> = observer(
           }}
           className="w-44 rounded-[4px] bg-transparent px-1.5 py-1 text-[13px] font-medium outline-none focus:bg-zk-raised"
         />
-        <span className="flex h-4 w-4 items-center justify-center" aria-live="polite">
-          {saveStatus === "saving" && <LoaderIcon aria-label="Saving" className="h-3.5 w-3.5 animate-spin text-zk-muted" />}
-          {saveStatus === "saved" && <CheckIcon aria-label="Saved" className="h-3.5 w-3.5 text-zk-muted" />}
-        </span>
+        {editing ? (
+          <button
+            aria-label="Save name"
+            title="Save name (Enter)"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={finishEditing}
+            className="flex h-6 w-6 items-center justify-center rounded-[4px] bg-zk-accent text-zk-on-accent hover:brightness-110"
+          >
+            <CheckIcon className="h-3.5 w-3.5" />
+          </button>
+        ) : (
+          <span className="flex h-4 w-4 items-center justify-center" aria-live="polite">
+            {saveStatus === "saving" && <LoaderIcon aria-label="Saving" className="h-3.5 w-3.5 animate-spin text-zk-muted" />}
+            {saveStatus === "saved" && <CheckIcon aria-label="Saved" className="h-3.5 w-3.5 text-zk-muted" />}
+          </span>
+        )}
       </div>
     );
   },
