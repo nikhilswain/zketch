@@ -53,6 +53,7 @@ export const useKeyboardShortcuts = (
     KeyBindingManager.registerHandler("selectShapeTool", () =>
       canvasStore.setActiveTool("shape")
     );
+    KeyBindingManager.registerHandler("duplicateSelection", () => canvasStore.duplicateSelection());
     KeyBindingManager.registerHandler("selectArrowTool", () => {
       canvasStore.setArrowKind("arrow");
       canvasStore.setActiveTool("arrow");

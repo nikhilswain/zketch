@@ -20,6 +20,7 @@ import { createArrowElement, type ArrowHead } from "./ArrowElementModel";
 import { createTextElement, type FontFamilyId, type TextAlign } from "./TextElementModel";
 import { buildElementLookup } from "@/engine/render/lookup";
 import { elementBounds } from "@/engine/render/elementBounds";
+import { cloneElements } from "@/utils/cloneElements";
 import { measureText } from "@/engine/render/fonts";
 import { isBindable, resolveArrow } from "@/engine/geometry";
 // Import shared models and re-export for backward compatibility
@@ -946,6 +947,21 @@ export const CanvasModel = types
       },
 
       syncArrows() {
+        const containers = new Set<string>();
+        for (const layer of self.layers) {
+          if (layer.type !== "draw") continue;
+          for (const el of (layer as IDrawLayer).elements as any[]) {
+            const kind = elementKind(el);
+            if (kind === "shape" || kind === "arrow") containers.add(el.id);
+          }
+        }
+        for (const layer of self.layers) {
+          if (layer.type !== "draw") continue;
+          const orphans = ((layer as IDrawLayer).elements as any[]).filter(
+            (el) => elementKind(el) === "text" && el.containerId && !containers.has(el.containerId),
+          );
+          orphans.forEach((el) => (layer as IDrawLayer).removeElement(el.id));
+        }
         const lookup = buildElementLookup(self.layers as any);
         for (const layer of self.layers) {
           if (layer.type !== "draw") continue;
@@ -988,6 +1004,58 @@ export const CanvasModel = types
         return elementId
           ? { layerId: drawLayer.id, elementId, createdLayer: target.created }
           : null;
+      },
+
+      duplicateSelection() {
+        const byLayer = new Map<string, Set<string>>();
+        for (const ref of self.selectedElements) {
+          if (!ref.elementId) continue;
+          if (!byLayer.has(ref.layerId)) byLayer.set(ref.layerId, new Set());
+          byLayer.get(ref.layerId)!.add(ref.elementId);
+        }
+        if (byLayer.size === 0) return;
+        const nextSelection: { layerId: string; elementId: string }[] = [];
+        byLayer.forEach((ids, layerId) => {
+          const layer = self.layers.find((l) => l.id === layerId) as IDrawLayer | undefined;
+          if (!layer || layer.type !== "draw" || layer.locked) return;
+          const picked = (layer.elements as any[]).filter(
+            (el) => ids.has(el.id) || (elementKind(el) === "text" && el.containerId && ids.has(el.containerId)),
+          );
+          const clones = cloneElements(picked.map((el) => getSnapshot(el)), 16, 16, false);
+          clones.forEach((c) => {
+            layer.elements.push(c);
+            if (!(elementKind(c) === "text" && c.containerId)) nextSelection.push({ layerId, elementId: c.id });
+          });
+        });
+        if (nextSelection.length === 0) return;
+        self.selectedElements.clear();
+        nextSelection.forEach((r) => self.selectedElements.push(r));
+        self.interactionMode = "transform";
+        (self as any).recomputeSelectionAnchor();
+        self.saveToHistory();
+      },
+
+      reorderSelection(where: "front" | "back") {
+        const byLayer = new Map<string, Set<string>>();
+        for (const ref of self.selectedElements) {
+          if (!ref.elementId) continue;
+          if (!byLayer.has(ref.layerId)) byLayer.set(ref.layerId, new Set());
+          byLayer.get(ref.layerId)!.add(ref.elementId);
+        }
+        let changed = false;
+        byLayer.forEach((ids, layerId) => {
+          const layer = self.layers.find((l) => l.id === layerId) as IDrawLayer | undefined;
+          if (!layer || layer.type !== "draw" || layer.locked) return;
+          const all = (layer.elements as any[]).map((el) => getSnapshot(el) as any);
+          const moves = (s: any) => ids.has(s.id) || (elementKind(s) === "text" && s.containerId && ids.has(s.containerId));
+          const moving = all.filter(moves);
+          const rest = all.filter((s) => !moves(s));
+          const next = where === "front" ? [...rest, ...moving] : [...moving, ...rest];
+          if (next.every((s, i) => s.id === all[i].id)) return;
+          layer.elements.replace(next);
+          changed = true;
+        });
+        if (changed) self.saveToHistory();
       },
 
       setEditingText(id: string | null) {
@@ -1658,10 +1726,12 @@ export const CanvasModel = types
             visible: layer.visible,
             locked: false,
             opacity: layer.opacity,
-            elements: drawLayer.elements.map((el: any) => {
-              const snap = getSnapshot(el) as any;
-              return { ...snap, id: crypto.randomUUID() };
-            }),
+            elements: cloneElements(
+              drawLayer.elements.map((el: any) => getSnapshot(el)),
+              0,
+              0,
+              true,
+            ),
           };
         } else if (layer.type === "image") {
           const imageLayer = layer as any;

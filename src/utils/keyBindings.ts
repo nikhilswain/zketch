@@ -71,6 +71,12 @@ export const KEY_BINDINGS: Record<string, KeyBinding> = {
     description: "Select shape tool",
     action: "selectShapeTool",
   },
+  DUPLICATE: {
+    key: "d",
+    ctrlKey: true,
+    description: "Duplicate selection",
+    action: "duplicateSelection",
+  },
   ARROW_TOOL: {
     key: "a",
     description: "Select arrow tool",
