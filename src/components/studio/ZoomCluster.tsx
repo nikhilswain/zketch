@@ -4,6 +4,8 @@ import { useCanvasStore } from "@/hooks/useStores";
 import { FitIcon } from "@/components/icons";
 import { visibleCanvasCenter } from "@/utils/viewport";
 
+export const ZoomReadout: React.FC = observer(() => <>{Math.round(useCanvasStore().zoom * 100)}%</>);
+
 const ZoomCluster: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
   const canvasStore = useCanvasStore();
   const zoomBy = (factor: number) => {
@@ -21,7 +23,7 @@ const ZoomCluster: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
         onClick={() => zoomBy(1 / canvasStore.zoom)}
         className="h-8 w-12 rounded-[4px] hover:bg-zk-hover"
       >
-        {Math.round(canvasStore.zoom * 100)}%
+        <ZoomReadout />
       </button>
       <button aria-label="Zoom in" onClick={() => zoomBy(1.2)} className="h-8 w-8 rounded-[4px] text-[15px] hover:bg-zk-hover">
         +

@@ -43,6 +43,7 @@ import { PresetsBody } from "./panels/PresetsPanel";
 import { SWATCHES } from "./panels/ColourPanel";
 import { PANELS } from "./panels";
 import { visibleCanvasCenter } from "@/utils/viewport";
+import { ZoomReadout } from "./ZoomCluster";
 
 const SHAPES: { kind: ShapeKind; label: string; Icon: typeof SquareIcon }[] = [
   { kind: "rectangle", label: "Rectangle", Icon: SquareIcon },
@@ -402,7 +403,9 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
         <button aria-label="Zoom out" onClick={() => zoomBy(1 / 1.2)} className="h-8 w-8 rounded-[4px] text-[15px] hover:bg-zk-raised">
           −
         </button>
-        <span className="w-11 text-center">{Math.round(canvasStore.zoom * 100)}%</span>
+        <span className="w-11 text-center">
+          <ZoomReadout />
+        </span>
         <button aria-label="Zoom in" onClick={() => zoomBy(1.2)} className="h-8 w-8 rounded-[4px] text-[15px] hover:bg-zk-raised">
           +
         </button>
