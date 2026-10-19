@@ -349,6 +349,9 @@ export class StampBrush implements Brush {
     const rand = (i: number, k: number) =>
       seededRandom(seed + i * 7.137 + k * 0.917);
     const tips = spec.tips.map((id) => getTintedTip(id, stroke.color));
+    const flipY =
+      spec.angleMode === "fixed" &&
+      Math.abs(Math.sin(spec.angle ?? 0)) > Math.abs(Math.cos(spec.angle ?? 0));
     const count = Math.max(1, Math.round(spec.count ?? 1));
     const gain = pressureGain(stroke);
     const sizeK = (spec.sizePressure ?? 0) * gain;
@@ -400,8 +403,11 @@ export class StampBrush implements Brush {
         ? diameter / Math.max(tip.width, tip.height)
         : 0;
       let sx = fit || diameter / tip.width;
-      const sy = (fit || diameter / tip.height) * roundness;
-      if (spec.flip && r(8) < 0.5) sx = -sx;
+      let sy = (fit || diameter / tip.height) * roundness;
+      if (spec.flip && r(8) < 0.5) {
+        if (flipY) sy = -sy;
+        else sx = -sx;
+      }
       const da = cos * sx;
       const db = sin * sx;
       const dc = -sin * sy;

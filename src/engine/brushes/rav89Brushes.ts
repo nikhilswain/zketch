@@ -485,7 +485,7 @@ export const pineBrush = new StampBrush({
   sizePressure: 0.3,
   scatter: 0.2,
   angleMode: "fixed",
-  angle: -Math.PI / 2,
+  angle: Math.PI / 2,
   flip: true,
   presets: [
     { id: "pine", label: "Pine", size: 150, opacity: 1 },
