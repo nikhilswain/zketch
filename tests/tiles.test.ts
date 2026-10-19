@@ -7,6 +7,7 @@ import { measureText } from "@/engine/render/fonts";
 import { labelPlacement } from "@/engine/geometry/labels";
 import { boxBounds } from "@/engine/geometry/outline";
 import { renderBounds } from "@/engine/tiles/renderBounds";
+import { changedIds, diffLayer, regionsForIds } from "@/engine/tiles/layerDiff";
 import { tileBounds, tileRange } from "@/engine/tiles/tileMath";
 import type { ArrowElementLike, ElementLike, ShapeElementLike, StrokeLike, TextElementLike } from "@/engine/types";
 
@@ -186,5 +187,71 @@ describe("render bounds cover painted pixels", () => {
       }
       expect({ id: el.id, outside }).toEqual({ id: el.id, outside: 0 });
     }
+  });
+});
+
+describe("layer diff", () => {
+  const empty = new Set<string>();
+  const first = (els: ElementLike[]) => diffLayer([], new Map(), els, lookupOf(els), empty);
+
+  it("unchanged layer has no regions", () => {
+    const els = [strokeEl("a"), strokeEl("b", { points: [{ x: 500, y: 500, pressure: 0.5 }] })];
+    const d = diffLayer(els, first(els).bounds, els, lookupOf(els), empty);
+    expect(d.regions).toEqual([]);
+    expect(d.appended).toBeNull();
+  });
+
+  it("appending one stroke reports appended and its bounds only", () => {
+    const a = strokeEl("a");
+    const b = strokeEl("b", { points: [{ x: 900, y: 900, pressure: 0.5 }] });
+    const d = diffLayer([a], first([a]).bounds, [a, b], lookupOf([a, b]), new Set(["b"]));
+    expect(d.appended).toBe(b);
+    expect(d.regions).toEqual([renderBounds(b, lookupOf([a, b]))]);
+  });
+
+  it("moving a stroke dirties old and new bounds", () => {
+    const a = strokeEl("a");
+    const moved = strokeEl("a", { points: [{ x: 300, y: 300, pressure: 0.5 }] });
+    const d = diffLayer([a], first([a]).bounds, [moved], lookupOf([moved]), new Set(["a"]));
+    expect(d.appended).toBeNull();
+    expect(d.regions).toContainEqual(renderBounds(a, lookupOf([a])));
+    expect(d.regions).toContainEqual(renderBounds(moved, lookupOf([moved])));
+  });
+
+  it("deleting dirties old bounds", () => {
+    const a = strokeEl("a");
+    const b = strokeEl("b", { points: [{ x: 900, y: 900, pressure: 0.5 }] });
+    const d = diffLayer([a, b], first([a, b]).bounds, [a], lookupOf([a]), new Set(["b"]));
+    expect(d.regions).toEqual([renderBounds(b, lookupOf([b]))]);
+    expect(d.bounds.has("b")).toBe(false);
+  });
+
+  it("arrow bound across layers is dirty when its target moves", () => {
+    const s1 = shapeEl("s1", { x: 300, y: 0 });
+    const s1moved = shapeEl("s1", { x: 300, y: 400 });
+    const arrow = arrowEl("ar", { endBinding: { elementId: "s1" }, end: { x: 300, y: 60 } });
+    const oldLookup = lookupOf([arrow, s1]);
+    const newLookup = lookupOf([arrow, s1moved]);
+    const prevA = diffLayer([], new Map(), [arrow], oldLookup, empty).bounds;
+    const globalChanged = new Set([...changedIds([s1], [s1moved]), ...changedIds([arrow], [arrow])]);
+    expect(globalChanged).toEqual(new Set(["s1"]));
+    const d = diffLayer([arrow], prevA, [arrow], newLookup, globalChanged);
+    expect(d.regions).toContainEqual(renderBounds(arrow, oldLookup));
+    expect(d.regions).toContainEqual(renderBounds(arrow, newLookup));
+  });
+
+  it("a label moves with its container", () => {
+    const box = shapeEl("box");
+    const boxMoved = shapeEl("box", { x: 500 });
+    const label = labelEl("lb", "box", "hi");
+    const prev = diffLayer([], new Map(), [box, label], lookupOf([box, label]), empty).bounds;
+    const d = diffLayer([box, label], prev, [boxMoved, label], lookupOf([boxMoved, label]), new Set(["box"]));
+    expect(d.regions).toContainEqual(prev.get("lb"));
+  });
+
+  it("regionsForIds skips unknown and null bounds", () => {
+    const a = strokeEl("a");
+    const bounds = first([a]).bounds;
+    expect(regionsForIds(["a", "zzz"], bounds)).toEqual([bounds.get("a")]);
   });
 });
