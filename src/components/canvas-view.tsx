@@ -556,6 +556,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           onFlattenLayers={() => canvasStore.flattenAllLayers()}
           layers={canvasStore.exportLayers as any}
           page={canvasStore.page ? { ...canvasStore.page } : null}
+          focusedLayerName={canvasStore.isFocusMode ? (canvasStore.visibleLayers[0]?.name ?? null) : null}
         />
 
         {showSettings && <SettingsPage onClose={() => setShowSettings(false)} />}

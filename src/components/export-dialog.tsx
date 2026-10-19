@@ -31,6 +31,7 @@ interface ExportDialogProps {
   onFlattenLayers?: () => void;
   layers?: IExportLayer[];
   page?: Page | null;
+  focusedLayerName?: string | null;
 }
 
 const EXPORT_W = 1920;
@@ -48,7 +49,7 @@ const SectionLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 );
 
 const ExportDialog: React.FC<ExportDialogProps> = observer(
-  ({ isOpen, onClose, onExport, strokes, background, drawingName, layerCount = 1, onFlattenLayers, layers, page = null }) => {
+  ({ isOpen, onClose, onExport, strokes, background, drawingName, layerCount = 1, onFlattenLayers, layers, page = null, focusedLayerName = null }) => {
     const settingsStore = useSettingsStore();
     const { scale, quality, transparentBackground } = settingsStore.exportSettings;
     const format: "png" | "jpg" = settingsStore.exportSettings.format === "jpg" ? "jpg" : "png";
@@ -216,7 +217,9 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
               )}
             </div>
             <div className="flex h-10 shrink-0 items-center justify-between px-5 text-[12px] text-zk-muted">
-              <span>{layerCount > 1 ? "All visible layers, combined" : "Preview"}</span>
+              <span>
+                {focusedLayerName ? `Only ${focusedLayerName} (focus mode)` : layerCount > 1 ? "All visible layers, combined" : "Preview"}
+              </span>
               <span className="tabular-nums">
                 {outW} × {outH} px
               </span>
@@ -302,7 +305,11 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
                 )}
               </div>
 
-              {layerCount > 1 && onFlattenLayers && (
+              {focusedLayerName ? (
+                <div className="rounded-[4px] bg-zk-raised/50 px-3 py-2.5 text-[12px] text-zk-muted">
+                  Focus mode: only {focusedLayerName} goes in the file. Exit focus mode to export every visible layer.
+                </div>
+              ) : layerCount > 1 && onFlattenLayers && (
                 <div className="flex items-center justify-between gap-3 rounded-[4px] bg-zk-raised/50 px-3 py-2.5 text-[12px] text-zk-muted">
                   <span>{layerCount} layers. Visible layers are combined in the file.</span>
                   <button onClick={onFlattenLayers} className="shrink-0 font-semibold text-zk-text-2 hover:text-zk-text">
