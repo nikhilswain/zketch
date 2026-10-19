@@ -27,11 +27,16 @@ Core capabilities:
   still registered so old saves render, but hidden from the picker/shortcuts.
 - Shape tools: rectangle, circle, diamond, triangle (drag-to-create; Shift =
   square aspect).
-- Multi-layer canvas (draw layers mix strokes + shapes; image layers hold
-  imported rasters).
+- Diagrams: arrows and lines that bind to shapes (bend, heads, labels), a text
+  tool, labels inside shapes, and five looks (Clean, Sketchy, Pencil, Crayon,
+  Charcoal). See §4.6.
+- Multi-layer canvas (draw layers mix strokes, shapes, arrows and text; image
+  layers hold imported rasters).
+- Infinite or fixed-size pages per drawing (presets + custom, `utils/page.ts`).
 - Selection / move / resize / rotate (single + multi-select, marquee, anchor bbox).
-- Undo / redo, eraser (pixel + whole-stroke/object modes).
-- Local vault (Dexie/IndexedDB), PNG/JPG/SVG export, image import, share links.
+- Undo / redo, eraser (Whole / Pixels / Smart modes).
+- Local vault (Dexie/IndexedDB), PNG/JPG export (SVG method kept but hidden),
+  image import, share links.
 - Per-layer **timelapse animation playback** (replays stroke timing with gap
   compression).
 
@@ -79,33 +84,50 @@ src/
 │   ├── TransformController.ts # bbox math, handles, hit-test, move/resize/rotate
 │   ├── InputManager.ts        # Pointer/touch/stylus intent + gestures (pinch/pan)
 │   ├── AnimationPlaybackEngine.ts # Timelapse playback + gap compression
+│   ├── arrowHandles.ts        # Arrow end/middle handle positions + hit-test
 │   ├── brushOptions.ts        # Builds per-brush BrushOptions from settings
 │   ├── easing.ts             # Easing-name → fn resolver (shared by brushes + options)
 │   ├── types.ts              # All engine contracts (StrokeLike, LayerLike, Brush…)
 │   ├── index.ts              # Barrel exports
 │   ├── render/               # Shared renderers + brush registry (canvas/export/thumb)
 │   │   ├── BrushRegistry.ts   # Brush map + shared singleton + registerDefaultBrushes()
+│   │   ├── renderDrawLayer.ts # One stacking order for a draw layer's elements
 │   │   ├── renderStroke.ts    # Eraser-aware stroke renderer (composite-safe)
 │   │   ├── renderShape.ts     # Shape renderer (applies element opacity/rotation)
+│   │   ├── renderArrow.ts     # Arrow/line body, heads, label
+│   │   ├── renderText.ts      # Free text + labels
+│   │   ├── sketchy.ts         # Hand-drawn looks (Sketchy/Pencil/Crayon/Charcoal)
 │   │   ├── shapePaths.ts      # ONE copy of rect/circle/diamond/triangle paths
 │   │   ├── renderImage.ts     # Image layer draw with rotation
+│   │   ├── lookup.ts          # id → element lookup for arrows and labels
+│   │   ├── elementBounds.ts   # Element bounds (selection, export, thumbnails)
+│   │   ├── dynamics.ts        # Stroke dynamics: stabilizer, speed pressure, stroke defaults
+│   │   ├── smooth.ts          # smoothPoints (airbrush, calligraphy, highlighter)
+│   │   ├── fonts.ts, canvasFactory.ts, overlayColor.ts
 │   │   ├── seededRandom.ts    # Deterministic RNG shared by brushes
 │   │   ├── pathData.ts        # perfect-freehand outline → SVG path string
 │   │   ├── color.ts           # hex → rgba helper (airbrush gradients)
 │   │   └── index.ts
+│   ├── geometry/             # Diagram math: arrow, labels, outline, textLayout
+│   ├── stamp/                # Stamp engine: StampBrush, tips, grain, lazy assets (§4.2.1)
+│   ├── brush-formats/gimp.ts # .gbr/.gih parser used by `npm run brushes`
 │   └── brushes/
 │       ├── FreehandBrush.ts   # key "ink" — perfect-freehand outline
 │       ├── MarkerBrush.ts     # key "marker" — flat, multiply build-up
 │       ├── HighlighterBrush.ts# key "highlighter" — wide translucent multiply
-│       ├── AirbrushBrush.ts   # key "airbrush" — soft radial-gradient build-up
+│       ├── AirbrushBrush.ts   # key "airbrush" — Gaussian-blurred stroke
 │       ├── CalligraphyBrush.ts# key "calligraphy" — angle-dependent nib ribbon
-│       ├── SprayBrush.ts      # key "spray" — seeded dot scatter
-│       └── TextureBrush.ts    # key "texture" — layered noisy outline (hidden)
+│       ├── stampBrushes.ts    # Pencil, Charcoal, Pastel, Watercolor, Gouache, …
+│       ├── rav89Brushes.ts    # 23 brushes from the RaV89 pack
+│       ├── SprayBrush.ts      # key "spray" — seeded dot scatter (legacy)
+│       └── TextureBrush.ts    # key "texture" — layered noisy outline (legacy)
 │
 ├── models/          # MST data models
 │   ├── CanvasModel.ts         # THE central model: layers, tools, selection, history
 │   ├── LayerModel.ts          # DrawLayer + ImageLayer union + Element union
 │   ├── ShapeLayerModel.ts     # ShapeElement (data only)
+│   ├── ArrowElementModel.ts   # ArrowElement (ends, bindings, bend, heads, label)
+│   ├── TextElementModel.ts    # TextElement
 │   ├── ImageLayerModel.ts     # ImageLayer + factory helpers
 │   ├── SharedModels.ts        # Point, Stroke, BrushSettings
 │   ├── VaultModel.ts          # Saved drawings list + persistence orchestration
@@ -117,13 +139,17 @@ src/
 ├── components/       # React UI (see §7)
 │   ├── canvas-view.tsx        # Desktop editor shell (top bar, panels, autosave)
 │   ├── drawing-canvas.tsx     # Canvas host: mounts engine, wires InputManager
-│   ├── layers-panel.tsx       # Right layers panel + per-layer thumbnails/animation
+│   ├── layers-panel.tsx       # Layer list + thumbnails (wrapped by studio LayersStudioPanel)
 │   ├── export-dialog.tsx      # Export + share dialog (preview pane + options column)
 │   ├── share/ShareViewer.tsx  # Shared viewer for /share and /share/[id] (pages only load data)
 │   ├── import-dialog.tsx      # Image import (file/URL/drag)
+│   ├── NewDrawingDialog.tsx, PageSizeDialog.tsx, PageSizeForm.tsx # Page presets
+│   ├── TextEditorOverlay.tsx  # In-place text/label editor
+│   ├── ZketchMark.tsx         # Swoosh logo, redraws on hover
+│   ├── MasonryColumns.tsx     # Vault masonry view
 │   ├── layer-animation-controls.tsx
 │   ├── valut-view.tsx         (note: "valut" typo is intentional/baked in)
-│   ├── studio/                # drawing-screen shell, bottom bar, docks, panels, StrokeTrack
+│   ├── studio/                # drawing-screen shell, bottom bar, docks, panels, StrokeTrack, Settings page
 │   ├── icons/index.tsx        # Generated icon components (SelectIcon, …); never edit by hand
 │   └── ui/                    # shadcn primitives
 │
@@ -141,17 +167,28 @@ src/
 │   ├── ImageProcessingUtils.ts# validate/resize/compress/sanitize images
 │   ├── brushMemory.ts         # Per-brush remembered settings (localStorage), presets, resets
 │   ├── brushCategories.ts     # Picker category list + registry grouping
+│   ├── dockLayout.ts          # Dock store: panel placement per layout
+│   ├── page.ts                # PAGE_PRESETS + page helpers
+│   ├── zoom.ts, viewport.ts   # Shared zoom clamp, fit-to-page
+│   ├── accent.ts              # Accent colour list + installs the chosen accent
+│   ├── cloneElements.ts       # Duplicate with labels + bindings kept intact
 │   └── keyBindings.ts         # KEY_BINDINGS table + KeyBindingManager
 │
-├── hooks/            # useStores, useKeyboardShortcuts, useMobile, useCanvasResize
+├── hooks/            # useStores, useKeyboardShortcuts, useMobile, useCanvasResize, useSortableList
 ├── pages/            # Astro routes (see §10)
 ├── page-components/  # React page shells mounted by Astro
-├── layouts/Layout.astro
+├── layouts/Layout.astro      # Head: title, description, canonical, OG/X cards, JSON-LD
+├── config.ts         # SITE: name, url (zketch.zerro.dev), title, description, X handle
+├── lib/og.ts         # Share image SVG (1200x630) for tools/build-share-images.ts
+├── assets/og/        # Fraunces + Kalam fonts (OFL) for the share image
 └── styles/global.css # Tailwind v4 theme + touch/zoom guards
 
+tools/                # convert-brushes.ts, render-brush-previews.ts, build-share-images.ts
 tests/                # Vitest suites (Node + @napi-rs/canvas)
 vitest.config.ts      # Test config (alias @ → src)
 icons/                # Removable icon pack: defs/, lib/, build.mjs, svg/, sprite.svg, gallery.html
+public/               # favicon.svg, apple-touch-icon, brand/, brushes/, robots.txt
+                      # (og/, favicon.ico, favicon-96.png are generated, gitignored)
 ```
 
 > The dead `src/page-components/draw-pages.tsx/` duplicate folder was removed
@@ -750,7 +787,20 @@ Ctrl+S save · Ctrl+E export · Ctrl+N new · Ctrl+V vault · B/W/R colors ·
 | `/api/share/store` | `pages/api/share/store.ts` | POST → writes KV w/ 30-day TTL |
 | `/api/share/[shareId]` | `pages/api/share/[shareId].ts` | GET → reads KV |
 
-`Layout.astro` wires global CSS, viewport (`user-scalable=no`), favicon.
+`Layout.astro` wires global CSS, viewport (`user-scalable=no`), favicons, fonts
+and SEO: props `pageTitle`, `description`, `canonicalPath`, `image`, `noindex`,
+`jsonLd`. It emits the canonical link (or `noindex` instead), Open Graph and X
+card tags (image `/og/default.png`), and JSON-LD when given. Defaults come from
+`SITE` in `src/config.ts`. The home page passes JSON-LD; `/draw/[id]` and the
+share pages are `noindex`.
+
+SEO files: `public/robots.txt`; `@astrojs/sitemap` (in `astro.config.mjs`,
+`site: https://zketch.zerro.dev`) lists only `/` and `/draw`. `npm run
+share-images` (`tools/build-share-images.ts`, runs as `predev` and `prebuild`)
+renders `public/og/default.png` from `src/lib/og.ts` with `@resvg/resvg-js` and
+the fonts in `src/assets/og/`, plus `favicon.ico` (16/32/48) and
+`favicon-96.png` from `public/favicon.svg`. Those outputs are gitignored. It
+runs with `node --experimental-strip-types` so it works on Node 22.
 
 ---
 
@@ -815,8 +865,9 @@ While animating, `canvasLocked` blocks all drawing/import.
 ## 12. Known gotchas / conventions
 
 1. **No comments in code** is the repo convention; keep changes self-explanatory.
-2. **No tests/lint/format** configured. Verify with `npx tsc --noEmit` and the
-   browser (chrome-devtools tools are allow-listed in `.claude/settings.local.json`).
+2. **No lint/format** configured. Verify with `npx tsc --noEmit`, `npm test`
+   (Vitest render tests), `npm run build`, and the browser (chrome-devtools
+   tools are allow-listed in `.claude/settings.local.json`).
 3. **`renderVersion` is auto-managed** — never `self.renderVersion++` manually;
    call `bumpRenderVersion` only if you must.
    Don't read `panX`/`panY`/`zoom`/`renderVersion` during `DrawingCanvas`
@@ -870,11 +921,13 @@ While animating, `canvasLocked` blocks all drawing/import.
 - `README.md` — short product intro.
 - `REFACTORING.md` — engine/layer/eraser refactor plan + phase status (mostly
   implemented: layered canvases, destination-out eraser, brush registry).
-- `CHANGELOG.md` — detailed "Unreleased" changelog for the `layer-refactor`
-  branch; the single best description of recent behavior (selection, shapes,
-  pending erase, auto-switch to select, etc.). *(gitignored/local.)*
+- `CHANGELOG.md` — "Unreleased" changelog for the old `layer-refactor` branch
+  (selection, shapes, pending erase, auto-switch to select). Not updated since;
+  later work is described in this file. *(gitignored/local.)*
 - `todo.md` — early Shapes feature brainstorm (superseded by implemented
-  shapes; still lists open questions).
+  shapes).
+- `THIRD_PARTY_ASSETS.md` — sources and licences of bundled brush tips and
+  grains (the share-image fonts carry their OFL files in `src/assets/og/`).
 - `SHARING_MIGRATION.md`, `CLOUDFLARE_KV_SETUP.md` — share system + KV setup.
 - `docs/superpowers/specs|plans/` — design specs for autosave/renderVersion,
   touch/stylus InputManager, and the sidebar floating-panel refactor. All three
@@ -885,23 +938,28 @@ While animating, `canvasLocked` blocks all drawing/import.
 
 ## 15. Current status & roadmap
 
-**Implemented & working:** layered engine with destination-out eraser, brush
-registry, pan/zoom, touch/stylus/palm rejection, shapes + selection/transform,
+**Implemented & working:** layered engine with destination-out eraser, shared
+renderers (canvas == export == thumbnails), brush registry with procedural,
+stamp and RaV89 brushes, stylus pressure and stroke dynamics, pan/zoom,
+touch/stylus/palm rejection, shapes + selection/transform, diagrams (bound
+arrows, text, labels, hand-drawn looks), eraser modes, fixed-size pages,
 autosave + renderVersion auto-bump, local vault + thumbnails, PNG/JPG export,
-SVG export (strokes only), share via Cloudflare KV, per-layer timelapse
-animation, sidebar floating panels.
+share via Cloudflare KV, per-layer timelapse animation, the studio drawing
+screen (docks, layouts, Simple layout, Settings page), brush-drawn icons, the
+swoosh logo, SEO tags and generated share images. Vitest render tests run with
+`npm test`.
 
 **Known gaps / likely next work:**
-- SVG export ignores shapes, images, and erasers.
-- No polygon (n-sided) shape kind (deferred to v2).
-- No text element type.
-- Shape animation ("how shapes appear") is an open design question.
-- Selection avatar for shape config is partially duplicated between
-  `CanvasModel` shape-tool state and `ShapeSettingsPanel`.
-- No automated tests; performance relies on full per-layer redraws.
+- Deep zoom: zoom is clamped to 0.1..5 (`utils/zoom.ts`); finer scales need a
+  save format without coarse truncation, camera-relative rendering and LOD.
+- SVG export only handles strokes, so it is hidden in the export dialog.
+- No polygon (n-sided) shape kind.
+- Shape animation ("how shapes appear" during playback) is an open design question.
+- No brush import (.abr / .brushset). The RaV89 pack licence forbids
+  redistributing its files, so never add a brush export.
+- Undo/redo history includes pan/zoom.
 - Layer `dirtyLayers` tracking is scaffolded but unused.
 
 ---
 
-*Last updated after a full read of the repo (engine, brushes, models, services,
-components, pages, and docs).*
+*Last updated 2026-10-19.*
