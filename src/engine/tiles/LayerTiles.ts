@@ -5,6 +5,7 @@ import { labelsByContainer } from "../geometry/labels";
 import { diffLayer, regionsForIds } from "./layerDiff";
 import { TILE, intersects, scaleKey, tileBounds, tileRange, union, type Bounds, type TileRange } from "./tileMath";
 import { TileSet, type Tile, type TileCache } from "./TileCache";
+import { renderBounds } from "./renderBounds";
 import type { Job, Scheduler } from "./Scheduler";
 
 export interface TileView {
@@ -23,6 +24,7 @@ export type RenderElements = (ctx: CanvasRenderingContext2D, elements: readonly 
 const MAX_SETS = 4;
 const MAX_FALLBACK_TILES = 64;
 const LOG_LIMIT = 256;
+const TILE_BYTES = TILE * TILE * 4;
 
 function viewRect(v: TileView): Bounds {
   return {
@@ -47,6 +49,11 @@ function* slots(r: TileRange) {
   for (let ty = r.y0; ty <= r.y1; ty++) for (let tx = r.x0; tx <= r.x1; tx++) yield [tx, ty] as const;
 }
 
+function sameBounds(a: Bounds | null, b: Bounds | null) {
+  if (!a || !b) return a === b;
+  return a.minX === b.minX && a.minY === b.minY && a.maxX === b.maxX && a.maxY === b.maxY;
+}
+
 function isLabel(el: ElementLike) {
   return elementKind(el) === "text" && !!(el as TextElementLike).containerId;
 }
@@ -54,6 +61,7 @@ function isLabel(el: ElementLike) {
 export class LayerTiles {
   overviewPx = 2048;
   private elements: readonly ElementLike[] = [];
+  private lookup: ElementLookup = new Map();
   private bounds = new Map<string, Bounds | null>();
   private labels = new Map<string, TextElementLike>();
   private content: Bounds | null = null;
@@ -64,7 +72,9 @@ export class LayerTiles {
   private pending: Bounds[] = [];
   private version = 0;
   private log: { v: number; r: Bounds }[] = [];
-  private occupancy = new Map<string, boolean>();
+  private logFloor = 0;
+  private generation = 0;
+  private occupancy = new Map<string, Map<string, boolean>>();
   private forced = new WeakSet<Tile>();
   private frame = 0;
 
@@ -86,15 +96,11 @@ export class LayerTiles {
     const d = diffLayer(this.elements, before, elements, lookup, globalChanged);
     const regions = [...d.regions, ...regionsForIds(extra, before), ...regionsForIds(extra, d.bounds)];
     this.elements = elements;
+    this.lookup = lookup;
     this.bounds = d.bounds;
     this.labels = labelsByContainer(elements);
     if (!regions.length) return;
-    this.version++;
-    this.occupancy.clear();
-    for (const r of regions) this.log.push({ v: this.version, r });
-    if (this.log.length > LOG_LIMIT) this.log.splice(0, this.log.length - LOG_LIMIT);
-    this.content = null;
-    for (const b of d.bounds.values()) if (b) this.content = this.content ? union(this.content, b) : b;
+    this.invalidate(regions);
     this.pending.push(...regions);
     const appendedBounds = d.appended && extra.length === 0 ? d.bounds.get(d.appended.id) : null;
     for (const set of this.allSets()) {
@@ -138,9 +144,17 @@ export class LayerTiles {
           this.enqueueIfNeeded(scheduler, layerKey, target, tx, ty, Math.hypot(tx - cx, ty - cy));
         }
         const ring = { x0: range.x0 - 1, y0: range.y0 - 1, x1: range.x1 + 1, y1: range.y1 + 1 };
+        const prefetch: (readonly [number, number])[] = [];
         for (const [tx, ty] of slots(ring)) {
           if (tx >= range.x0 && tx <= range.x1 && ty >= range.y0 && ty <= range.y1) continue;
-          this.enqueueIfNeeded(scheduler, layerKey, target, tx, ty, 2000 + Math.hypot(tx - cx, ty - cy));
+          if (!this.occupied(s, tx, ty)) continue;
+          const t = target.get(tx, ty);
+          if (!t || t.state !== "ready") prefetch.push([tx, ty]);
+        }
+        if (prefetch.length && this.cache.headroom() >= prefetch.length * TILE_BYTES) {
+          for (const [tx, ty] of prefetch) {
+            this.enqueue(scheduler, layerKey, target, tx, ty, 2000 + Math.hypot(tx - cx, ty - cy));
+          }
         }
       }
     }
@@ -166,7 +180,10 @@ export class LayerTiles {
       this.enqueue(scheduler, layerKey, ov, tx, ty, 1000 + i++);
     }
     if (this.nextOverview && complete) {
-      if (this.overview) this.cache.remove(this.overview);
+      if (this.overview) {
+        this.cache.remove(this.overview);
+        this.setUsed.delete(this.overview);
+      }
       this.overview = this.nextOverview;
       this.nextOverview = null;
     }
@@ -181,6 +198,7 @@ export class LayerTiles {
     const target = this.findSet(s);
     const range = tileRange(area, s);
     if (target) this.setUsed.set(target, v.frame);
+    this.pruneOccupancy(s);
     let allReady = true;
     if (!v.revealAll) {
       for (const [tx, ty] of slots(range)) {
@@ -212,11 +230,40 @@ export class LayerTiles {
   }
 
   markAllStale(): void {
+    this.generation++;
     for (const set of this.allSets()) set.markAllStale();
+  }
+
+  remeasure(): void {
+    const regions: Bounds[] = [];
+    for (const el of this.elements) {
+      if (elementKind(el) === "stroke") continue;
+      const before = this.bounds.get(el.id) ?? null;
+      const after = renderBounds(el, this.lookup, this.labels.get(el.id));
+      if (sameBounds(before, after)) continue;
+      this.bounds.set(el.id, after);
+      if (before) regions.push(before);
+      if (after) regions.push(after);
+    }
+    if (regions.length) this.invalidate(regions);
+  }
+
+  private invalidate(regions: Bounds[]) {
+    this.version++;
+    this.occupancy.clear();
+    for (const r of regions) this.log.push({ v: this.version, r });
+    if (this.log.length > LOG_LIMIT) {
+      const dropped = this.log.splice(0, this.log.length - LOG_LIMIT);
+      this.logFloor = Math.max(this.logFloor, dropped[dropped.length - 1].v);
+    }
+    this.content = null;
+    for (const b of this.bounds.values()) if (b) this.content = this.content ? union(this.content, b) : b;
   }
 
   dispose(): void {
     for (const set of this.allSets()) this.cache.remove(set);
+    this.setUsed.clear();
+    this.occupancy.clear();
     this.sets = [];
     this.overview = null;
     this.nextOverview = null;
@@ -265,9 +312,20 @@ export class LayerTiles {
     return Math.pow(2, Math.floor(Math.log2(this.overviewPx / dim)));
   }
 
+  private pruneOccupancy(scale: number) {
+    const keep = new Set([scaleKey(scale), ...this.allSets().map((set) => scaleKey(set.scale))]);
+    for (const k of this.occupancy.keys()) if (!keep.has(k)) this.occupancy.delete(k);
+  }
+
   private occupied(scale: number, tx: number, ty: number): boolean {
-    const k = `${scaleKey(scale)}|${tx},${ty}`;
-    let hit = this.occupancy.get(k);
+    const sk = scaleKey(scale);
+    let byScale = this.occupancy.get(sk);
+    if (!byScale) {
+      byScale = new Map();
+      this.occupancy.set(sk, byScale);
+    }
+    const k = `${tx},${ty}`;
+    let hit = byScale.get(k);
     if (hit === undefined) {
       const r = tileBounds(tx, ty, scale);
       hit = false;
@@ -277,7 +335,7 @@ export class LayerTiles {
           break;
         }
       }
-      this.occupancy.set(k, hit);
+      byScale.set(k, hit);
     }
     return hit;
   }
@@ -387,11 +445,16 @@ export class LayerTiles {
       ctx.rect(v.originX + tx * TILE, v.originY + ty * TILE, TILE, TILE);
       ctx.clip();
       for (const t of tiles) {
-        this.drawTile(ctx, t, v.originX + t.tx * TILE * k, v.originY + t.ty * TILE * k, TILE * k);
+        const x0 = Math.round(v.originX + t.tx * TILE * k);
+        const y0 = Math.round(v.originY + t.ty * TILE * k);
+        const x1 = Math.round(v.originX + (t.tx + 1) * TILE * k);
+        const y1 = Math.round(v.originY + (t.ty + 1) * TILE * k);
+        ctx.drawImage(t.canvas, x0, y0, x1 - x0, y1 - y0);
+        t.lastUsed = this.frame;
         drawn.add(t);
       }
       ctx.restore();
-      this.setUsed.set(set, v.frame);
+      if (this.sets.includes(set)) this.setUsed.set(set, v.frame);
       return true;
     }
     return false;
@@ -415,7 +478,7 @@ export class LayerTiles {
 
   private dirtySince(v0: number, r: Bounds): boolean {
     if (this.version === v0) return false;
-    if (!this.log.length || this.log[0].v > v0 + 1) return true;
+    if (v0 < this.logFloor) return true;
     return this.log.some((e) => e.v > v0 && intersects(e.r, r));
   }
 
@@ -423,6 +486,7 @@ export class LayerTiles {
     const r = tileBounds(tx, ty, set.scale);
     let units: ElementLike[][] | null = null;
     let started = -1;
+    let generation = -1;
     let canvas: HTMLCanvasElement | null = null;
     let i = 0;
     return {
@@ -433,9 +497,10 @@ export class LayerTiles {
           if (canvas) this.cache.release(canvas);
           return true;
         }
-        if (!units || this.dirtySince(started, r)) {
+        if (!units || generation !== this.generation || this.dirtySince(started, r)) {
           units = this.unitsIn(r);
           started = this.version;
+          generation = this.generation;
           i = 0;
           if (canvas) canvas.getContext("2d")!.clearRect(0, 0, TILE, TILE);
         }

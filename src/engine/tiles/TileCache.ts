@@ -95,6 +95,10 @@ export class TileCache {
     for (const tile of set.tiles()) this.release(tile.canvas);
   }
 
+  headroom(): number {
+    return this.budgetBytes - this.bytes();
+  }
+
   bytes(): number {
     let n = 0;
     for (const set of this.sets) n += set.size;

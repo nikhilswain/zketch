@@ -237,3 +237,125 @@ describe("LayerTiles", () => {
     expect(inked(composite(lt, far))).toBeGreaterThan(1000);
   });
 });
+
+describe("review fixes", () => {
+  const filled = (id: string, x: number, y: number, w: number, h: number): ShapeElementLike =>
+    shape(id, x, y, { width: w, height: h, rotation: 0, look: "clean", fillColor: "#222222", strokeColor: "#222222", strokeWidth: 2, cornerRadius: 0, opacity: 1 });
+
+  it("C1: a budget smaller than view + ring lets the scheduler go idle", () => {
+    const els = Array.from({ length: 40 }, (_, i) => line(`s${i}`, 0, i * 100, 4000, i * 100 + 50, { size: 30 }));
+    const cache = new TileCache(8 * 512 * 512 * 4);
+    const lt = new LayerTiles(cache, (ctx, e) => renderDrawLayer(ctx, e, { lookup: lookupOf(els) }));
+    lt.update(els, lookupOf(els), new Set(els.map((e) => e.id)), []);
+    const s = new Scheduler();
+    let finishedLate = 0;
+    for (let f = 1; f <= 60; f++) {
+      const v = view(1, -1000, -1000, 1100, 800, { frame: f });
+      lt.syncVisible(v);
+      lt.schedule(v, s, "L");
+      const drawn = lt.composite(createCanvas(1100, 800).getContext("2d") as never, v, 1);
+      cache.evict(drawn);
+      const n = s.run(1e6);
+      if (f > 30) finishedLate += n;
+    }
+    expect(finishedLate).toBe(0);
+  });
+
+  it("I1: markAllStale during an in-flight job restarts it", () => {
+    let t = 0;
+    const clock = () => (t += 1);
+    const els = Array.from({ length: 30 }, (_, i) => line(`s${i}`, 50, 20 + i * 15, 450, 20 + i * 15));
+    let first = 0;
+    const lt = new LayerTiles(
+      new TileCache(1e9),
+      (ctx, e) => {
+        const m = ctx.getTransform();
+        if (e[0].id === "s0" && Math.abs(m.a - 1) < 1e-9 && m.e === 0 && m.f === 0) first++;
+        renderDrawLayer(ctx, e, { lookup: lookupOf(els) });
+      },
+      clock,
+    );
+    lt.update(els, lookupOf(els), new Set(els.map((e) => e.id)), []);
+    lt.syncVisible(view(1, -9000, -9000));
+    const v = view(1, 0, 0, 512, 512);
+    const s = new Scheduler(clock);
+    lt.schedule(v, s, "L");
+    s.run(6);
+    const before = first;
+    lt.markAllStale();
+    for (let i = 0; i < 20; i++) {
+      s.run(1e6);
+      lt.schedule(v, s, "L");
+    }
+    expect(first).toBeGreaterThan(before);
+  });
+
+  it("I2: a large delete during an in-flight job leaves nothing behind", () => {
+    let t = 0;
+    const clock = () => (t += 1);
+    const keep = line("keep", 20, 20, 60, 20);
+    const a = Array.from({ length: 44 }, (_, i) => line(`a${i}`, 100, 100 + i * 8, 400, 100 + i * 8));
+    const b = Array.from({ length: 256 }, (_, i) => line(`b${i}`, 3000 + (i % 16) * 20, 3000 + i * 3, 3100 + (i % 16) * 20, 3000 + i * 3));
+    let current: ElementLike[] = [keep, ...a, ...b];
+    const lt = new LayerTiles(new TileCache(1e9), (ctx, els) => renderDrawLayer(ctx, els, { lookup: lookupOf(current) }), clock);
+    lt.update(current, lookupOf(current), new Set(current.map((e) => e.id)), []);
+    lt.syncVisible(view(1, -9000, -9000));
+    const v = view(1, 0, 0, 512, 512);
+    const s = new Scheduler(clock);
+    lt.schedule(v, s, "L");
+    s.run(6);
+    const prev = current;
+    current = [keep];
+    const removed = new Set(prev.filter((e) => e !== keep).map((e) => e.id));
+    lt.update(current, lookupOf(current), removed, []);
+    lt.syncVisible(v);
+    while (s.pending) {
+      s.run(1e6);
+      lt.schedule(v, s, "L");
+    }
+    const out = composite(lt, v);
+    let ink = 0;
+    for (let y = 80; y < 480; y++) for (let x = 80; x < 420; x++) if (out[(y * 512 + x) * 4 + 3] > 0) ink++;
+    expect(ink).toBe(0);
+  });
+
+  it("I4: scaled fallback tiles have no seams at a fractional scale", () => {
+    const els: ElementLike[] = [filled("f", 0, 0, 2000, 1400)];
+    const { lt } = showFully(els, view(1, 0, 0, 1600, 1200));
+    const v = view(1.37, -30, -20, 1100, 800, { zoomStable: false, revealAll: false });
+    const out = composite(lt, v);
+    let holes = 0;
+    for (let y = 100; y < 700; y++) for (let x = 100; x < 1000; x++) if (out[(y * 1100 + x) * 4 + 3] < 250) holes++;
+    expect(holes).toBe(0);
+  });
+
+  it("I5: replaced overviews are not kept alive", () => {
+    const els = [line("a", 0, 0, 3000, 2000)];
+    const lt = new LayerTiles(new TileCache(1e9), (ctx, e) => renderDrawLayer(ctx, e, { lookup: lookupOf(els) }));
+    lt.update(els, lookupOf(els), new Set(["a"]), []);
+    const s = new Scheduler();
+    for (let round = 0; round < 6; round++) {
+      lt.overviewPx = round % 2 ? 2048 : 600;
+      for (let i = 0; i < 5; i++) {
+        lt.schedule(view(1, 0, 0, 1100, 800, { zoomStable: false }), s, "L");
+        while (s.pending) s.run(1e6);
+      }
+      lt.composite(createCanvas(1100, 800).getContext("2d") as never, view(0.8 + round * 0.01, 0, 0, 1100, 800, { zoomStable: false, revealAll: false, frame: round + 2 }), 1);
+    }
+    const internals = lt as unknown as { setUsed: Map<object, number>; sets: object[]; overview: object | null };
+    const live = new Set<object>([...internals.sets, ...(internals.overview ? [internals.overview] : [])]);
+    expect([...internals.setUsed.keys()].filter((k) => !live.has(k))).toEqual([]);
+  });
+
+  it("I6: the occupancy cache stays bounded during long zoom gestures", () => {
+    const els = [line("a", 0, 0, 3000, 2000)];
+    const { lt } = showFully(els, view(1));
+    for (let f = 0; f < 600; f++) {
+      lt.composite(createCanvas(1100, 800).getContext("2d") as never, view(0.5 + f * 0.001, 0, 0, 1100, 800, { zoomStable: false, revealAll: false, frame: f + 2 }), 1);
+    }
+    const occ = (lt as unknown as { occupancy: Map<string, unknown> }).occupancy;
+    let entries = 0;
+    for (const v of occ.values()) entries += v instanceof Map ? v.size : 1;
+    expect(entries).toBeLessThan(500);
+  });
+});
