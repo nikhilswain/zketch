@@ -93,6 +93,18 @@ function ensureCanvas(
   return canvas;
 }
 
+const smoothedPoints = new WeakMap<StrokeLike, StampPoint[]>();
+
+function strokePoints(stroke: StrokeLike) {
+  if (stroke.live) return stampSmooth(dynamicPoints(stroke));
+  let pts = smoothedPoints.get(stroke);
+  if (!pts) {
+    pts = stampSmooth(dynamicPoints(stroke));
+    smoothedPoints.set(stroke, pts);
+  }
+  return pts;
+}
+
 function pathLength(pts: readonly StampPoint[]) {
   let total = 0;
   for (let i = 1; i < pts.length; i++) {
@@ -208,7 +220,7 @@ export class StampBrush implements Brush {
     stroke: StrokeLike,
     m: Matrix,
   ) {
-    const pts = stampSmooth(dynamicPoints(stroke));
+    const pts = strokePoints(stroke);
     const size = Math.max(0.5, stroke.size);
     const scale = Math.hypot(m[0], m[1]) || 1;
     let minX = Infinity;
@@ -265,6 +277,8 @@ export class StampBrush implements Brush {
       { segment: 1, carry: 0, dabs: 0 },
       pts.length,
       pathLength(pts),
+      bw,
+      bh,
     );
     this.applyGrain(bctx, local, bw, bh);
     bctx.restore();
@@ -302,7 +316,7 @@ export class StampBrush implements Brush {
       };
     }
     const cache = live!;
-    const pts = stampSmooth(dynamicPoints(stroke));
+    const pts = strokePoints(stroke);
     const settledPoints = Math.max(0, pts.length - SMOOTH_PASSES - 1);
 
     const actx = cache.accum.getContext("2d")!;
@@ -341,6 +355,8 @@ export class StampBrush implements Brush {
     start: WalkState,
     endPoint: number,
     totalLength: number,
+    limitW = bctx.canvas.width,
+    limitH = bctx.canvas.height,
   ): WalkState {
     const spec = this.spec;
     const size = Math.max(0.5, stroke.size);
@@ -415,6 +431,17 @@ export class StampBrush implements Brush {
       if (spec.flip && r(8) < 0.5) {
         if (flipY) sy = -sy;
         else sx = -sx;
+      }
+      const cx = m[0] * x + m[2] * y + m[4];
+      const cy = m[1] * x + m[3] * y + m[5];
+      const reach = 0.5 * Math.hypot(tip.width * sx, tip.height * sy) * scale;
+      if (
+        cx + reach < 0 ||
+        cy + reach < 0 ||
+        cx - reach > limitW ||
+        cy - reach > limitH
+      ) {
+        return;
       }
       const da = cos * sx;
       const db = sin * sx;

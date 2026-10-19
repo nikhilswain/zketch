@@ -26,26 +26,36 @@ export class FreehandBrush implements Brush {
     stroke: StrokeLike,
     options?: BrushOptions,
   ) {
-    const pts = stroke.points.map((p) => [p.x, p.y, p.pressure ?? 0.5]);
-    // Use stroke's own settings first, then fallback to options, then defaults
-    const outline = getStroke(pts, {
-      size: stroke.size,
-      thinning: stroke.thinning ?? options?.thinning ?? 0.5,
-      smoothing: stroke.smoothing ?? options?.smoothing ?? 0.5,
-      streamline: stroke.streamline ?? options?.streamline ?? 0.5,
-      easing: easingFn(stroke.easing ?? "linear"),
-      start: { taper: stroke.taperStart ?? options?.start?.taper ?? 0 },
-      end: { taper: stroke.taperEnd ?? options?.end?.taper ?? 0 },
-      simulatePressure: stroke.input !== "pen",
-      last: true,
-    } as any);
-    if (outline.length < 3) return;
-
-    const path = new Path2D(toPathData(outline));
+    let path = stroke.live ? undefined : outlines.get(stroke);
+    if (path === undefined) {
+      path = outlinePath(stroke, options);
+      if (!stroke.live) outlines.set(stroke, path);
+    }
+    if (!path) return;
     const prevAlpha = ctx.globalAlpha;
     ctx.fillStyle = stroke.color;
     ctx.globalAlpha = (stroke.opacity ?? 1) * prevAlpha;
     ctx.fill(path);
     ctx.globalAlpha = prevAlpha;
   }
+}
+
+const outlines = new WeakMap<StrokeLike, Path2D | null>();
+
+function outlinePath(stroke: StrokeLike, options?: BrushOptions): Path2D | null {
+  const pts = stroke.points.map((p) => [p.x, p.y, p.pressure ?? 0.5]);
+  // Use stroke's own settings first, then fallback to options, then defaults
+  const outline = getStroke(pts, {
+    size: stroke.size,
+    thinning: stroke.thinning ?? options?.thinning ?? 0.5,
+    smoothing: stroke.smoothing ?? options?.smoothing ?? 0.5,
+    streamline: stroke.streamline ?? options?.streamline ?? 0.5,
+    easing: easingFn(stroke.easing ?? "linear"),
+    start: { taper: stroke.taperStart ?? options?.start?.taper ?? 0 },
+    end: { taper: stroke.taperEnd ?? options?.end?.taper ?? 0 },
+    simulatePressure: stroke.input !== "pen",
+    last: true,
+  } as any);
+  if (outline.length < 3) return null;
+  return new Path2D(toPathData(outline));
 }
