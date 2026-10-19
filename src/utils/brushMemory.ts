@@ -50,6 +50,28 @@ function isBrushState(value: unknown): value is BrushState {
   );
 }
 
+const RANGES: Record<(typeof NUMERIC_FIELDS)[number], [number, number]> = {
+  size: [1, 100],
+  opacity: [0, 1],
+  angle: [0, 180],
+  softness: [0, 1],
+  thinning: [0, 1],
+  smoothing: [0, 1],
+  streamline: [0, 1],
+  taperStart: [0, 100],
+  taperEnd: [0, 100],
+};
+
+function clampState(key: string, state: BrushState): BrushState {
+  const out = { ...state };
+  for (const k of NUMERIC_FIELDS) {
+    const [min, max] =
+      k === "size" ? [1, brushRegistry.get(key)?.maxSize ?? 100] : RANGES[k];
+    out[k] = Math.max(min, Math.min(max, state[k]));
+  }
+  return out;
+}
+
 function load() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -59,7 +81,7 @@ function load() {
       memory.strokeOpen = parsed?.strokeOpen === true;
       for (const [key, value] of Object.entries(parsed?.brushes ?? {})) {
         if (brushRegistry.has(key) && isBrushState(value)) {
-          memory.brushes.set(key, value);
+          memory.brushes.set(key, clampState(key, value));
         }
       }
     });
@@ -218,6 +240,7 @@ export function installBrushMemory(store: ICanvasModel): () => void {
   if (brushRegistry.keys().length === 0) registerDefaultBrushes();
   load();
   const onPointerDown = (e: PointerEvent) => {
+    if (!(e.target instanceof Element) || !e.target.closest("[data-canvas-root]")) return;
     if (e.pointerType !== memory.lastInput) {
       runInAction(() => {
         memory.lastInput = e.pointerType;
