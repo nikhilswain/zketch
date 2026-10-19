@@ -75,6 +75,7 @@ export class CanvasEngine {
   private static readonly HIDDEN_LAYER_TTL_MS = 30000;
   private lastViewChange = 0;
   private settleTimer: ReturnType<typeof setTimeout> | null = null;
+  private revealTimer: ReturnType<typeof setTimeout> | null = null;
   private stopAssetListener: () => void = () => {};
   private resizeObserver: ResizeObserver | null = null;
 
@@ -181,6 +182,7 @@ export class CanvasEngine {
     this.tiles.clear();
     this.scheduler.cancel("");
     if (this.settleTimer) clearTimeout(this.settleTimer);
+    if (this.revealTimer) clearTimeout(this.revealTimer);
 
     // Clean up image cache
     this.imageCache.clear();
@@ -200,7 +202,12 @@ export class CanvasEngine {
       this.settleTimer = setTimeout(() => {
         this.settleTimer = null;
         this.invalidate();
-      }, CanvasEngine.VIEW_SETTLE_MS);
+      }, CanvasEngine.VIEW_SETTLE_MS + 20);
+      if (this.revealTimer) clearTimeout(this.revealTimer);
+      this.revealTimer = setTimeout(() => {
+        this.revealTimer = null;
+        this.invalidate();
+      }, CanvasEngine.REVEAL_MS + 20);
     }
     this.pz = next;
     this.invalidate();
