@@ -46,6 +46,9 @@ export interface InputManagerConfig {
   callbacks: InputManagerCallbacks;
 }
 
+const pressureOf = (e: PointerEvent) =>
+  e.pointerType === "pen" ? e.pressure : e.pressure || 0.5;
+
 export class InputManager {
   private root: HTMLElement;
   private config: InputManagerConfig;
@@ -298,7 +301,7 @@ export class InputManager {
       previousX: e.clientX,
       previousY: e.clientY,
       startTime: performance.now(),
-      pressure: e.pressure || 0.5,
+      pressure: pressureOf(e),
     };
 
     this.activePointers.set(e.pointerId, pointer);
@@ -366,7 +369,7 @@ export class InputManager {
     // intent === "draw"
     this.currentIntent = "draw";
     this.config.callbacks.onDrawStart?.(
-      { x: e.clientX, y: e.clientY, pressure: e.pressure || 0.5 },
+      { x: e.clientX, y: e.clientY, pressure: pressureOf(e) },
       e.pointerType,
     );
   };
@@ -385,7 +388,7 @@ export class InputManager {
     pointer.previousY = pointer.currentY;
     pointer.currentX = e.clientX;
     pointer.currentY = e.clientY;
-    pointer.pressure = e.pressure || 0.5;
+    pointer.pressure = pressureOf(e);
 
     // Re-classify intent — touch count may have changed
     const intent = this.classifyIntent(e.pointerType);
@@ -452,7 +455,7 @@ export class InputManager {
       this.config.callbacks.onDrawMove?.({
         x: e.clientX,
         y: e.clientY,
-        pressure: e.pressure || 0.5,
+        pressure: pressureOf(e),
       });
 
       // Also emit hover for eraser cursor tracking during drawing
