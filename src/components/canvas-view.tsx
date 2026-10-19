@@ -204,6 +204,14 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               };
             });
             canvasStore.loadLayers(layersData as any, drawing.activeLayerId);
+            lastSavedRef.current = [
+              getSnapshot(canvasStore.layers),
+              canvasStore.background,
+              canvasStore.activeLayerId,
+              drawing.name,
+              canvasStore.page ? getSnapshot(canvasStore.page) : null,
+              editingDrawingId,
+            ];
             requestAnimationFrame(() => {
               fitView(canvasStore);
             });
