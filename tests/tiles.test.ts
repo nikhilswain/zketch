@@ -8,7 +8,9 @@ import { labelPlacement } from "@/engine/geometry/labels";
 import { boxBounds } from "@/engine/geometry/outline";
 import { renderBounds } from "@/engine/tiles/renderBounds";
 import { changedIds, diffLayer, regionsForIds } from "@/engine/tiles/layerDiff";
-import { tileBounds, tileRange } from "@/engine/tiles/tileMath";
+import { TILE, tileBounds, tileRange } from "@/engine/tiles/tileMath";
+import { TileCache, TileSet, type Tile } from "@/engine/tiles/TileCache";
+import { Scheduler } from "@/engine/tiles/Scheduler";
 import type { ArrowElementLike, ElementLike, ShapeElementLike, StrokeLike, TextElementLike } from "@/engine/types";
 
 export function strokeEl(id: string, overrides: Partial<StrokeLike> = {}): StrokeLike {
@@ -253,5 +255,109 @@ describe("layer diff", () => {
     const a = strokeEl("a");
     const bounds = first([a]).bounds;
     expect(regionsForIds(["a", "zzz"], bounds)).toEqual([bounds.get("a")]);
+  });
+});
+
+describe("tile cache", () => {
+  const TILE_BYTES = TILE * TILE * 4;
+  const tile = (cache: TileCache, tx: number, ty: number, lastUsed: number): Tile => ({
+    tx,
+    ty,
+    canvas: cache.alloc(),
+    state: "ready",
+    lastUsed,
+  });
+
+  it("evict keeps protected and pinned tiles", () => {
+    const cache = new TileCache(3 * TILE_BYTES);
+    const normal = new TileSet(1);
+    const pinned = new TileSet(0.25, true);
+    cache.add(normal);
+    cache.add(pinned);
+    const tiles = [1, 2, 3, 4, 5].map((n) => tile(cache, n, 0, n));
+    tiles.forEach((t) => normal.set(t));
+    pinned.set(tile(cache, 0, 0, 0));
+    cache.evict(new Set([tiles[4]]));
+    expect([...normal.tiles()].map((t) => t.tx).sort()).toEqual([4, 5]);
+    expect(pinned.size).toBe(1);
+    expect(cache.bytes()).toBe(3 * TILE_BYTES);
+  });
+
+  it("evict reports honestly when protected tiles exceed the budget", () => {
+    const cache = new TileCache(1 * TILE_BYTES);
+    const set = new TileSet(1);
+    cache.add(set);
+    const a = tile(cache, 0, 0, 1);
+    const b = tile(cache, 1, 0, 2);
+    set.set(a);
+    set.set(b);
+    cache.evict(new Set([a, b]));
+    expect(set.size).toBe(2);
+    expect(cache.bytes()).toBe(2 * TILE_BYTES);
+  });
+
+  it("markDirty returns only intersecting tiles", () => {
+    const cache = new TileCache(100 * TILE_BYTES);
+    const set = new TileSet(1);
+    set.set(tile(cache, 0, 0, 0));
+    set.set(tile(cache, 1, 0, 0));
+    set.set(tile(cache, 5, 5, 0));
+    const hit = set.markDirty({ minX: 500, minY: 10, maxX: 520, maxY: 20 });
+    expect(hit.map((t) => t.tx).sort()).toEqual([0, 1]);
+    expect(set.get(5, 5)!.state).toBe("ready");
+    expect(set.get(0, 0)!.state).toBe("dirty");
+  });
+
+  it("released canvases are reused", () => {
+    const cache = new TileCache(100 * TILE_BYTES);
+    const c = cache.alloc();
+    cache.release(c);
+    expect(cache.alloc()).toBe(c);
+  });
+});
+
+describe("scheduler", () => {
+  it("scheduler runs by priority within budget", () => {
+    let t = 0;
+    const s = new Scheduler(() => t);
+    const log: string[] = [];
+    const job = (key: string, priority: number) => {
+      let steps = 0;
+      return {
+        key,
+        priority,
+        step: () => {
+          t += 3;
+          log.push(key);
+          return ++steps >= 2;
+        },
+      };
+    };
+    s.add(job("two", 2));
+    s.add(job("zero", 0));
+    s.add(job("one", 1));
+    expect(s.run(7)).toBe(1);
+    expect(log).toEqual(["zero", "zero", "one"]);
+    expect(s.pending).toBe(2);
+  });
+
+  it("add with an existing key replaces the job", () => {
+    let t = 0;
+    const s = new Scheduler(() => t);
+    const ran: string[] = [];
+    s.add({ key: "k", priority: 0, step: () => (ran.push("old"), true) });
+    s.add({ key: "k", priority: 0, step: () => (ran.push("new"), true) });
+    expect(s.pending).toBe(1);
+    s.run(10);
+    expect(ran).toEqual(["new"]);
+  });
+
+  it("cancel removes jobs by key prefix", () => {
+    const s = new Scheduler(() => 0);
+    s.add({ key: "L1:a", priority: 0, step: () => true });
+    s.add({ key: "L1:b", priority: 0, step: () => true });
+    s.add({ key: "L2:a", priority: 0, step: () => true });
+    s.cancel("L1:");
+    expect(s.pending).toBe(1);
   });
 });
