@@ -65,6 +65,7 @@ type Matrix = [number, number, number, number, number, number];
 
 interface LiveCache {
   id: string;
+  brush: string;
   canvas: HTMLCanvasElement;
   matrix: Matrix;
   rawCount: number;
@@ -164,7 +165,7 @@ export class StampBrush implements Brush {
   ) {
     if (hasDynamics(stroke) && (stroke.taperEnd ?? 0) > 0) return false;
     const cache = live;
-    if (!cache || cache.id !== stroke.id) return false;
+    if (!cache || cache.id !== stroke.id || cache.brush !== this.key) return false;
     if (cache.rawCount > stroke.points.length) return false;
     const lm = cache.matrix;
     if (lm[0] !== m[0] || lm[1] !== m[1] || lm[2] !== m[2] || lm[3] !== m[3]) {
@@ -278,6 +279,7 @@ export class StampBrush implements Brush {
     const reusable =
       live &&
       live.id === stroke.id &&
+      live.brush === this.key &&
       live.canvas === ctx.canvas &&
       live.rawCount <= raw.length &&
       live.matrix.every((v, i) => v === m[i]);
@@ -288,6 +290,7 @@ export class StampBrush implements Brush {
       actx.clearRect(0, 0, accum.width, accum.height);
       live = {
         id: stroke.id,
+        brush: this.key,
         canvas: ctx.canvas,
         matrix: m,
         rawCount: 0,
@@ -475,10 +478,6 @@ export class StampBrush implements Brush {
         const pressure = p0.pressure + (p1.pressure - p0.pressure) * u;
         const x = p0.x + dx * u;
         const y = p0.y + dy * u;
-        const step = Math.max(
-          minStep,
-          spec.spacing * size * Math.max(0, 1 - sizeK * (1 - pressure)),
-        );
         const along = (state.travelled ?? 0) + state.carry;
         const taper = tapered
           ? taperFactor(
@@ -488,6 +487,10 @@ export class StampBrush implements Brush {
               stroke.taperEnd ?? 0,
             )
           : 1;
+        const step = Math.max(
+          minStep,
+          spec.spacing * size * Math.max(0, 1 - sizeK * (1 - pressure)) * taper,
+        );
         let dir = segDir;
         if (follow) {
           dir = d0 + turn * u;
