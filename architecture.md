@@ -236,7 +236,9 @@ exactly) and `512 x 512` device-px tiles on a world-aligned grid (tile `(tx,ty)`
 is rendered with `setTransform(s, 0, 0, s, -tx*512, -ty*512)`). Empty tiles are
 never allocated.
 
-- **Every frame** (`renderStrokes`): `changedIds` across all draw layers →
+- **Every frame** (`renderStrokes`): `ChangeTracker.next` gives each draw layer the ids
+  that changed anywhere this frame (plus ids it missed while hidden; a layer that leaves or
+  joins counts as all its ids changed, so arrows bound across layers follow) →
   `LayerTiles.update` (element diff via `layerDiff`, generous `renderBounds`
   per element; pending-erase and hidden-element changes are extra dirty ids) →
   `syncVisible` → `schedule` → `composite`, then `TileCache.evict`.
@@ -259,7 +261,7 @@ never allocated.
   screens), LRU by last composite, current view protected, canvases pooled.
   `LayerTiles` of layers the engine stops receiving (hidden/focus) are disposed
   after 30 s.
-- Brush assets or fonts finishing loading mark tiles **stale** (still drawn, then
+- Brush assets or fonts finishing loading mark tiles **stale** (fonts also re-measure text bounds via `remeasure`; tiles are still drawn, then
   re-rendered by the scheduler). Debug: `localStorage["zk-debug-tiles"] = "1"`
   draws tile borders and the job count.
 
