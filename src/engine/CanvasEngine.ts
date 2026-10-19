@@ -29,7 +29,7 @@ import type {
   PageRect,
 } from "./types";
 import { elementKind, isShapeElement } from "./types";
-import { LayerTiles, Scheduler, TileCache, TILE, changedIds, type Tile, type TileView } from "./tiles";
+import { ChangeTracker, LayerTiles, Scheduler, TileCache, TILE, type Tile, type TileView } from "./tiles";
 
 const MB = 1024 * 1024;
 
@@ -62,7 +62,7 @@ export class CanvasEngine {
   private scheduler = new Scheduler();
   private tiles: Map<string, LayerTiles> = new Map();
   private tilesSeen: Map<string, number> = new Map();
-  private prevElements: Map<string, readonly ElementLike[]> = new Map();
+  private changes = new ChangeTracker();
   private prevPending = new Set<string>();
   private prevHidden: string | null = null;
   private pending: Set<string> | undefined;
@@ -147,7 +147,10 @@ export class CanvasEngine {
       this.invalidate();
     });
     this.stopFontListener = onFontsReady(() => {
-      for (const t of this.tiles.values()) t.markAllStale();
+      for (const t of this.tiles.values()) {
+        t.remeasure();
+        t.markAllStale();
+      }
       this.invalidate();
     });
     try {
@@ -498,28 +501,21 @@ export class CanvasEngine {
       this.prevHidden = this.hidden;
     }
 
-    const globalChanged = new Set<string>();
-    const seen = new Set<string>();
+    const tracked = layers.filter(
+      (l) => l.type === "draw" && l.visible && !(this.animatingLayerId === l.id && this.animationStrokes),
+    ) as { id: string; elements: readonly ElementLike[] }[];
+    const changes = this.changes.next(tracked);
     let layersWithContent = 0;
-    for (const layer of layers) {
-      if (layer.type !== "draw") continue;
-      seen.add(layer.id);
-      if (layer.elements.length) layersWithContent++;
-      const prev = this.prevElements.get(layer.id);
-      if (prev !== layer.elements) {
-        for (const id of changedIds(prev ?? [], layer.elements)) globalChanged.add(id);
-        this.prevElements.set(layer.id, layer.elements);
-      }
-    }
-    for (const [id, els] of this.prevElements) {
-      if (seen.has(id)) continue;
+    for (const layer of tracked) if (layer.elements.length) layersWithContent++;
+    const present = new Set(tracked.map((l) => l.id));
+    for (const id of [...this.tiles.keys()]) {
+      if (present.has(id)) continue;
       if (now - (this.tilesSeen.get(id) ?? now) > CanvasEngine.HIDDEN_LAYER_TTL_MS) {
         this.tiles.get(id)?.dispose();
         this.tiles.delete(id);
         this.tilesSeen.delete(id);
-        this.prevElements.delete(id);
+        this.changes.forget(id);
         this.scheduler.cancel(`${id}|`);
-        for (const el of els) globalChanged.add(el.id);
       }
     }
     const overviewPx = Math.max(
@@ -563,7 +559,7 @@ export class CanvasEngine {
         this.tiles.set(layer.id, tiles);
       }
       tiles.overviewPx = overviewPx;
-      tiles.update(layer.elements, this.lookup, globalChanged, extraIds);
+      tiles.update(layer.elements, this.lookup, changes.get(layer.id) ?? new Set(), extraIds);
       tiles.syncVisible(view);
       tiles.schedule(view, this.scheduler, layer.id);
       for (const t of tiles.composite(ctx, view, layer.opacity)) drawn.add(t);

@@ -11,6 +11,7 @@ import { changedIds, diffLayer, regionsForIds } from "@/engine/tiles/layerDiff";
 import { TILE, tileBounds, tileRange } from "@/engine/tiles/tileMath";
 import { TileCache, TileSet, type Tile } from "@/engine/tiles/TileCache";
 import { Scheduler } from "@/engine/tiles/Scheduler";
+import { ChangeTracker } from "@/engine/tiles/changeTracker";
 import type { ArrowElementLike, ElementLike, ShapeElementLike, StrokeLike, TextElementLike } from "@/engine/types";
 
 export function strokeEl(id: string, overrides: Partial<StrokeLike> = {}): StrokeLike {
@@ -359,5 +360,42 @@ describe("scheduler", () => {
     s.add({ key: "L2:a", priority: 0, step: () => true });
     s.cancel("L1:");
     expect(s.pending).toBe(1);
+  });
+});
+
+describe("change tracker", () => {
+  const layer = (id: string, elements: ElementLike[]) => ({ id, elements });
+
+  it("plain edits report changed ids to every layer", () => {
+    const t = new ChangeTracker();
+    const a = strokeEl("a");
+    const b = strokeEl("b");
+    t.next([layer("L1", [a]), layer("L2", [b])]);
+    const b2 = strokeEl("b", { size: 20 });
+    const res = t.next([layer("L1", [a]), layer("L2", [b2])]);
+    expect([...res.get("L1")!]).toEqual(["b"]);
+    expect([...res.get("L2")!]).toEqual(["b"]);
+  });
+
+  it("hiding a layer marks its elements changed for the others", () => {
+    const t = new ChangeTracker();
+    const arrow = arrowEl("ar", { endBinding: { elementId: "s1" } });
+    const s1 = shapeEl("s1");
+    t.next([layer("A", [arrow]), layer("B", [s1])]);
+    const res = t.next([layer("A", [arrow])]);
+    expect(res.get("A")!.has("s1")).toBe(true);
+  });
+
+  it("a layer shown again gets the changes it missed while hidden", () => {
+    const t = new ChangeTracker();
+    const arrow = arrowEl("ar", { endBinding: { elementId: "s1" } });
+    const s1 = shapeEl("s1");
+    const moved = shapeEl("s1", { x: 400 });
+    t.next([layer("A", [arrow]), layer("B", [s1])]);
+    t.next([layer("B", [s1])]);
+    t.next([layer("B", [moved])]);
+    t.next([layer("B", [moved])]);
+    const res = t.next([layer("A", [arrow]), layer("B", [moved])]);
+    expect(res.get("A")!.has("s1")).toBe(true);
   });
 });
