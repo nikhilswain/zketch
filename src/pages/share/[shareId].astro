@@ -4,7 +4,7 @@ import ShareByIdPage from '@/page-components/share-by-id-page';
 import { Toaster } from '@/components/ui/sonner';
 ---
 
-<Layout>
+<Layout pageTitle="shared drawing | zketch" description="A drawing made in zketch, the doodle app." noindex>
   {Astro.params.shareId && <ShareByIdPage client:only="react" shareId={Astro.params.shareId} />}
   <Toaster richColors client:only="react" />
 </Layout>

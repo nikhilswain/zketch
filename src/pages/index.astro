@@ -2,9 +2,24 @@
 import { Toaster } from '@/components/ui/sonner';
 import Layout from '@/layouts/Layout.astro';
 import VaultPage from '@/page-components/vault-page';
+import { SITE } from '@/config';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: SITE.name,
+  url: `${SITE.url}/`,
+  description: SITE.description,
+  applicationCategory: 'DesignApplication',
+  operatingSystem: 'Any',
+  browserRequirements: 'Requires a modern web browser',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  inLanguage: 'en',
+  creator: { '@type': 'Person', name: SITE.author, url: SITE.authorUrl },
+};
 ---
 
-<Layout pageTitle="vault | zketch">
+<Layout jsonLd={jsonLd}>
 	<VaultPage client:only="react" />
 	<Toaster richColors client:only="react" />
 </Layout>
