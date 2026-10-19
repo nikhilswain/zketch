@@ -66,6 +66,7 @@ function generateDrawLayerThumbnail(
     out.height = height;
     const outCtx = out.getContext("2d");
     if (!outCtx) return work.toDataURL();
+    outCtx.imageSmoothingQuality = "high";
     outCtx.drawImage(work, 0, 0, width, height);
     return out.toDataURL();
   };

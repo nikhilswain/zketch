@@ -68,7 +68,10 @@ export class ThumbnailService {
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext("2d");
-    if (ctx) ctx.drawImage(work, 0, 0, width, height);
+    if (ctx) {
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(work, 0, 0, width, height);
+    }
     return new Promise((resolve) =>
       (ctx ? canvas : work).toBlob(
         (blob) => resolve(blob ?? new Blob([], { type: "image/png" })),
