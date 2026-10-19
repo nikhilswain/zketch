@@ -110,6 +110,7 @@ src/
 │   │   └── index.ts
 │   ├── geometry/             # Diagram math: arrow, labels, outline, textLayout
 │   ├── stamp/                # Stamp engine: StampBrush, tips, grain, lazy assets (§4.2.1)
+│   ├── tiles/                # Tiled rendering: LayerTiles, TileCache, Scheduler, layerDiff, renderBounds (§4.1)
 │   ├── brush-formats/gimp.ts # .gbr/.gih parser used by `npm run brushes`
 │   └── brushes/
 │       ├── FreehandBrush.ts   # key "ink" — perfect-freehand outline
@@ -214,34 +215,55 @@ Per frame (`render()`):
    transparent.
 2. `renderStrokes()` — content:
    - If `getLayers()` is empty → legacy mode renders `getStrokes()` directly.
-   - Else, for each **visible** layer: render it into its own **offscreen
-     canvas** (`getLayerContext`), then composite onto `display` with
+   - Else, for each **visible** layer in order: image layers and the animating
+     layer draw straight onto `display` with the view transform; **draw layers
+     come from tiles** (`engine/tiles/`, below), composited with
      `globalAlpha = layer.opacity`.
-   - Layer canvases are device-pixel sized plus a 256 CSS-px **overscan**
-     margin on every side. Bakes use an explicit
-     `setTransform(dpr*zoom, dpr*(pan+margin))`; compositing is done 1:1 in
-     device pixels (identity transform, then the view delta).
-   - Layers are **cached** per layer (`layerBakes`: content key, pending-erase
-     set, and the view it was baked at). The content key is the layer's
-     `elements` snapshot array (MST snapshots are structurally shared, so it
-     keeps its identity until that layer changes) or, for image layers, a
-     string of blob/geometry/loaded state. A layer re-bakes when its own key,
-     the pending-erase set, the element hidden for text editing, or any element
-     its arrows are bound to (`deps`, which may live on other layers) changes,
-     when web fonts finish loading, or while it is animating. If exactly one
-     element was appended (same view, prefix identical), only that element is
-     drawn onto the cached canvas. When only the view changes, the cached bitmap is composited with the view delta while
-     a gesture is in progress (view changed < 150 ms ago) and the bitmap still
-     covers the viewport (scale delta 0.5–3×); a crisp re-bake runs once the
-     gesture settles (`settleTimer`) or coverage runs out. Live preview frames
-     never re-bake committed strokes.
+   - The view transform uses an integer device origin
+     `round(dpr * pan)` and scale `dpr * zoom`, for tiles and for the previews,
+     so tiles land on whole device pixels and a committed stroke does not shift.
    - Preview stroke, shape and arrow (`setPreviewStroke/Shape/Arrow`) are drawn
      last, on top.
 3. `renderOverlay()` — selection outlines, transform handles (arrow handles for a
    single arrow: both ends and the middle), marquee, bind highlight
    (`setBindHighlight`) and the eraser circle cursor.
 
-`renderLayer()` for a **draw layer** calls `renderDrawLayer` (`engine/render/`),
+#### Tiled rendering (`engine/tiles/`)
+
+Each draw layer has a `LayerTiles`. Content is cached in **tile sets**: a set has a
+render scale `s` (device px per world unit; the view uses `s = dpr * zoom`
+exactly) and `512 x 512` device-px tiles on a world-aligned grid (tile `(tx,ty)`
+is rendered with `setTransform(s, 0, 0, s, -tx*512, -ty*512)`). Empty tiles are
+never allocated.
+
+- **Every frame** (`renderStrokes`): `changedIds` across all draw layers →
+  `LayerTiles.update` (element diff via `layerDiff`, generous `renderBounds`
+  per element; pending-erase and hidden-element changes are extra dirty ids) →
+  `syncVisible` → `schedule` → `composite`, then `TileCache.evict`.
+- **Edits are synchronous**: visible tiles of the current scale inside an edited
+  region render in the same frame (`syncVisible`). Appending one element draws it
+  onto every ready tile it touches (all sets). Other dirty tiles are skipped as
+  fallbacks until re-rendered.
+- **View changes are time-sliced**: `Scheduler` jobs run in the RAF loop after the
+  frame (6 ms budget during a gesture, 10 ms otherwise), resumable per element.
+  Order: visible tiles centre-out, overview, one prefetch ring. The current
+  scale is only scheduled once zoom has been still for 150 ms; until 450 ms
+  after a zoom, sharp tiles swap in only when all visible ones are ready (no
+  patchwork). Panning at a fixed zoom reuses tiles and fills exposed ones.
+- **Fallbacks** (per tile slot, never two sources in one slot): the target tile,
+  else the most recently used other set whose covering tiles are all clean
+  (scaled, clipped to the slot), else the **overview** (pinned set at a
+  power-of-two scale fitting the layer into `overviewPx`, 512–2048 px, sized so
+  all overviews stay under ~24 MB), else nothing.
+- **Memory**: `TileCache` budget 160 MB (96 MB on coarse-pointer / small
+  screens), LRU by last composite, current view protected, canvases pooled.
+  `LayerTiles` of layers the engine stops receiving (hidden/focus) are disposed
+  after 30 s.
+- Brush assets or fonts finishing loading mark tiles **stale** (still drawn, then
+  re-rendered by the scheduler). Debug: `localStorage["zk-debug-tiles"] = "1"`
+  draws tile borders and the job count.
+
+`renderDrawLayer` (`engine/render/`) is what a tile renders with,
 the one renderer every consumer shares (engine, `ExportService` page and
 infinite paths, `ThumbnailService`, layer thumbnails). It draws every element
 **in array order** (one stacking order, newest on top): strokes via
@@ -264,7 +286,7 @@ draws the page with a soft shadow and the page background (white / world-space
 grid aligned to the page / world-space checker pattern) clipped to the page;
 after layers and previews `renderPageVeil` draws one surround-coloured fill at
 72% with an even-odd hole for the page, so overdraw reads as off the page.
-Both run every frame (including the cached pan/zoom composite), no re-bakes.
+Both run every frame on top of the tile composite.
 
 ### 4.2 Brush registry
 
@@ -901,7 +923,15 @@ While animating, `canvasLocked` blocks all drawing/import.
     model keeps full points for smooth re-rendering.
 12. Layer order: `layers[0]` is **bottom** in render order; the panel displays
     reversed (top layer first).
-13. **No lucide**: use `@/components/icons`. `src/components/icons/index.tsx`
+13. **Tiles**: anything that changes how an element renders must change the
+    element (new snapshot) or go through the pending/hidden ids, otherwise its
+    tiles stay stale. Add new per-element render state the same way.
+    `renderBounds` must cover every painted pixel (test
+    `renderBounds contains every painted pixel`).
+14. **Autosave** skips when layers, background, active layer, name and page are
+    unchanged (`lastSavedRef` in `canvas-view.tsx`), so pan/zoom never rewrites a
+    drawing. New saved fields must be added to that signature.
+15. **No lucide**: use `@/components/icons`. `src/components/icons/index.tsx`
     is generated; change drawings in `icons/defs/` and rerun `npm run icons`.
 
 ---
@@ -954,8 +984,8 @@ arrows, text, labels, hand-drawn looks), eraser modes, fixed-size pages,
 autosave + renderVersion auto-bump, local vault + thumbnails, PNG/JPG export,
 share via Cloudflare KV, per-layer timelapse animation, the studio drawing
 screen (docks, layouts, Simple layout, Settings page), brush-drawn icons, the
-swoosh logo, SEO tags and generated share images. Vitest render tests run with
-`npm test`.
+swoosh logo, SEO tags and generated share images, tiled rendering (pan/zoom
+never block on stroke rendering). Vitest render tests run with `npm test`.
 
 **Known gaps / likely next work:**
 - Deep zoom: zoom is clamped to 0.1..5 (`utils/zoom.ts`); finer scales need a
@@ -966,7 +996,13 @@ swoosh logo, SEO tags and generated share images. Vitest render tests run with
 - No brush import (.abr / .brushset). The RaV89 pack licence forbids
   redistributing its files, so never add a brush export.
 - Undo/redo history includes pan/zoom.
-- Layer `dirtyLayers` tracking is scaffolded but unused.
+- Selection drag over dense content re-renders the affected tiles each move
+  (~28 fps on 300 heavy strokes); lifting dragged elements out of tiles during a
+  transform would fix it.
+- Opening a heavy drawing spends ~1.2 s (dev) creating MST `Point` nodes; frozen
+  point arrays would remove it (same saved format).
+- Layer and vault thumbnails still re-render every stroke; they could be built
+  from the overview tiles.
 
 ---
 
