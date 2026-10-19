@@ -10,12 +10,21 @@ import sitemap from "@astrojs/sitemap";
 
 // https://astro.build/config
 export default defineConfig({
-  site: "https://zketch.pages.dev",
+  site: "https://zketch.zerro.dev",
 
   // Enable server-side rendering
   output: "server",
 
-  integrations: [react(), sitemap()],
+  integrations: [
+    react(),
+    sitemap({
+      filter: (page) => /^https:\/\/zketch\.zerro\.dev\/(draw\/?)?$/.test(page),
+      serialize(item) {
+        item.url = item.url.replace(/(.)\/$/, "$1");
+        return item;
+      },
+    }),
+  ],
 
   vite: {
     plugins: [tailwindcss()],
