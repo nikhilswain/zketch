@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import type { StrokeLike } from "@/engine";
 import type { PlaybackState } from "@/engine/AnimationPlaybackEngine";
 import { reaction } from "mobx";
+import { getSnapshot } from "mobx-state-tree";
 import { effectiveExportScale, newPage, resizePage } from "@/utils/page";
 import { fitView } from "@/utils/viewport";
 import PageSizeDialog from "./PageSizeDialog";
@@ -63,6 +64,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     // Track if rename was just done (to prevent double toast from Enter + blur)
     const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
     const isDirtyRef = useRef(false);
+    const lastSavedRef = useRef<unknown[] | null>(null);
     const autosaveTimerRef = useRef<number | null>(null);
     const saveStatusResetTimerRef = useRef<number | null>(null);
 
@@ -224,6 +226,20 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     const performSave = async (): Promise<boolean> => {
       if (canvasStore.isEmpty && !currentDrawingId) return false;
 
+      const saved = [
+        getSnapshot(canvasStore.layers),
+        canvasStore.background,
+        canvasStore.activeLayerId,
+        drawingName,
+        canvasStore.page ? getSnapshot(canvasStore.page) : null,
+        currentDrawingId,
+      ];
+      const last = lastSavedRef.current;
+      if (last && saved.every((v, i) => v === last[i])) {
+        isDirtyRef.current = false;
+        return true;
+      }
+
       try {
         const layersToSave = serializeLayers(canvasStore.layers);
 
@@ -270,6 +286,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         }
 
         isDirtyRef.current = false;
+        lastSavedRef.current = saved;
         return true;
       } catch (error) {
         console.error("Save failed:", error);
