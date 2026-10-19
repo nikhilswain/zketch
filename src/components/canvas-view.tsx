@@ -203,7 +203,6 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             canvasStore.loadLayers(layersData as any, drawing.activeLayerId);
             requestAnimationFrame(() => {
               fitView(canvasStore);
-              canvasStore.syncViewToHistory();
             });
           } else {
             // No layers - start fresh
@@ -217,7 +216,6 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         setDrawingName("Untitled Drawing");
         requestAnimationFrame(() => {
           fitView(canvasStore);
-          canvasStore.syncViewToHistory();
         });
       }
     }, [editingDrawingId, canvasStore, vaultStore]);
@@ -573,7 +571,6 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               canvasStore.setPage(resizePage({ x: p.x, y: p.y, width: p.width, height: p.height }, width, height));
               requestAnimationFrame(() => {
                 fitView(canvasStore);
-                canvasStore.syncViewToHistory();
               });
             }}
           />

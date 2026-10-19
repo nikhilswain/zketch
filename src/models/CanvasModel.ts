@@ -49,9 +49,6 @@ export const CanvasState = types.model("CanvasState", {
     "transparent",
     "grid",
   ]),
-  zoom: types.number,
-  panX: types.number,
-  panY: types.number,
   page: types.optional(types.maybeNull(PageModel), null),
 });
 
@@ -574,9 +571,6 @@ export const CanvasModel = types
         }),
         activeLayerId: self.activeLayerId,
         background: self.background,
-        zoom: self.zoom,
-        panX: self.panX,
-        panY: self.panY,
         page: self.page ? { ...getSnapshot(self.page) } : null,
         selectionAnchor: self.selectionAnchor
           ? {
@@ -639,9 +633,6 @@ export const CanvasModel = types
       }
 
       self.background = state.background as any;
-      self.zoom = state.zoom;
-      self.panX = state.panX;
-      self.panY = state.panY;
       self.page = state.page ? { ...state.page } : null;
 
       // Restore the selection anchor so the bbox snaps back with elements on undo/redo.
@@ -754,13 +745,6 @@ export const CanvasModel = types
       },
       loadPage(page: Page | null) {
         self.page = page ? { ...page } : null;
-      },
-      syncViewToHistory() {
-        const entry = self.history[self.historyIndex];
-        if (!entry) return;
-        const next = self.history.slice();
-        next[self.historyIndex] = { ...entry, zoom: self.zoom, panX: self.panX, panY: self.panY };
-        self.history = next;
       },
       setPage(page: Page | null) {
         self.page = page ? { ...page } : null;
