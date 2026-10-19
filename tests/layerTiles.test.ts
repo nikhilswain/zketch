@@ -208,6 +208,18 @@ describe("LayerTiles", () => {
     expect(goneInk).toBe(0);
   });
 
+  it("composite applies layer opacity", () => {
+    const els: ElementLike[] = [line("a", 100, 300, 900, 320, { size: 40 })];
+    const v = view(1);
+    const { lt } = showFully(els, v);
+    const c = createCanvas(v.widthPx, v.heightPx);
+    const ctx = c.getContext("2d");
+    lt.composite(ctx as never, v, 0.5);
+    const m = maxAlpha(ctx.getImageData(0, 0, v.widthPx, v.heightPx).data);
+    expect(m).toBeGreaterThanOrEqual(125);
+    expect(m).toBeLessThanOrEqual(130);
+  });
+
   it("scheduler fills visible tiles and the overview", () => {
     const els: ElementLike[] = [line("a", 100, 100, 3000, 1800, { size: 40 }), shape("s", 2500, 300)];
     let current = els;

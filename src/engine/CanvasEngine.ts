@@ -29,15 +29,20 @@ import type {
   PageRect,
 } from "./types";
 import { elementKind, isShapeElement } from "./types";
+import { LayerTiles, Scheduler, TileCache, TILE, changedIds, type Tile, type TileView } from "./tiles";
 
-type LayerContent = readonly ElementLike[] | string;
+const MB = 1024 * 1024;
 
-const NO_DEPS: unknown[] = [];
+function tileBudgetBytes() {
+  const small =
+    typeof window !== "undefined" &&
+    (window.matchMedia?.("(pointer: coarse)").matches || window.screen.width < 1024);
+  return (small ? 96 : 160) * MB;
+}
 
-function sameDeps(a: unknown[], b: unknown[]) {
-  if (a === b) return true;
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+function sameIds(a: Set<string>, b: Set<string>) {
+  if (a.size !== b.size) return false;
+  for (const id of a) if (!b.has(id)) return false;
   return true;
 }
 
@@ -53,29 +58,21 @@ export class CanvasEngine {
   private displayCtx: CanvasRenderingContext2D;
   private uiCtx: CanvasRenderingContext2D;
 
-  // Offscreen layer canvases - one per layer for true isolation
-  private layerCanvases: Map<string, HTMLCanvasElement> = new Map();
-  private layerContexts: Map<string, CanvasRenderingContext2D> = new Map();
-
-  // Track which layers need re-rendering (dirty tracking)
-  private dirtyLayers: Set<string> = new Set();
-  private lastLayerVersions: Map<string, number> = new Map();
-  private layerBakes: Map<
-    string,
-    {
-      content: LayerContent;
-      pending: Set<string> | undefined;
-      panX: number;
-      panY: number;
-      zoom: number;
-      animating: boolean;
-      deps: unknown[];
-      hidden: string | null;
-    }
-  > = new Map();
+  private tileCache = new TileCache(tileBudgetBytes());
+  private scheduler = new Scheduler();
+  private tiles: Map<string, LayerTiles> = new Map();
+  private tilesSeen: Map<string, number> = new Map();
+  private prevElements: Map<string, readonly ElementLike[]> = new Map();
+  private prevPending = new Set<string>();
+  private prevHidden: string | null = null;
+  private pending: Set<string> | undefined;
+  private lastZoomChange = -Infinity;
+  private frameNo = 0;
+  private tileDebug = false;
   private stopFontListener: (() => void) | null = null;
-  private static readonly OVERSCAN_CSS_PX = 256;
   private static readonly VIEW_SETTLE_MS = 150;
+  private static readonly REVEAL_MS = 450;
+  private static readonly HIDDEN_LAYER_TTL_MS = 30000;
   private lastViewChange = 0;
   private settleTimer: ReturnType<typeof setTimeout> | null = null;
   private stopAssetListener: () => void = () => {};
@@ -145,13 +142,18 @@ export class CanvasEngine {
     registerDefaultBrushes();
     installBrushAssetLoader();
     this.stopAssetListener = onBrushAssetsChanged(() => {
-      this.layerBakes.clear();
+      for (const t of this.tiles.values()) t.markAllStale();
       this.invalidate();
     });
     this.stopFontListener = onFontsReady(() => {
-      this.layerBakes.clear();
+      for (const t of this.tiles.values()) t.markAllStale();
       this.invalidate();
     });
+    try {
+      this.tileDebug = localStorage.getItem("zk-debug-tiles") === "1";
+    } catch {
+      this.tileDebug = false;
+    }
     this.resize();
     window.addEventListener("resize", this.resize);
     if (typeof ResizeObserver !== "undefined") {
@@ -175,12 +177,9 @@ export class CanvasEngine {
     this.display.remove();
     this.ui.remove();
 
-    // Clean up layer canvases
-    this.layerCanvases.clear();
-    this.layerContexts.clear();
-    this.dirtyLayers.clear();
-    this.lastLayerVersions.clear();
-    this.layerBakes.clear();
+    for (const t of this.tiles.values()) t.dispose();
+    this.tiles.clear();
+    this.scheduler.cancel("");
     if (this.settleTimer) clearTimeout(this.settleTimer);
 
     // Clean up image cache
@@ -196,6 +195,7 @@ export class CanvasEngine {
       next.zoom !== this.pz.zoom
     ) {
       this.lastViewChange = performance.now();
+      if (next.zoom !== this.pz.zoom) this.lastZoomChange = this.lastViewChange;
       if (this.settleTimer) clearTimeout(this.settleTimer);
       this.settleTimer = setTimeout(() => {
         this.settleTimer = null;
@@ -206,25 +206,6 @@ export class CanvasEngine {
     this.invalidate();
   }
 
-  private overscanDevicePx() {
-    const dpr = window.devicePixelRatio || 1;
-    return Math.round(CanvasEngine.OVERSCAN_CSS_PX * dpr);
-  }
-
-  private bakeCoversView(
-    bake: { panX: number; panY: number; zoom: number },
-    margin: number,
-    viewW: number,
-    viewH: number,
-  ) {
-    const k = this.pz.zoom / bake.zoom;
-    if (k < 0.5 || k > 3) return false;
-    const left = this.pz.panX - (margin + bake.panX) * k;
-    const top = this.pz.panY - (margin + bake.panY) * k;
-    const right = this.pz.panX + (viewW + margin - bake.panX) * k;
-    const bottom = this.pz.panY + (viewH + margin - bake.panY) * k;
-    return left <= 0 && top <= 0 && right >= viewW && bottom >= viewH;
-  }
   setBackground(bg: EngineConfig["background"]) {
     this.background = bg;
     this.invalidate();
@@ -306,9 +287,6 @@ export class CanvasEngine {
       canvas.height = h;
     }
 
-    // Resize offscreen layer canvases
-    this.resizeLayerCanvases(w, h);
-
     // Apply scaling for high DPI
     this.bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.displayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -322,13 +300,48 @@ export class CanvasEngine {
       this.render();
       this.invalid = false;
     }
+    if (this.scheduler.pending) {
+      const busy = performance.now() - this.lastViewChange < CanvasEngine.VIEW_SETTLE_MS;
+      if (this.scheduler.run(busy ? 6 : 10) > 0) this.invalid = true;
+    }
     this.rafId = requestAnimationFrame(this.loop);
   };
+
+  setTileDebug(on: boolean) {
+    this.tileDebug = on;
+    this.invalidate();
+  }
 
   private render() {
     this.renderBackground();
     this.renderStrokes();
     this.renderOverlay();
+    if (this.tileDebug) this.renderTileDebug();
+  }
+
+  private renderTileDebug() {
+    const dpr = window.devicePixelRatio || 1;
+    const ox = Math.round(dpr * this.pz.panX);
+    const oy = Math.round(dpr * this.pz.panY);
+    const ctx = this.uiCtx;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.strokeStyle = "rgba(255, 0, 128, 0.6)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = ((ox % TILE) + TILE) % TILE; x < this.ui.width; x += TILE) {
+      ctx.moveTo(x + 0.5, 0);
+      ctx.lineTo(x + 0.5, this.ui.height);
+    }
+    for (let y = ((oy % TILE) + TILE) % TILE; y < this.ui.height; y += TILE) {
+      ctx.moveTo(0, y + 0.5);
+      ctx.lineTo(this.ui.width, y + 0.5);
+    }
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255, 0, 128, 0.9)";
+    ctx.font = "12px monospace";
+    ctx.fillText(`jobs ${this.scheduler.pending}`, 8, this.ui.height - 8);
+    ctx.restore();
   }
 
   private renderBackground() {
@@ -450,133 +463,111 @@ export class CanvasEngine {
       return;
     }
 
-    // Get active layer IDs and clean up old canvases
-    const activeLayerIds = layers.map((l) => l.id);
-    this.cleanupLayerCanvases(activeLayerIds);
-
     const dpr = window.devicePixelRatio || 1;
-    const pending = this.config.getPendingEraserDeletes?.();
+    const now = performance.now();
+    const view: TileView = {
+      originX: Math.round(dpr * this.pz.panX),
+      originY: Math.round(dpr * this.pz.panY),
+      scale: dpr * this.pz.zoom,
+      widthPx: this.display.width,
+      heightPx: this.display.height,
+      zoomStable: now - this.lastZoomChange >= CanvasEngine.VIEW_SETTLE_MS,
+      revealAll: now - this.lastZoomChange >= CanvasEngine.REVEAL_MS,
+      frame: ++this.frameNo,
+    };
+    this.pending = this.config.getPendingEraserDeletes?.();
     this.hidden = this.config.getHiddenElementId?.() ?? null;
 
-    const margin = this.overscanDevicePx() / dpr;
-    const viewW = this.display.width / dpr;
-    const viewH = this.display.height / dpr;
-    const settling =
-      performance.now() - this.lastViewChange < CanvasEngine.VIEW_SETTLE_MS;
-    const { panX, panY, zoom } = this.pz;
+    const pendingNow = new Set(this.pending ?? []);
+    const extraIds: string[] = [];
+    if (!sameIds(pendingNow, this.prevPending)) {
+      for (const id of pendingNow) if (!this.prevPending.has(id)) extraIds.push(id);
+      for (const id of this.prevPending) if (!pendingNow.has(id)) extraIds.push(id);
+      this.prevPending = pendingNow;
+    }
+    if (this.hidden !== this.prevHidden) {
+      if (this.hidden) extraIds.push(this.hidden);
+      if (this.prevHidden) extraIds.push(this.prevHidden);
+      this.prevHidden = this.hidden;
+    }
 
+    const globalChanged = new Set<string>();
+    const seen = new Set<string>();
+    let layersWithContent = 0;
+    for (const layer of layers) {
+      if (layer.type !== "draw") continue;
+      seen.add(layer.id);
+      if (layer.elements.length) layersWithContent++;
+      const prev = this.prevElements.get(layer.id);
+      if (prev !== layer.elements) {
+        for (const id of changedIds(prev ?? [], layer.elements)) globalChanged.add(id);
+        this.prevElements.set(layer.id, layer.elements);
+      }
+    }
+    for (const [id, els] of this.prevElements) {
+      if (seen.has(id)) continue;
+      if (now - (this.tilesSeen.get(id) ?? now) > CanvasEngine.HIDDEN_LAYER_TTL_MS) {
+        this.tiles.get(id)?.dispose();
+        this.tiles.delete(id);
+        this.tilesSeen.delete(id);
+        this.prevElements.delete(id);
+        this.scheduler.cancel(`${id}|`);
+        for (const el of els) globalChanged.add(el.id);
+      }
+    }
+    const overviewPx = Math.max(
+      512,
+      Math.min(2048, Math.floor(Math.sqrt(6_000_000 / Math.max(1, layersWithContent)))),
+    );
+
+    const drawn = new Set<Tile>();
     for (const layer of layers) {
       if (!layer.visible) continue;
+      this.tilesSeen.set(layer.id, now);
+      const ctx = this.displayCtx;
 
-      const layerCtx = this.getLayerContext(layer.id);
-      const layerCanvas = this.getLayerCanvas(layer.id);
-
-      const isAnimating =
-        this.animatingLayerId === layer.id && !!this.animationStrokes;
-      const content = this.layerContentKey(layer);
-      const elements = layer.type === "draw" ? layer.elements : null;
-      const deps = elements ? this.layerDeps(elements) : NO_DEPS;
-      const bake = this.layerBakes.get(layer.id);
-      const sameView =
-        !!bake &&
-        bake.panX === panX &&
-        bake.panY === panY &&
-        bake.zoom === zoom;
-      const sameContent =
-        !!bake &&
-        !isAnimating &&
-        !bake.animating &&
-        bake.pending === pending &&
-        bake.hidden === this.hidden &&
-        bake.content === content &&
-        sameDeps(bake.deps, deps);
-      const reusable =
-        sameContent &&
-        (sameView ||
-          (settling && this.bakeCoversView(bake!, margin, viewW, viewH)));
-      const appended =
-        !reusable &&
-        !!bake &&
-        sameView &&
-        !isAnimating &&
-        !bake.animating &&
-        bake.pending === pending &&
-        bake.hidden === this.hidden &&
-        sameDeps(bake.deps, deps) &&
-        this.appendedElement(bake.content, elements);
-
-      const applyBakeTransform = () => {
-        const scale = dpr * zoom;
-        layerCtx.setTransform(
-          scale,
-          0,
-          0,
-          scale,
-          dpr * (panX + margin),
-          dpr * (panY + margin),
-        );
-      };
-
-      if (appended) {
-        layerCtx.save();
-        applyBakeTransform();
-        this.renderElement(layerCtx, appended, pending);
-        layerCtx.restore();
-        bake!.content = content;
-        bake!.deps = deps;
-      } else if (!reusable) {
-        layerCtx.save();
-        layerCtx.setTransform(1, 0, 0, 1, 0, 0);
-        layerCtx.clearRect(0, 0, layerCanvas.width, layerCanvas.height);
-        applyBakeTransform();
-
-        if (isAnimating) {
-          for (const stroke of this.animationStrokes!) {
-            renderStroke(
-              layerCtx,
-              stroke,
-              brushRegistry,
-              this.config.getBrushOptions,
-            );
-          }
+      if (layer.type === "image" || (this.animatingLayerId === layer.id && this.animationStrokes)) {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, view.originX, view.originY);
+        ctx.scale(view.scale, view.scale);
+        ctx.globalAlpha = layer.opacity;
+        if (layer.type === "image") {
+          this.renderImageLayer(ctx, layer as ImageLayerLike);
         } else {
-          this.renderLayer(layerCtx, layer, pending);
+          for (const stroke of this.animationStrokes!) {
+            renderStroke(ctx, stroke, brushRegistry, this.config.getBrushOptions);
+          }
         }
-
-        layerCtx.restore();
-        this.layerBakes.set(layer.id, {
-          content,
-          pending,
-          panX,
-          panY,
-          zoom,
-          animating: isAnimating,
-          deps,
-          hidden: this.hidden,
-        });
+        ctx.restore();
+        continue;
       }
+      if (layer.type !== "draw") continue;
 
-      const baked = this.layerBakes.get(layer.id)!;
-      const k = zoom / baked.zoom;
-      this.displayCtx.save();
-      this.displayCtx.setTransform(
-        k,
-        0,
-        0,
-        k,
-        dpr * (panX - (margin + baked.panX) * k),
-        dpr * (panY - (margin + baked.panY) * k),
-      );
-      this.displayCtx.globalAlpha = layer.opacity;
-      this.displayCtx.drawImage(layerCanvas, 0, 0);
-      this.displayCtx.restore();
+      let tiles = this.tiles.get(layer.id);
+      if (!tiles) {
+        tiles = new LayerTiles(this.tileCache, (c, els) =>
+          renderDrawLayer(c, els, {
+            getBrushOptions: this.config.getBrushOptions,
+            pending: this.pending,
+            lookup: this.lookup,
+            hidden: this.hidden,
+          }),
+        );
+        this.tiles.set(layer.id, tiles);
+      }
+      tiles.overviewPx = overviewPx;
+      tiles.update(layer.elements, this.lookup, globalChanged, extraIds);
+      tiles.syncVisible(view);
+      tiles.schedule(view, this.scheduler, layer.id);
+      for (const t of tiles.composite(ctx, view, layer.opacity)) drawn.add(t);
     }
+    this.tileCache.evict(drawn);
 
     // Render preview stroke on top (for live drawing feedback)
     if (this.preview) {
       this.displayCtx.save();
-      this.displayCtx.translate(this.pz.panX, this.pz.panY);
-      this.displayCtx.scale(this.pz.zoom, this.pz.zoom);
+      this.displayCtx.setTransform(1, 0, 0, 1, view.originX, view.originY);
+      this.displayCtx.scale(view.scale, view.scale);
       renderStroke(
         this.displayCtx,
         this.preview,
@@ -588,79 +579,21 @@ export class CanvasEngine {
 
     if (this.previewShape) {
       this.displayCtx.save();
-      this.displayCtx.translate(this.pz.panX, this.pz.panY);
-      this.displayCtx.scale(this.pz.zoom, this.pz.zoom);
+      this.displayCtx.setTransform(1, 0, 0, 1, view.originX, view.originY);
+      this.displayCtx.scale(view.scale, view.scale);
       renderShape(this.displayCtx, this.previewShape);
       this.displayCtx.restore();
     }
 
     if (this.previewArrow) {
       this.displayCtx.save();
-      this.displayCtx.translate(this.pz.panX, this.pz.panY);
-      this.displayCtx.scale(this.pz.zoom, this.pz.zoom);
+      this.displayCtx.setTransform(1, 0, 0, 1, view.originX, view.originY);
+      this.displayCtx.scale(view.scale, view.scale);
       renderArrow(this.displayCtx, this.previewArrow, this.lookup, measureText, null);
       this.displayCtx.restore();
     }
 
     this.renderPageVeil();
-  }
-
-  private layerDeps(elements: readonly ElementLike[]): unknown[] {
-    const deps: unknown[] = [];
-    for (const el of elements) {
-      const a = el as any;
-      if (a.kind !== "arrow") continue;
-      if (a.startBinding) deps.push(this.lookup.get(a.startBinding.elementId));
-      if (a.endBinding) deps.push(this.lookup.get(a.endBinding.elementId));
-    }
-    return deps.length ? deps : NO_DEPS;
-  }
-
-  private layerContentKey(layer: LayerLike): LayerContent {
-    if (layer.type === "draw") return layer.elements;
-    const img = layer as ImageLayerLike;
-    return `${img.blobId}|${img.x}|${img.y}|${img.width}|${img.height}|${
-      img.rotation
-    }|${this.imageCache.has(img.blobId)}`;
-  }
-
-  private appendedElement(
-    prev: LayerContent,
-    next: readonly ElementLike[] | null,
-  ): ElementLike | null {
-    if (!next || typeof prev === "string") return null;
-    if (next.length !== prev.length + 1) return null;
-    for (let i = 0; i < prev.length; i++) {
-      if (next[i] !== prev[i]) return null;
-    }
-    return next[next.length - 1];
-  }
-
-  private renderElement(
-    ctx: CanvasRenderingContext2D,
-    el: ElementLike,
-    pending: Set<string> | undefined,
-  ) {
-    renderDrawLayer(ctx, [el], { getBrushOptions: this.config.getBrushOptions, pending, lookup: this.lookup });
-  }
-
-  private renderLayer(
-    ctx: CanvasRenderingContext2D,
-    layer: LayerLike,
-    pending: Set<string> | undefined,
-  ) {
-    if (layer.type === "image") {
-      this.renderImageLayer(ctx, layer as ImageLayerLike);
-      return;
-    }
-    if (layer.type === "draw") {
-      renderDrawLayer(ctx, layer.elements, {
-        getBrushOptions: this.config.getBrushOptions,
-        pending,
-        lookup: this.lookup,
-        hidden: this.hidden,
-      });
-    }
   }
 
   private renderImageLayer(
@@ -949,48 +882,5 @@ export class CanvasEngine {
     if (!anchor) return;
     const pad = CanvasEngine.SELECTION_GAP_PX / this.pz.zoom;
     transformController.renderHandles(ctx, anchor, this.pz, dpr, pad);
-  }
-
-  // Get or create an offscreen canvas for a layer
-  private getLayerCanvas(layerId: string): HTMLCanvasElement {
-    let canvas = this.layerCanvases.get(layerId);
-    if (!canvas) {
-      canvas = document.createElement("canvas");
-      canvas.width = this.display.width + 2 * this.overscanDevicePx();
-      canvas.height = this.display.height + 2 * this.overscanDevicePx();
-      this.layerCanvases.set(layerId, canvas);
-      const ctx = canvas.getContext("2d", { alpha: true })!;
-      this.layerContexts.set(layerId, ctx);
-    }
-    return canvas;
-  }
-
-  private getLayerContext(layerId: string): CanvasRenderingContext2D {
-    this.getLayerCanvas(layerId); // Ensure canvas exists
-    return this.layerContexts.get(layerId)!;
-  }
-
-  // Resize all layer canvases when main canvas resizes
-  private resizeLayerCanvases(width: number, height: number) {
-    for (const [id, canvas] of this.layerCanvases) {
-      canvas.width = width + 2 * this.overscanDevicePx();
-      canvas.height = height + 2 * this.overscanDevicePx();
-    }
-    // Mark all layers as dirty after resize
-    this.dirtyLayers = new Set(this.layerCanvases.keys());
-    this.layerBakes.clear();
-  }
-
-  // Clean up unused layer canvases
-  private cleanupLayerCanvases(activeLayerIds: string[]) {
-    const activeSet = new Set(activeLayerIds);
-    for (const [id, canvas] of this.layerCanvases) {
-      if (!activeSet.has(id)) {
-        this.layerCanvases.delete(id);
-        this.layerContexts.delete(id);
-        this.lastLayerVersions.delete(id);
-        this.layerBakes.delete(id);
-      }
-    }
   }
 }
