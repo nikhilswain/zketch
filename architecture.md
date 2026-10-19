@@ -310,8 +310,16 @@ step), size/flow jitter and pressure response, angle mode
 (fixed/direction/random, `directionOffset` rotates direction-following tips),
 roundness, `keepAspect` (fit the tip's longer side to the size instead of
 squashing it into a square; the original brushes predate it and keep the square
-fit so saved strokes render unchanged), `flip` (random mirror), and optional
-paper `grain` (`{id, scale, depth}`).
+fit so saved strokes render unchanged), `flip` (random mirror; left-right on
+screen, so a fixed-angle brush whose tip is stored sideways, like Pine at 90°,
+mirrors the tip's y axis), `pickTips` (lets the user choose which tips a stroke
+uses), and optional paper `grain` (`{id, scale, depth}`).
+
+- **Tip choice** (`pickTips`, used by Bare Tree): `Brush.tipChoices` exposes the
+  tip ids, the Presets panel shows them as toggles (`TipPicker`), and
+  `utils/brushMemory` keeps the set per brush (`getTipSet`/`toggleTip`, saved
+  with the brush memory). A new stroke stores the indices in `stroke.tips`
+  (null = every tip), so saved strokes, export and thumbnails keep their trees.
 
 - **Dabs** are placed along a fixed 2-pass smoothed path (`stampSmooth`) at
   `spacing × size` and drawn as tinted tip canvases with a per-dab affine

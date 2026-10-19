@@ -6,13 +6,60 @@ import { BRUSH_CATEGORIES } from "@/utils/brushCategories";
 import {
   applyPreset,
   getBrushState,
+  getTipSet,
   isPresetModified,
   resetPreset,
+  toggleTip,
 } from "@/utils/brushMemory";
 import PanelFrame, { usePanelVariant } from "../PanelFrame";
 import StrokeCanvas from "./StrokeCanvas";
 import PresetList from "./PresetList";
 import { currentBrushLook } from "./brushLook";
+
+const TipPicker: React.FC<{ brushKey: string; tips: readonly string[] }> = observer(
+  ({ brushKey, tips }) => {
+    const chosen = getTipSet(brushKey);
+    return (
+      <div className="flex flex-col gap-1.5">
+        <span className="px-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-zk-muted">
+          Shapes{chosen ? ` · ${chosen.length} of ${tips.length}` : ""}
+        </span>
+        <div className="grid grid-cols-5 gap-1">
+          {tips.map((id, i) => {
+            const on = !chosen || chosen.includes(i);
+            const url = `url(/brushes/${id}.png)`;
+            return (
+              <button
+                key={id}
+                onClick={() => toggleTip(brushKey, i)}
+                aria-pressed={on}
+                aria-label={`Shape ${i + 1}`}
+                title={on ? "Click to leave this shape out" : "Click to use this shape"}
+                className={`aspect-square rounded-[4px] p-1 transition-colors ${
+                  on ? "bg-zk-selected" : "bg-zk-raised/40 hover:bg-zk-raised"
+                }`}
+              >
+                <span
+                  className={`block h-full w-full ${on ? "bg-zk-text" : "bg-zk-muted opacity-50"}`}
+                  style={{
+                    maskImage: url,
+                    WebkitMaskImage: url,
+                    maskSize: "contain",
+                    WebkitMaskSize: "contain",
+                    maskRepeat: "no-repeat",
+                    WebkitMaskRepeat: "no-repeat",
+                    maskPosition: "center",
+                    WebkitMaskPosition: "center",
+                  }}
+                />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  },
+);
 
 export const PresetsBody: React.FC = observer(() => {
   const canvasStore = useCanvasStore();
@@ -54,6 +101,9 @@ export const PresetsBody: React.FC = observer(() => {
           maxSize={36}
         />
       </div>
+      {brush?.tipChoices && brush.tipChoices.length > 1 && (
+        <TipPicker brushKey={key} tips={brush.tipChoices} />
+      )}
       {presets.length > 0 && (
         <PresetList
           presets={presets}

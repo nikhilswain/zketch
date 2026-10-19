@@ -48,6 +48,7 @@ export const Stroke = types
       types.maybeNull(types.enumeration("StrokeInput", ["pen", "mouse", "touch"])),
       null,
     ),
+    tips: types.optional(types.maybeNull(types.array(types.number)), null),
   })
   .actions((self) => ({
     setColor(c: string) {

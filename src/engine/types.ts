@@ -77,6 +77,7 @@ export interface StrokeLike {
   angle?: number;
   softness?: number;
   input?: StrokeInput | null;
+  tips?: number[] | null;
   live?: boolean;
 }
 
@@ -269,6 +270,7 @@ export interface Brush {
   legacy?: boolean;
   defaults?: Partial<BrushOptions>;
   presets?: BrushPreset[];
+  tipChoices?: readonly string[];
   render(
     ctx: CanvasRenderingContext2D,
     stroke: StrokeLike,

@@ -31,6 +31,7 @@ export interface StampSpec {
   scatterBothAxes?: boolean;
   keepAspect?: boolean;
   flip?: boolean;
+  pickTips?: boolean;
   sizeJitter?: number;
   sizePressure?: number;
   flowJitter?: number;
@@ -130,6 +131,7 @@ export class StampBrush implements Brush {
   readonly strokeSettings?: StrokeSettingKey[];
   readonly strokeDefaults?: Partial<StrokeDefaults>;
   readonly presets?: BrushPreset[];
+  readonly tipChoices?: readonly string[];
 
   constructor(readonly spec: StampSpec) {
     this.key = spec.key;
@@ -139,6 +141,7 @@ export class StampBrush implements Brush {
     this.strokeSettings = spec.strokeSettings;
     this.strokeDefaults = spec.strokeDefaults;
     this.presets = spec.presets;
+    this.tipChoices = spec.pickTips ? spec.tips : undefined;
   }
 
   render(
@@ -349,6 +352,7 @@ export class StampBrush implements Brush {
     const rand = (i: number, k: number) =>
       seededRandom(seed + i * 7.137 + k * 0.917);
     const tips = spec.tips.map((id) => getTintedTip(id, stroke.color));
+    const pool = stroke.tips?.filter((i) => i >= 0 && i < tips.length) ?? [];
     const flipY =
       spec.angleMode === "fixed" &&
       Math.abs(Math.sin(spec.angle ?? 0)) > Math.abs(Math.cos(spec.angle ?? 0));
@@ -396,7 +400,11 @@ export class StampBrush implements Brush {
         }
       }
       const tip =
-        tips.length === 1 ? tips[0] : tips[Math.floor(r(6) * tips.length)];
+        tips.length === 1
+          ? tips[0]
+          : pool.length > 0
+            ? tips[pool[Math.floor(r(6) * pool.length)]]
+            : tips[Math.floor(r(6) * tips.length)];
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);
       const fit = spec.keepAspect

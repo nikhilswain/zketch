@@ -20,6 +20,7 @@ import { createGetBrushOptions } from "@/engine/brushOptions";
 import { ImportService } from "@/services/ImportService";
 import { toast } from "sonner";
 import { clampZoom } from "@/utils/zoom";
+import { getTipSet } from "@/utils/brushMemory";
 import { SURROUND, type SurroundTone } from "@/utils/page";
 import {
   bendFromMid,
@@ -613,6 +614,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             angle: canvasStore.brushSettings.angle,
             softness: canvasStore.brushSettings.softness,
             input: strokeInputRef.current,
+            tips: getTipSet(canvasStore.currentBrushStyle),
           };
           engineRef.current.setPreviewStroke(temp);
         } else {
@@ -1483,6 +1485,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             angle: canvasStore.brushSettings.angle,
             softness: canvasStore.brushSettings.softness,
             input: strokeInputRef.current,
+            tips: getTipSet(canvasStore.currentBrushStyle),
           };
           strokeIdRef.current = "";
 

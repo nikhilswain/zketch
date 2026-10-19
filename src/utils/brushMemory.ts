@@ -36,6 +36,7 @@ export interface BrushState {
 
 const memory = observable({
   brushes: observable.map<string, BrushState>(),
+  tips: observable.map<string, number[]>(),
   strokeOpen: false,
   lastInput: "mouse" as string,
   lastBrush: "ink" as string,
@@ -84,6 +85,14 @@ function load() {
           memory.brushes.set(key, clampState(key, value));
         }
       }
+      for (const [key, value] of Object.entries(parsed?.tips ?? {})) {
+        const count = brushRegistry.get(key)?.tipChoices?.length ?? 0;
+        if (!Array.isArray(value)) continue;
+        const set = [...new Set(value)].filter(
+          (i): i is number => Number.isInteger(i) && i >= 0 && i < count,
+        );
+        if (set.length > 0 && set.length < count) memory.tips.set(key, set.sort((a, b) => a - b));
+      }
     });
   } catch {
     return;
@@ -102,6 +111,7 @@ function scheduleSave() {
         JSON.stringify({
           strokeOpen: memory.strokeOpen,
           brushes: Object.fromEntries(memory.brushes),
+          tips: Object.fromEntries(memory.tips),
         }),
       );
     } catch {
@@ -210,6 +220,26 @@ export function resetStroke(store: ICanvasModel, key: string) {
     taperStart: d.taperStart,
     taperEnd: d.taperEnd,
   });
+}
+
+export function getTipSet(key: string): number[] | null {
+  const set = memory.tips.get(key);
+  return set ? [...set] : null;
+}
+
+export function toggleTip(key: string, index: number) {
+  const count = brushRegistry.get(key)?.tipChoices?.length ?? 0;
+  if (index < 0 || index >= count) return;
+  const current = memory.tips.get(key) ?? Array.from({ length: count }, (_, i) => i);
+  const next = current.includes(index)
+    ? current.filter((i) => i !== index)
+    : [...current, index].sort((a, b) => a - b);
+  if (next.length === 0) return;
+  runInAction(() => {
+    if (next.length === count) memory.tips.delete(key);
+    else memory.tips.set(key, next);
+  });
+  scheduleSave();
 }
 
 export function isStrokeOpen() {

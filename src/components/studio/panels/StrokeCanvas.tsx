@@ -18,6 +18,7 @@ export interface StrokeLook {
   taperStart: number;
   taperEnd: number;
   input: "pen" | "mouse";
+  tips?: number[] | null;
 }
 
 interface StrokeCanvasProps {
@@ -85,6 +86,7 @@ const StrokeCanvas: React.FC<StrokeCanvasProps> = ({
         taperStart: (look.taperStart * size) / Math.max(1, look.size),
         taperEnd: (look.taperEnd * size) / Math.max(1, look.size),
         input: look.input,
+        tips: look.tips ?? null,
       },
       brushRegistry,
     );
@@ -106,6 +108,7 @@ const StrokeCanvas: React.FC<StrokeCanvasProps> = ({
     look.taperStart,
     look.taperEnd,
     look.input,
+    look.tips?.join(","),
   ]);
 
   return (

@@ -501,6 +501,7 @@ export const treeBrush = new StampBrush({
   category: "nature",
   maxSize: 400,
   tips: frames("tree", 5),
+  pickTips: true,
   keepAspect: true,
   spacing: 0.7,
   flow: 1,

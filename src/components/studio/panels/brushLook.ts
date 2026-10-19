@@ -1,5 +1,5 @@
 import type { ICanvasModel } from "@/models/CanvasModel";
-import { lastInputWasPen } from "@/utils/brushMemory";
+import { getTipSet, lastInputWasPen } from "@/utils/brushMemory";
 import type { StrokeLook } from "./StrokeCanvas";
 
 export function currentBrushLook(store: ICanvasModel): StrokeLook {
@@ -17,5 +17,6 @@ export function currentBrushLook(store: ICanvasModel): StrokeLook {
     taperStart: bs.taperStart,
     taperEnd: bs.taperEnd,
     input: lastInputWasPen() ? "pen" : "mouse",
+    tips: getTipSet(store.currentBrushStyle),
   };
 }
