@@ -24,6 +24,7 @@ function pathLength(pts: Pt[]): number[] {
 
 export class DoodlePlayer {
   readonly doodle: Doodle;
+  readonly cssWidth: number;
   private ctx: CanvasRenderingContext2D;
   private done: HTMLCanvasElement;
   private dctx: CanvasRenderingContext2D;
@@ -43,6 +44,7 @@ export class DoodlePlayer {
     cssH = cssW,
   ) {
     this.doodle = doodle;
+    this.cssWidth = cssW;
     this.dpr = Math.min(2, typeof devicePixelRatio === "number" ? devicePixelRatio : 1);
     canvas.width = Math.max(1, Math.round(cssW * this.dpr));
     canvas.height = Math.max(1, Math.round(cssH * this.dpr));

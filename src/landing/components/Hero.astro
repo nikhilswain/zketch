@@ -1,4 +1,6 @@
 ---
+import ZIcon from "./ZIcon.astro";
+
 const slots = [
   { x: "4%", y: "6%", r: "-6deg", s: 1 },
   { x: "13%", y: "38%", r: "4deg", s: 0.9 },
@@ -28,6 +30,7 @@ const slots = [
       ))
     }
   </div>
+  <template data-eraser-icon><ZIcon name="eraser" size={30} /></template>
   <div class="lp-cursors" data-cursors aria-hidden="true"></div>
   <div class="lp-hero-copy">
     <p class="lp-tape">free · no sign-up · nothing to install</p>
@@ -45,3 +48,10 @@ const slots = [
     <p class="lp-hint lp-desktop-only" aria-hidden="true">psst, the doodles are clickable</p>
   </div>
 </section>
+
+<script>
+  import { mountHero } from "../hero";
+
+  const root = document.querySelector<HTMLElement>("[data-hero]");
+  if (root) mountHero(root);
+</script>

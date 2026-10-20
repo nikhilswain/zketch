@@ -59,8 +59,7 @@ export function requestDrawSlot(start: () => void, urgent = false): () => void {
     drawing++;
     start();
   };
-  if (drawing < MAX_DRAWING) run();
-  else if (urgent) waiting.unshift(run);
+  if (urgent || drawing < MAX_DRAWING) run();
   else waiting.push(run);
   return () => {
     cancelled = true;
