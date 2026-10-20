@@ -76,7 +76,7 @@ const TopLeftBlock: React.FC<TopLeftBlockProps> = observer(
     };
 
     return (
-      <div className="pointer-events-auto flex h-10 items-center gap-1 rounded-[6px] bg-zk-surface pr-2 pl-1.5 text-zk-text">
+      <div className="pointer-events-auto flex h-10 items-center gap-1 rounded-[6px] bg-zk-surface shadow-(--zk-shadow-float) pr-2 pl-1.5 text-zk-text">
         <button
           onClick={onBack}
           aria-label="Back to vault"

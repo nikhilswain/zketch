@@ -35,7 +35,7 @@ const ReopenTab: React.FC<{ side: "left" | "right" }> = ({ side }) => (
   <button
     aria-label={`Show ${side} sidebar`}
     onClick={() => setSideOpen(side, true)}
-    className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-[6px] bg-zk-surface text-zk-text hover:bg-zk-hover"
+    className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-[6px] bg-zk-surface shadow-(--zk-shadow-float) text-zk-text hover:bg-zk-hover"
   >
     {side === "left" ? (
       <PanelLeftOpenIcon className="h-4 w-4" />

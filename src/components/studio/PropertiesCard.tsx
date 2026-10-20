@@ -27,7 +27,7 @@ const PropertiesCard: React.FC = observer(() => {
   return (
     <div
       aria-label="Properties"
-      className="pointer-events-auto max-h-[calc(100vh-140px)] w-[236px] overflow-y-auto rounded-[6px] bg-zk-surface p-3 text-zk-text"
+      className="pointer-events-auto max-h-[calc(100vh-140px)] w-[236px] overflow-y-auto rounded-[6px] bg-zk-surface shadow-(--zk-shadow-float) p-3 text-zk-text"
     >
       {pen && !canvasStore.hasSelection ? (
         <div className="flex flex-col gap-3.5">

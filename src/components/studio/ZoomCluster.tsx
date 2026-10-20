@@ -13,7 +13,7 @@ const ZoomCluster: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
     canvasStore.zoomAt(canvasStore.zoom * factor, c.x, c.y);
   };
   return (
-    <div className="pointer-events-auto flex h-10 items-center gap-0.5 rounded-[6px] bg-zk-surface px-1 text-[12px] text-zk-text tabular-nums">
+    <div className="pointer-events-auto flex h-10 items-center gap-0.5 rounded-[6px] bg-zk-surface shadow-(--zk-shadow-float) px-1 text-[12px] text-zk-text tabular-nums">
       <button aria-label="Zoom out" onClick={() => zoomBy(1 / 1.2)} className="h-8 w-8 rounded-[4px] text-[15px] hover:bg-zk-hover">
         −
       </button>

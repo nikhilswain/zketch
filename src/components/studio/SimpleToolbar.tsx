@@ -101,7 +101,7 @@ const SimpleToolbar: React.FC = observer(() => {
     <div
       role="toolbar"
       aria-label="Tools"
-      className="pointer-events-auto flex h-11 max-w-full items-center gap-0.5 overflow-x-auto rounded-[6px] bg-zk-surface px-1 text-zk-text"
+      className="pointer-events-auto flex h-11 max-w-full items-center gap-0.5 overflow-x-auto rounded-[6px] bg-zk-surface shadow-(--zk-shadow-float) px-1 text-zk-text"
     >
       {TOOLS.map(({ id, label, key, Icon }) => {
         const on = active === id;

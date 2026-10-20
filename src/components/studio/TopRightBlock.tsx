@@ -7,7 +7,7 @@ const TopRightBlock: React.FC<{ onShare: () => void; onClear: () => void }> = ob
   const canvasStore = useCanvasStore();
   const icon = "flex h-8 w-9 items-center justify-center rounded-[4px] text-zk-text hover:bg-zk-hover disabled:pointer-events-none disabled:opacity-30";
   return (
-    <div className="pointer-events-auto flex h-10 items-center gap-0.5 rounded-[6px] bg-zk-surface px-1">
+    <div className="pointer-events-auto flex h-10 items-center gap-0.5 rounded-[6px] bg-zk-surface shadow-(--zk-shadow-float) px-1">
       <button aria-label="Undo" title="Undo (Ctrl+Z)" onClick={() => canvasStore.undo()} disabled={!canvasStore.canUndo} className={icon}>
         <UndoIcon className="h-[17px] w-[17px]" />
       </button>

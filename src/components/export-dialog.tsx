@@ -298,7 +298,7 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
                       className={`relative h-[18px] w-8 shrink-0 rounded-[3px] transition-colors disabled:opacity-50 ${transparent ? "bg-zk-accent" : "bg-zk-hover"}`}
                     >
                       <span
-                        className={`absolute top-[2px] h-[14px] w-[14px] rounded-[2px] bg-zk-text transition-[left] duration-150 ${transparent ? "left-[16px]" : "left-[2px]"}`}
+                        className={`absolute top-[2px] h-[14px] w-[14px] rounded-[2px] bg-(--zk-knob) shadow-(--zk-knob-shadow) transition-[left] duration-150 ${transparent ? "left-[16px]" : "left-[2px]"}`}
                       />
                     </button>
                   </div>
