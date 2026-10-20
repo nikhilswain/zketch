@@ -759,3 +759,32 @@
     stroke-dashoffset: 0;
   }
 }
+
+.lp-cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  color: var(--c);
+  will-change: transform;
+}
+
+.lp-cursor span {
+  margin-top: 16px;
+  padding: 2px 9px 3px;
+  border-radius: 9px 7px 8px 6px;
+  background: var(--c);
+  color: #fff;
+  font-family: var(--hand);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.lp-tree {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
