@@ -1,4 +1,6 @@
 ---
+import ZIcon from "./ZIcon.astro";
+
 const features = [
   {
     id: "mini-diagram",
@@ -45,6 +47,7 @@ const features = [
       stroke-linecap="round"
       vector-effect="non-scaling-stroke"></path>
   </svg>
+  <span class="lp-pencil-tip" data-pencil-tip aria-hidden="true" hidden><ZIcon name="pencil" size={30} /></span>
   <div class="lp-section-head">
     <h2 id="lp-features-title">everything you need to think on paper.</h2>
     <p>Quick doodles, tidy-ish diagrams and proper paintings, all in one app.</p>
@@ -69,7 +72,11 @@ const features = [
 
 <script>
   import { mountMargins } from "../margins";
+  import { mountPencilLine } from "../line";
 
   const root = document.querySelector<HTMLElement>(".lp-features");
-  if (root) mountMargins(root);
+  if (root) {
+    mountMargins(root);
+    mountPencilLine(root);
+  }
 </script>

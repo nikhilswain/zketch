@@ -27,7 +27,7 @@ export function mountMargins(root: HTMLElement): () => void {
     t0: 0,
   }));
   const queue: Margin[] = [];
-  let busy = false;
+  let active = 0;
   let stopFrame: (() => void) | null = null;
   let lastTick = -1;
 
@@ -43,7 +43,7 @@ export function mountMargins(root: HTMLElement): () => void {
         any = true;
         if (m.player.renderAt(now - m.t0)) {
           m.state = "done";
-          busy = false;
+          active--;
           next();
         }
       } else if (m.state === "done") {
@@ -67,30 +67,32 @@ export function mountMargins(root: HTMLElement): () => void {
   const settle = (m: Margin) => {
     m.player?.finish();
     m.state = "done";
-    busy = false;
+    active--;
     next();
   };
 
   const next = () => {
-    if (busy) return;
+    if (active >= 2) return;
     let m = queue.shift();
     while (m && !m.visible) {
       m.state = "idle";
       m = queue.shift();
     }
     if (!m) return;
-    busy = true;
-    const doodle = doodleById(m.id)!.make(Math.floor(rand() * 1e6), getDoodleMode());
+    const cur = m;
+    active++;
+    const doodle = doodleById(cur.id)!.make(Math.floor(rand() * 1e6), getDoodleMode());
     void whenBrushesReady(doodle).then(() => {
-      m.player = new DoodlePlayer(m.canvas, doodle, m.canvas.clientWidth || 260);
-      if (reduced || !m.visible) {
-        settle(m);
+      cur.player = new DoodlePlayer(cur.canvas, doodle, cur.canvas.clientWidth || 260);
+      if (reduced || !cur.visible) {
+        settle(cur);
         return;
       }
-      m.state = "drawing";
-      m.t0 = performance.now();
+      cur.state = "drawing";
+      cur.t0 = performance.now();
       startLoop();
     });
+    next();
   };
 
   const stops = margins.map((m) =>

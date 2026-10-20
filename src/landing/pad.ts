@@ -81,7 +81,7 @@ export function mountPad(root: HTMLElement, opts: { keep: boolean } = { keep: tr
   };
 
   const setEmpty = () => {
-    if (empty) empty.hidden = strokes.length > 0 || !!live;
+    if (empty) empty.hidden = strokes.length > 0 || !!live || !!replay;
   };
 
   const say = (text: string) => {
@@ -183,6 +183,7 @@ export function mountPad(root: HTMLElement, opts: { keep: boolean } = { keep: tr
   const surprise = async () => {
     finishReplay();
     const token = ++surpriseToken;
+    if (empty) empty.hidden = true;
     const [def] = pickDoodles(1, rand, new Set(), grainWarm() ? 0 : 1);
     const doodle = def.make(Math.floor(rand() * 1e6), getDoodleMode());
     const k = Math.min(cssW / doodle.w, cssH / doodle.h) * 0.62;
@@ -198,7 +199,10 @@ export function mountPad(root: HTMLElement, opts: { keep: boolean } = { keep: tr
       timestamp: base + s.startTime!,
     }));
     await whenBrushesReady(doodle);
-    if (token !== surpriseToken) return;
+    if (token !== surpriseToken) {
+      setEmpty();
+      return;
+    }
     if (prefersReducedMotion()) {
       for (const s of list) {
         strokes.push(s);

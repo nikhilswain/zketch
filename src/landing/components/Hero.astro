@@ -2,36 +2,16 @@
 import ZIcon from "./ZIcon.astro";
 
 const slots = [
-  { x: "4%", y: "6%", r: "-6deg", s: 1 },
-  { x: "13%", y: "38%", r: "4deg", s: 0.9 },
-  { x: "80%", y: "4%", r: "5deg", s: 1 },
-  { x: "87%", y: "36%", r: "-4deg", s: 0.92 },
-  { x: "3%", y: "68%", r: "3deg", s: 0.95 },
-  { x: "79%", y: "68%", r: "-5deg", s: 1 },
-  { x: "25%", y: "84%", r: "-2deg", s: 0.8 },
-  { x: "62%", y: "86%", r: "6deg", s: 0.82 },
+  { x: "5%", y: "7%", r: "-5deg", s: 1 },
+  { x: "80%", y: "5%", r: "5deg", s: 1 },
+  { x: "4%", y: "64%", r: "4deg", s: 0.95 },
+  { x: "79%", y: "66%", r: "-4deg", s: 1 },
+  { x: "14%", y: "36%", r: "3deg", s: 0.85 },
+  { x: "87%", y: "35%", r: "-3deg", s: 0.85 },
 ];
 ---
 
 <section class="lp-hero" data-hero aria-labelledby="lp-title">
-  <div class="lp-slots" aria-label="Doodles drawing themselves. Click one to get a new doodle.">
-    {
-      slots.map((s, i) => (
-        <button
-          type="button"
-          class="lp-scrap lp-slot"
-          data-slot={i}
-          data-desktop-only={i >= 4 ? "" : undefined}
-          style={`--x:${s.x};--y:${s.y};--r:${s.r};--s:${s.s}`}
-          aria-label="redraw this doodle"
-        >
-          <canvas aria-hidden="true" />
-        </button>
-      ))
-    }
-  </div>
-  <template data-eraser-icon><ZIcon name="eraser" size={30} /></template>
-  <div class="lp-cursors" data-cursors aria-hidden="true"></div>
   <div class="lp-hero-copy">
     <p class="lp-tape">free · no sign-up · nothing to install</p>
     <h1 id="lp-title" class="lp-title" data-headline>
@@ -48,18 +28,37 @@ const slots = [
     </div>
     <p class="lp-hint lp-desktop-only" aria-hidden="true">psst, the doodles are clickable</p>
   </div>
+  <div class="lp-slots">
+    {
+      slots.map((s, i) => (
+        <button
+          type="button"
+          class="lp-slot"
+          data-slot={i}
+          data-desktop-only={i >= 4 ? "" : undefined}
+          style={`--x:${s.x};--y:${s.y};--r:${s.r};--s:${s.s}`}
+          aria-label="swap this doodle for a new one"
+        >
+          <canvas aria-hidden="true" />
+        </button>
+      ))
+    }
+  </div>
+  <template data-eraser-icon><ZIcon name="eraser" size={30} /></template>
+  <template data-pen-icon><ZIcon name="pencil" size={34} /></template>
+  <div class="lp-pens" data-pens aria-hidden="true"></div>
 </section>
 
 <script>
   import { mountHero } from "../hero";
-  import { mountCursors, springButton } from "../cursors";
+  import { mountPens, springButton } from "../pens";
   import { mountEggs } from "../eggs";
 
   const root = document.querySelector<HTMLElement>("[data-hero]");
   if (root) {
     mountHero(root);
     const cta = root.querySelector<HTMLElement>(".lp-hero-copy [data-cta]");
-    mountCursors(root, cta);
+    mountPens(root, cta);
     mountEggs(root);
     for (const el of document.querySelectorAll<HTMLElement>("[data-cta]")) {
       if (el === cta) continue;

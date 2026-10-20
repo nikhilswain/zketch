@@ -177,7 +177,7 @@ src/
 │
 ├── hooks/            # useStores, useKeyboardShortcuts, useMobile, useCanvasResize, useSortableList
 ├── pages/            # Astro routes (see §10)
-├── landing/          # Static landing page at / (see §10.1): doodles, player, pad, cards, cursors
+├── landing/          # Static landing page at / (see §10.1): doodles, player, pad, cards, pens
 ├── page-components/  # React page shells mounted by Astro
 ├── layouts/Layout.astro      # Head: title, description, canonical, OG/X cards, JSON-LD
 ├── config.ts         # SITE: name, url (zketch.zerro.dev), title, description, X handle
@@ -864,12 +864,15 @@ guards 150 KB).
 - `ticker.ts`: one shared rAF loop (stops when nothing subscribes or the tab
   is hidden), `watchVisible`, reduced-motion check, and the draw-slot cap
   (2 doodles drawing or erasing at once; clicks bypass it).
-- `hero.ts`: 8 taped paper scraps (4 on phones) cycling draw → boil 8–15 s →
+- Light "paper" theme: doodles draw straight onto the page.
+- `hero.ts`: 6 doodle spots (4 on phones) cycling draw → boil 8–15 s →
   erase → new doodle; click to swap. `pad.ts` + `handoff.ts`: the scribble pad
   with real brushes; "keep drawing" saves an `ISavedDrawingData` through
   `DexieService` and opens `/draw/<id>`. `vaultCount.ts` counts drawings with
   raw IndexedDB (never creates the database). `cards.ts`, `margins.ts`,
-  `cursors.ts` (fake brush cursors, pine trees on the CTA, button springs),
+  `pens.ts` (two roaming pens that leave fading brush marks in empty space,
+  pine trees on the CTA, button springs), `line.ts` (pencil line redrawn in
+  real pixels and driven by scroll, with a pencil on its tip),
   `eggs.ts` (scribble over the headline, Konami → watercolor mode).
 - Everything pauses off-screen, and `prefers-reduced-motion` shows finished
   doodles with no cursors or boil. No sound anywhere, by design.
