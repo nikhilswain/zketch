@@ -56,11 +56,19 @@ export function whenBrushesReady(doodle: Doodle, timeoutMs = 1500): Promise<void
 }
 
 let warmed = false;
+let warm = false;
+
+export function grainWarm(): boolean {
+  return warm;
+}
 
 export function warmGrain(): void {
   if (warmed) return;
   warmed = true;
-  const run = () => getGrainMask("paper-noise", 0.85);
+  const run = () => {
+    getGrainMask("paper-noise", 0.85);
+    warm = true;
+  };
   const idle = (globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
   if (idle) idle(run, { timeout: 4000 });
   else setTimeout(run, 200);

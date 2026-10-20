@@ -64,19 +64,27 @@ export function mountMargins(root: HTMLElement): () => void {
     stopFrame = null;
   };
 
+  const settle = (m: Margin) => {
+    m.player?.finish();
+    m.state = "done";
+    busy = false;
+    next();
+  };
+
   const next = () => {
     if (busy) return;
-    const m = queue.shift();
+    let m = queue.shift();
+    while (m && !m.visible) {
+      m.state = "idle";
+      m = queue.shift();
+    }
     if (!m) return;
     busy = true;
     const doodle = doodleById(m.id)!.make(Math.floor(rand() * 1e6), getDoodleMode());
     void whenBrushesReady(doodle).then(() => {
       m.player = new DoodlePlayer(m.canvas, doodle, m.canvas.clientWidth || 260);
-      if (reduced) {
-        m.player.finish();
-        m.state = "done";
-        busy = false;
-        next();
+      if (reduced || !m.visible) {
+        settle(m);
         return;
       }
       m.state = "drawing";
@@ -96,19 +104,21 @@ export function mountMargins(root: HTMLElement): () => void {
           next();
         }
         if (v && m.state !== "idle") startLoop();
-        if (!v && m.state === "drawing" && m.player) {
-          m.player.finish();
-          m.state = "done";
-          busy = false;
-          next();
+        if (!v && m.state === "queued") {
+          const i = queue.indexOf(m);
+          if (i >= 0) {
+            queue.splice(i, 1);
+            m.state = "idle";
+          }
         }
+        if (!v && m.state === "drawing" && m.player) settle(m);
       },
       "0px",
     ),
   );
 
   const stopAssets = onBrushAssetsChanged(() => {
-    for (const m of margins) if (m.state === "done") m.player?.rebake();
+    for (const m of margins) m.player?.rebake();
   });
 
   return () => {

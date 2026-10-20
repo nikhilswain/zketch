@@ -71,6 +71,12 @@ describe("doodle library", () => {
     }
   });
 
+  it("single picks can land on pencil doodles once the pencil is warm", () => {
+    const ids = new Set<string>();
+    for (let seed = 1; seed <= 300; seed++) ids.add(pickDoodles(1, mulberry(seed), new Set(), 0)[0].id);
+    for (const id of ["flower", "mushroom", "snail", "cactus"]) expect(ids.has(id), id).toBe(true);
+  });
+
   it("watercolor mode paints every fill with watercolor", () => {
     let fills = 0;
     for (const def of DOODLES) {

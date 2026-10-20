@@ -926,12 +926,12 @@ function shuffle<T>(xs: T[], rand: () => number): T[] {
   return out;
 }
 
-export function pickDoodles(n: number, rand: () => number, exclude: Set<string>): DoodleDef[] {
+export function pickDoodles(n: number, rand: () => number, exclude: Set<string>, safeLead = 2): DoodleDef[] {
   const pool = shuffle(
     DOODLES.filter((d) => d.hero && !exclude.has(d.id)),
     rand,
   );
-  const lead = pool.filter((d) => !PENCIL.has(d.id)).slice(0, 2);
+  const lead = pool.filter((d) => !PENCIL.has(d.id)).slice(0, safeLead);
   const rest = pool.filter((d) => !lead.includes(d));
   return [...lead, ...rest].slice(0, n);
 }

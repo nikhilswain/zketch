@@ -2,7 +2,7 @@ import type { BrushStyle, StrokeInput, StrokeLike } from "@/engine/types";
 import { createCanvas } from "@/engine/render/canvasFactory";
 import { renderStroke } from "@/engine/render/renderStroke";
 import { mulberry, pickDoodles } from "./doodles/library";
-import { landingRegistry, onBrushAssetsChanged, warmGrain, whenBrushesReady } from "./engine";
+import { grainWarm, landingRegistry, onBrushAssetsChanged, warmGrain, whenBrushesReady } from "./engine";
 import { keepDrawing } from "./handoff";
 import { getDoodleMode } from "./hero";
 import { onFrame, prefersReducedMotion } from "./ticker";
@@ -42,6 +42,8 @@ export function mountPad(root: HTMLElement, opts: { keep: boolean } = { keep: tr
   let queued = 0;
   let count = 0;
   let replay: { list: StrokeLike[]; t0: number; next: number; stop: () => void } | null = null;
+  let surpriseToken = 0;
+  let saving = false;
 
   const paint = (target: CanvasRenderingContext2D, s: StrokeLike) => {
     target.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -170,6 +172,7 @@ export function mountPad(root: HTMLElement, opts: { keep: boolean } = { keep: tr
 
   const clear = () => {
     finishReplay();
+    surpriseToken++;
     strokes.length = 0;
     rebuild();
     show();
@@ -179,7 +182,8 @@ export function mountPad(root: HTMLElement, opts: { keep: boolean } = { keep: tr
 
   const surprise = async () => {
     finishReplay();
-    const [def] = pickDoodles(1, rand, new Set());
+    const token = ++surpriseToken;
+    const [def] = pickDoodles(1, rand, new Set(), grainWarm() ? 0 : 1);
     const doodle = def.make(Math.floor(rand() * 1e6), getDoodleMode());
     const k = Math.min(cssW / doodle.w, cssH / doodle.h) * 0.62;
     const ox = rand() * (cssW - doodle.w * k);
@@ -194,6 +198,7 @@ export function mountPad(root: HTMLElement, opts: { keep: boolean } = { keep: tr
       timestamp: base + s.startTime!,
     }));
     await whenBrushesReady(doodle);
+    if (token !== surpriseToken) return;
     if (prefersReducedMotion()) {
       for (const s of list) {
         strokes.push(s);
@@ -251,14 +256,20 @@ export function mountPad(root: HTMLElement, opts: { keep: boolean } = { keep: tr
     } else if (t.closest("[data-surprise]")) {
       void surprise();
     } else if (t.closest("[data-keep]") && opts.keep) {
+      if (saving) return;
+      surpriseToken++;
       finishReplay();
       if (!strokes.length) {
         location.assign("/draw");
         return;
       }
+      saving = true;
       say("saving your doodle…");
       const result = await keepDrawing(strokes, canvas);
-      if (result === "storage-error") say("your browser won't let zketch save here (private mode?). open zketch in a normal window.");
+      if (result === "storage-error") {
+        saving = false;
+        say("zketch couldn't save here. if this is a private window, open zketch in a normal one.");
+      }
     }
   };
 

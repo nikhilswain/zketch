@@ -1,6 +1,6 @@
 import { DoodlePlayer } from "./DoodlePlayer";
 import { mulberry, pickDoodles, type DoodleDef, type DoodleMode } from "./doodles/library";
-import { onBrushAssetsChanged, warmGrain, whenBrushesReady } from "./engine";
+import { grainWarm, onBrushAssetsChanged, warmGrain, whenBrushesReady } from "./engine";
 import { activeDrawing, debugLanding, onFrame, prefersReducedMotion, releaseDrawSlot, requestDrawSlot, watchVisible } from "./ticker";
 
 type Phase = "idle" | "loading" | "waiting" | "drawing" | "boiling" | "erasing";
@@ -81,7 +81,7 @@ export function mountHero(root: HTMLElement): () => void {
     s.phase = "loading";
     if (delay) await new Promise((r) => setTimeout(r, delay));
     if (token !== s.token) return;
-    const [def] = pickDoodles(1, rand, onScreen());
+    const [def] = pickDoodles(1, rand, onScreen(), grainWarm() ? 0 : 1);
     s.def = def;
     recent.push(def.id);
     if (recent.length > 5) recent.shift();
@@ -103,12 +103,17 @@ export function mountHero(root: HTMLElement): () => void {
         return;
       }
       s.phase = "drawing";
-      s.t0 = performance.now();
+      s.t0 = -1;
       log(`draw ${def.id}`);
     });
   };
 
   const erase = (s: Slot, urgent: boolean) => {
+    if (urgent && s.phase === "waiting" && s.player?.finished && s.cancel) {
+      s.cancel();
+      s.cancel = null;
+      s.phase = "boiling";
+    }
     if (s.phase !== "boiling" && s.phase !== "drawing") return;
     if (s.phase === "drawing") {
       s.player?.finish();
@@ -125,7 +130,7 @@ export function mountHero(root: HTMLElement): () => void {
         return;
       }
       s.phase = "erasing";
-      s.t0 = performance.now();
+      s.t0 = -1;
       log(`erase ${s.def?.id}`);
     }, urgent);
   };
@@ -137,6 +142,7 @@ export function mountHero(root: HTMLElement): () => void {
     let baked = false;
     for (const [i, s] of slots.entries()) {
       if (!s.player) continue;
+      if (s.t0 < 0 && (s.phase === "drawing" || s.phase === "erasing")) s.t0 = now;
       if (s.phase === "drawing") {
         if (s.player.renderAt(now - s.t0)) {
           releaseDrawSlot();
@@ -152,6 +158,8 @@ export function mountHero(root: HTMLElement): () => void {
         if (!baked && !s.player.bakeNext()) baked = true;
         else if (boilTick) s.player.boil(tick + i);
         if (now > s.until) erase(s, false);
+      } else if (s.phase === "waiting" && s.player.finished && boilTick) {
+        s.player.boil(tick + i);
       } else if (s.phase === "erasing") {
         const p = (now - s.t0) / ERASE_MS;
         const head = s.player.erase(p);
@@ -175,7 +183,7 @@ export function mountHero(root: HTMLElement): () => void {
     if (pausedAt) {
       const gap = performance.now() - pausedAt;
       for (const s of slots) {
-        s.t0 += gap;
+        if (s.t0 >= 0) s.t0 += gap;
         s.until += gap;
       }
       pausedAt = 0;
@@ -239,7 +247,7 @@ export function mountHero(root: HTMLElement): () => void {
   addEventListener("resize", onResize);
 
   const stopAssets = onBrushAssetsChanged(() => {
-    for (const s of slots) if (s.player?.finished && (s.phase === "boiling" || reduced)) s.player.rebake();
+    for (const s of slots) s.player?.rebake();
   });
 
   const stopMode = onDoodleMode(() => {

@@ -82,7 +82,7 @@ export function mountCards(root: HTMLElement): () => void {
 
   stops.push(
     onBrushAssetsChanged(() => {
-      for (const c of cards) if (c.player?.finished && !c.stop) c.player.rebake();
+      for (const c of cards) c.player?.rebake();
     }),
   );
 
