@@ -54,3 +54,10 @@ const colors = [
     <p class="lp-phone-note lp-phone-only">zketch works on tablets and computers. open zketch.zerro.dev there to keep drawing.</p>
   </div>
 </section>
+
+<script>
+  import { mountPad } from "../pad";
+
+  const root = document.querySelector<HTMLElement>("[data-pad]");
+  if (root) mountPad(root);
+</script>
