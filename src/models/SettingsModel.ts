@@ -1,5 +1,8 @@
 import { types, type Instance } from "mobx-state-tree";
 
+export type ThemePreference = "light" | "dark" | "system";
+export type SurroundMode = "auto" | "light" | "dark";
+
 export const ExportSettings = types.model("ExportSettings", {
   format: types.optional(
     types.enumeration("ExportFormat", ["png", "jpg", "svg"]),
@@ -39,7 +42,8 @@ export const SettingsModel = types
     ),
     eraserMode: types.optional(types.enumeration("EraserMode", ["element", "pixel", "smart"]), "element"),
     accent: types.optional(types.string, "#FF6B5B"),
-    surround: types.optional(types.enumeration("SurroundTone", ["light", "dark"]), "light"),
+    theme: types.optional(types.enumeration<ThemePreference>("Theme", ["light", "dark", "system"]), "light"),
+    surroundMode: types.optional(types.enumeration<SurroundMode>("SurroundMode", ["auto", "light", "dark"]), "auto"),
   })
   .views((self) => ({
     get defaultSettings() {
@@ -72,7 +76,8 @@ export const SettingsModel = types
           touchMode: self.touchMode,
           eraserMode: self.eraserMode,
           accent: self.accent,
-          surround: self.surround,
+          theme: self.theme,
+          surroundMode: self.surroundMode,
         };
         localStorage.setItem("drawing-app-settings", JSON.stringify(settings));
       } catch (error) {
@@ -116,8 +121,13 @@ export const SettingsModel = types
           ) {
             self.accent = settings.accent;
           }
-          if (settings.surround === "light" || settings.surround === "dark") {
-            self.surround = settings.surround;
+          if (["light", "dark", "system"].includes(settings.theme)) {
+            self.theme = settings.theme;
+          }
+          if (["auto", "light", "dark"].includes(settings.surroundMode)) {
+            self.surroundMode = settings.surroundMode;
+          } else if (settings.surround === "dark") {
+            self.surroundMode = "dark";
           }
         }
       } catch (error) {
@@ -173,8 +183,12 @@ export const SettingsModel = types
         self.eraserMode = mode;
         saveToStorage();
       },
-      setSurround(tone: "light" | "dark") {
-        self.surround = tone;
+      setTheme(theme: ThemePreference) {
+        self.theme = theme;
+        saveToStorage();
+      },
+      setSurroundMode(mode: SurroundMode) {
+        self.surroundMode = mode;
         saveToStorage();
       },
       setAccent(hex: string) {

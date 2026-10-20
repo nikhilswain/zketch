@@ -21,7 +21,8 @@ import { ImportService } from "@/services/ImportService";
 import { toast } from "sonner";
 import { clampZoom } from "@/utils/zoom";
 import { getTipSet } from "@/utils/brushMemory";
-import { SURROUND, type SurroundTone } from "@/utils/page";
+import { SURROUND, resolveSurround } from "@/utils/page";
+import { themeState } from "@/utils/theme";
 import {
   bendFromMid,
   bindableBox,
@@ -266,7 +267,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     useEffect(
       () =>
         reaction(
-          () => settingsStore.surround as SurroundTone,
+          () => resolveSurround(settingsStore.surroundMode, themeState.resolved),
           (tone) => engineRef.current?.setSurround(SURROUND[tone], tone === "dark"),
           { fireImmediately: true },
         ),

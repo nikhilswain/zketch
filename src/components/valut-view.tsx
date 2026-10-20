@@ -29,7 +29,8 @@ import { BlobStorageService } from "@/services/BlobStorageService";
 import type { ISavedDrawing } from "@/models/VaultModel";
 import SettingsPage from "./studio/SettingsPage";
 import { toast } from "sonner";
-import { SURROUND, type SurroundTone } from "@/utils/page";
+import { SURROUND, resolveSurround } from "@/utils/page";
+import { themeState } from "@/utils/theme";
 import MasonryColumns from "./MasonryColumns";
 
 type SortOrder = "updated" | "created" | "name";
@@ -138,7 +139,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
     }
   });
   const settingsStore = useSettingsStore();
-  const surround = SURROUND[settingsStore.surround as SurroundTone];
+  const surround = SURROUND[resolveSurround(settingsStore.surroundMode, themeState.resolved)];
   const [sortBy, setSortBy] = useState<SortOrder>("updated");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newName, setNewName] = useState("");

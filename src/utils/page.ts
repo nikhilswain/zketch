@@ -16,8 +16,12 @@ export const PAGE_PRESETS: { id: PagePresetId; label: string; width: number; hei
 export const PAGE_MIN = 64;
 export const PAGE_MAX = 4096;
 
-export const SURROUND = { light: "#D9D7D2", dark: "#1B1B1E" } as const;
+export const SURROUND = { light: "#D6D8DC", dark: "#1B1B1E" } as const;
 export type SurroundTone = keyof typeof SURROUND;
+
+export function resolveSurround(mode: "auto" | SurroundTone, theme: SurroundTone): SurroundTone {
+  return mode === "auto" ? theme : mode;
+}
 
 const EXPORT_MAX_AREA = 16_777_216;
 const EXPORT_MAX_SIDE = 8192;
