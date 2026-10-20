@@ -422,7 +422,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
           <div className="flex flex-col items-center py-24 text-center">
             <button
               onClick={onNewDrawing}
-              className="mb-8 flex aspect-[4/3] w-64 items-center justify-center rounded-[6px] bg-[#FBFAF6] text-[#b5b2aa] transition-transform hover:-translate-y-0.5"
+              className="mb-8 flex aspect-[4/3] w-64 items-center justify-center rounded-[6px] bg-[#FBFAF6] text-[#b5b2aa] shadow-(--zk-mini-edge) transition-transform hover:-translate-y-0.5"
               aria-label="Start your first drawing"
             >
               <PlusIcon className="h-10 w-10" />

@@ -90,6 +90,14 @@ export const SettingsModel = types
         const stored = localStorage.getItem("drawing-app-settings");
         if (stored) {
           const settings = JSON.parse(stored);
+          if (["light", "dark", "system"].includes(settings.theme)) {
+            self.theme = settings.theme;
+          }
+          if (["auto", "light", "dark"].includes(settings.surroundMode)) {
+            self.surroundMode = settings.surroundMode;
+          } else if (settings.surround === "dark") {
+            self.surroundMode = "dark";
+          }
           self.defaultPenSize = settings.defaultPenSize ?? self.defaultPenSize;
           self.defaultBrushStyle =
             settings.defaultBrushStyle ?? self.defaultBrushStyle;
@@ -120,14 +128,6 @@ export const SettingsModel = types
             /^#[0-9a-fA-F]{6}$/.test(settings.accent)
           ) {
             self.accent = settings.accent;
-          }
-          if (["light", "dark", "system"].includes(settings.theme)) {
-            self.theme = settings.theme;
-          }
-          if (["auto", "light", "dark"].includes(settings.surroundMode)) {
-            self.surroundMode = settings.surroundMode;
-          } else if (settings.surround === "dark") {
-            self.surroundMode = "dark";
           }
         }
       } catch (error) {

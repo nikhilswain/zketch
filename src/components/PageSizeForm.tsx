@@ -76,7 +76,7 @@ const PageSizeForm: React.FC<PageSizeFormProps> = ({ width, height, onChange, on
           Swap · {ratioLabel(width, height)}
         </button>
       </div>
-      <div className="flex h-[170px] flex-1 items-center justify-center rounded-[4px] bg-(--zk-well)" aria-hidden="true">
+      <div className="flex h-[170px] flex-1 items-center justify-center rounded-[4px] bg-(--zk-stage)" aria-hidden="true">
         <div className="bg-(--zk-mini-page) shadow-(--zk-shadow-page)" style={{ width: width * k, height: height * k }} />
       </div>
     </div>

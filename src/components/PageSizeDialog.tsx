@@ -91,7 +91,7 @@ const PageSizeDialog: React.FC<PageSizeDialogProps> = ({ open, onOpenChange, pag
                     aria-pressed={selected}
                     className={`group relative flex h-[104px] flex-col justify-between overflow-hidden rounded-[4px] p-2.5 text-left transition-colors ${
                       selected
-                        ? "bg-zk-hover after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-zk-accent"
+                        ? "bg-(--zk-tile-selected) after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-zk-accent"
                         : "bg-zk-raised hover:bg-zk-hover"
                     }`}
                   >

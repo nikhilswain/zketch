@@ -39,6 +39,12 @@ describe("theme setting", () => {
     expect(load({ theme: "sepia" }).theme).toBe("light");
   });
 
+  it("keeps the saved theme when another stored field is malformed", () => {
+    const s = load({ defaultPenSize: "x", theme: "dark", surroundMode: "dark" });
+    expect(s.theme).toBe("dark");
+    expect(s.surroundMode).toBe("dark");
+  });
+
   it("saves the theme", () => {
     const s = load();
     s.setTheme("dark");

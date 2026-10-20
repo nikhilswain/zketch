@@ -61,7 +61,7 @@ const StripThumb: React.FC<{
           className="flex cursor-[inherit] flex-col items-center gap-0.5"
         >
           <span
-            className="block h-[30px] w-11 overflow-hidden rounded-[3px] bg-[#FBFAF6]"
+            className="block h-[30px] w-11 overflow-hidden rounded-[3px] bg-[#FBFAF6] shadow-(--zk-mini-edge)"
             style={{ opacity: layer.visible ? 1 : 0.35 }}
           >
             {thumbnail && <img src={thumbnail} alt="" draggable={false} className="h-full w-full object-cover" />}

@@ -550,8 +550,8 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         </StudioShell>
 
         {showClearModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-(--zk-scrim)">
-            <div role="alertdialog" aria-labelledby="clear-title" className="w-[340px] rounded-[6px] bg-zk-surface p-6 text-zk-text shadow-(--zk-shadow-dialog)">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-(--zk-scrim-alert)">
+            <div role="alertdialog" aria-labelledby="clear-title" className="w-[340px] rounded-[6px] bg-zk-surface p-6 text-zk-text shadow-(--zk-shadow-alert)">
               <h3 id="clear-title" className="mb-3 font-display text-2xl font-semibold">
                 Clear the canvas?
               </h3>

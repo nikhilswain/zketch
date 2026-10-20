@@ -298,7 +298,7 @@ const LayerItem: React.FC<LayerItemProps> = observer(
           e.preventDefault();
           setMenuOpen(true);
         }}
-        className={`group mx-1.5 mb-0.5 flex cursor-grab select-none flex-col rounded-[4px] transition-colors data-lifted:cursor-grabbing data-lifted:bg-zk-raised data-lifted:shadow-(--zk-shadow-lift) ${
+        className={`group mx-1.5 mb-0.5 flex cursor-grab select-none flex-col rounded-[4px] transition-colors data-lifted:cursor-grabbing data-lifted:bg-zk-raised data-lifted:shadow-(--zk-shadow-lift-row) ${
           isActive ? "bg-zk-selected" : "hover:bg-zk-raised"
         } ${!layer.visible ? "opacity-50" : ""}`}
       >

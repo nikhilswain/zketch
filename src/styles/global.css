@@ -120,6 +120,14 @@
   --zk-scroll: #c3c8cf;
   --zk-preview-filter: opacity(0.82);
   --zk-knob: #ffffff;
+  --zk-stage: #dcdfe3;
+  --zk-tile-selected: #d3d7dc;
+  --zk-scrim-alert: rgba(24, 28, 34, 0.32);
+  --zk-shadow-alert: 0 20px 60px rgba(28, 34, 44, 0.2), 0 0 0 1px rgba(28, 34, 44, 0.06);
+  --zk-shadow-lift-row: 0 8px 24px rgba(28, 34, 44, 0.16);
+  --zk-swatch-edge-soft: rgba(0, 0, 0, 0.12);
+  --zk-swatch-edge-mid: rgba(0, 0, 0, 0.14);
+  --zk-swatch-edge-strong: rgba(0, 0, 0, 0.16);
   --zk-shadow-float: 0 1px 3px rgba(28, 34, 44, 0.08), 0 0 0 1px rgba(28, 34, 44, 0.06);
   --zk-knob-shadow: 0 1px 2px rgba(28, 34, 44, 0.3);
   --zk-shadow-pop: 0 14px 44px rgba(28, 34, 44, 0.16), 0 0 0 1px rgba(28, 34, 44, 0.06);
@@ -164,6 +172,14 @@
   --zk-scroll: #3a3a40;
   --zk-preview-filter: invert(0.92);
   --zk-knob: #ecebe7;
+  --zk-stage: #1b1b1e;
+  --zk-tile-selected: #2e2e34;
+  --zk-scrim-alert: rgba(0, 0, 0, 0.5);
+  --zk-shadow-alert: 0 20px 60px rgba(0, 0, 0, 0.5);
+  --zk-shadow-lift-row: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --zk-swatch-edge-soft: rgba(255, 255, 255, 0.08);
+  --zk-swatch-edge-mid: rgba(255, 255, 255, 0.12);
+  --zk-swatch-edge-strong: rgba(255, 255, 255, 0.15);
   --zk-shadow-float: 0 0 #0000;
   --zk-knob-shadow: 0 0 #0000;
   --zk-shadow-pop: 0 14px 44px rgba(0, 0, 0, 0.35);
@@ -175,6 +191,10 @@
   --zk-shadow-stage: 0 8px 40px rgba(0, 0, 0, 0.45);
   --zk-shadow-share: 0 16px 60px rgba(0, 0, 0, 0.5);
   --zk-mini-edge: 0 0 #0000;
+}
+
+:root:not([data-theme]) {
+  --zk-scroll: #3a3a40;
 }
 
 @layer base {

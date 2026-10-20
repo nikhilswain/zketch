@@ -121,7 +121,7 @@ export const Swatches: React.FC<{
             aria-label={s.name}
             onClick={() => onPick(s.hex)}
             className={`h-[22px] w-[22px] rounded-[3px] ${value?.toLowerCase() === s.hex.toLowerCase() ? "ring-2 ring-zk-accent ring-offset-1 ring-offset-zk-surface" : ""}`}
-            style={{ backgroundColor: s.hex, boxShadow: "inset 0 0 0 1px var(--zk-swatch-edge)" }}
+            style={{ backgroundColor: s.hex, boxShadow: "inset 0 0 0 1px var(--zk-swatch-edge-mid)" }}
           />
         ))}
         <button

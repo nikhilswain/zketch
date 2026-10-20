@@ -84,7 +84,7 @@ const NewDrawingDialog: React.FC<NewDrawingDialogProps> = ({ open, onOpenChange,
   const tileClass = (id: string) =>
     `group relative flex h-full min-h-0 flex-col justify-between overflow-hidden rounded-[4px] p-2.5 text-left transition-colors outline-none focus-visible:ring-1 focus-visible:ring-zk-accent ${
       isSelected(id)
-        ? "bg-zk-hover after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-zk-accent"
+        ? "bg-(--zk-tile-selected) after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-zk-accent"
         : "bg-zk-raised hover:bg-zk-hover"
     }`;
 
