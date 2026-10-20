@@ -324,6 +324,7 @@
   text-align: center;
 }
 
+.lp-section-head h1,
 .lp-section-head h2,
 .lp-final h2 {
   margin: 0;
@@ -787,4 +788,100 @@
   left: 0;
   top: 0;
   pointer-events: none;
+}
+
+.lp-joke {
+  position: absolute;
+  top: 120px;
+  left: 0;
+  right: 0;
+  margin: 0;
+  font-family: var(--hand);
+  font-size: clamp(22px, 3vw, 30px);
+  color: var(--accent);
+  transform: rotate(-2deg);
+  animation: lp-pop 0.35s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+
+.lp-joke[hidden] {
+  display: none;
+}
+
+.lp-erased {
+  animation: lp-erase 0.8s steps(8) forwards;
+}
+
+.lp-redraw {
+  animation: lp-redraw 0.9s steps(9) both;
+}
+
+@keyframes lp-erase {
+  from {
+    clip-path: inset(0 0 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 100%);
+    opacity: 0.2;
+  }
+}
+
+@keyframes lp-redraw {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes lp-pop {
+  from {
+    transform: rotate(-2deg) scale(0.6);
+    opacity: 0;
+  }
+}
+
+.lp-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  z-index: 50;
+  margin: 0;
+  padding: 10px 18px;
+  border-radius: 12px 9px 11px 10px;
+  background: var(--paper, #f3eee4);
+  color: #23201c;
+  font-family: "Kalam", cursive;
+  font-size: 18px;
+  box-shadow: 0 14px 30px -12px #000;
+  transform: translateX(-50%) rotate(-1.5deg);
+  animation: lp-pop 0.35s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+  transition: opacity 0.4s;
+}
+
+.lp-toast-out {
+  opacity: 0;
+}
+
+:root[data-mode="watercolor"] .lp {
+  background-image:
+    radial-gradient(circle at 18% 22%, #3d7cc92e, transparent 38%),
+    radial-gradient(circle at 82% 58%, #ef7aa029, transparent 42%),
+    radial-gradient(circle at 40% 88%, #f2c2301f, transparent 40%),
+    radial-gradient(#26262c 1px, transparent 1.3px);
+  background-size:
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    22px 22px;
+  background-attachment: fixed, fixed, fixed, scroll;
+}
+
+.lp-404-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+  margin: 0 auto;
+  padding: 0 var(--gutter) 80px;
 }

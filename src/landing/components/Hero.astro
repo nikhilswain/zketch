@@ -37,6 +37,7 @@ const slots = [
     <h1 id="lp-title" class="lp-title" data-headline>
       Doodle, diagram <span class="lp-amp">&amp;</span> <span class="lp-paint">paint</span>, right in your browser.
     </h1>
+    <p class="lp-joke" data-joke hidden></p>
     <p class="lp-sub">
       zketch is a free drawing app with real textured brushes, sketchy diagrams and layers. Your drawings stay on your device.
     </p>
@@ -52,12 +53,14 @@ const slots = [
 <script>
   import { mountHero } from "../hero";
   import { mountCursors, springButton } from "../cursors";
+  import { mountEggs } from "../eggs";
 
   const root = document.querySelector<HTMLElement>("[data-hero]");
   if (root) {
     mountHero(root);
     const cta = root.querySelector<HTMLElement>(".lp-hero-copy [data-cta]");
     mountCursors(root, cta);
+    mountEggs(root);
     for (const el of document.querySelectorAll<HTMLElement>("[data-cta]")) {
       if (el === cta) continue;
       const s = springButton(el);

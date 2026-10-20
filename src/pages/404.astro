@@ -1,0 +1,28 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/landing/components/Header.astro";
+import Pad from "@/landing/components/Pad.astro";
+import Footer from "@/landing/components/Footer.astro";
+import "@/landing/landing.css";
+
+export const prerender = true;
+---
+
+<Layout pageTitle="page not found | zketch" noindex zoomable>
+  <div class="lp" data-landing>
+    <Header />
+    <main>
+      <Pad
+        level="h1"
+        title="this page got erased."
+        intro="Whatever was here is gone. While you're here, the brushes still work. Doodle something, then head home."
+        keep={false}
+      />
+      <p class="lp-404-links">
+        <a href="/" class="lp-btn">take me home <span aria-hidden="true">→</span></a>
+        <a href="/vault" class="lp-btn lp-btn-ghost">your drawings</a>
+      </p>
+    </main>
+    <Footer />
+  </div>
+</Layout>

@@ -1,6 +1,20 @@
 ---
 import ZIcon from "./ZIcon.astro";
 
+interface Props {
+  title?: string;
+  intro?: string;
+  keep?: boolean;
+  level?: "h1" | "h2";
+}
+
+const {
+  title = "your turn. the pencil's warm.",
+  intro = "These are the real zketch brushes, right here on the page. Scribble something, then take it with you.",
+  keep = true,
+  level: Heading = "h2",
+} = Astro.props;
+
 const brushes = [
   { key: "pencil", label: "pencil", icon: "pencil" },
   { key: "ink", label: "ink", icon: "pen-nib" },
@@ -19,8 +33,8 @@ const colors = [
 
 <section class="lp-section lp-pad-section" aria-labelledby="lp-pad-title">
   <div class="lp-section-head">
-    <h2 id="lp-pad-title">your turn. the pencil's warm.</h2>
-    <p>These are the real zketch brushes, right here on the page. Scribble something, then take it with you.</p>
+    <Heading id="lp-pad-title" class="lp-pad-title">{title}</Heading>
+    <p>{intro}</p>
   </div>
   <div class="lp-pad" data-pad>
     <div class="lp-sheet lp-pad-sheet">
@@ -48,10 +62,10 @@ const colors = [
         <button type="button" class="lp-tool lp-tool-wide" data-surprise><ZIcon name="magic-wand" size={18} /> surprise me</button>
         <button type="button" class="lp-tool lp-tool-wide" data-clear><ZIcon name="trash" size={18} /> clear</button>
       </div>
-      <button type="button" class="lp-btn lp-desktop-only" data-keep>keep drawing in zketch <span aria-hidden="true">→</span></button>
+      {keep && <button type="button" class="lp-btn lp-desktop-only" data-keep>keep drawing in zketch <span aria-hidden="true">→</span></button>}
     </div>
     <p class="lp-pad-msg" data-pad-msg role="status" aria-live="polite"></p>
-    <p class="lp-phone-note lp-phone-only">zketch works on tablets and computers. open zketch.zerro.dev there to keep drawing.</p>
+    {keep && <p class="lp-phone-note lp-phone-only">zketch works on tablets and computers. open zketch.zerro.dev there to keep drawing.</p>}
   </div>
 </section>
 
@@ -59,5 +73,5 @@ const colors = [
   import { mountPad } from "../pad";
 
   const root = document.querySelector<HTMLElement>("[data-pad]");
-  if (root) mountPad(root);
+  if (root) mountPad(root, { keep: !!root.querySelector("[data-keep]") });
 </script>
