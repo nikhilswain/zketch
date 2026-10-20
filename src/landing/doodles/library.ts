@@ -816,6 +816,31 @@ const SPECS: Spec[] = [
       }
     },
   },
+  {
+    id: "404",
+    hero: false,
+    outline: "marker",
+    colorChance: 1,
+    w: 400,
+    h: 220,
+    draw(k) {
+      const four = (ox: number) => {
+        k.out(shapes.poly([
+          { x: ox + 70, y: 28 },
+          { x: ox + 22, y: 136 },
+          { x: ox + 112, y: 134 },
+        ]), { size: 9 });
+        k.out(shapes.line({ x: ox + 86, y: 64 }, { x: ox + 90, y: 196 }, -3), { size: 9 });
+      };
+      four(10);
+      const zero = shapes.ellipse(200, 112, 50, 84, 0.3);
+      k.out(zero, { size: 9 });
+      four(262);
+      if (k.colored) {
+        k.paint(shapes.ellipse(200, 112, 38, 70, 0), "#ff6b5b", { brush: "watercolor" });
+      }
+    },
+  },
 ];
 
 function chunk(path: Pt[], max: number): Pt[][] {

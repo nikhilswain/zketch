@@ -2,6 +2,8 @@
 import ZIcon from "./ZIcon.astro";
 
 interface Props {
+  kicker?: string;
+  introDoodle?: string;
   title?: string;
   intro?: string;
   keep?: boolean;
@@ -9,6 +11,8 @@ interface Props {
 }
 
 const {
+  kicker,
+  introDoodle,
   title = "your turn. the pencil's warm.",
   intro = "These are the real zketch brushes, right here on the page. Scribble something, then take it with you.",
   keep = true,
@@ -33,10 +37,11 @@ const colors = [
 
 <section class="lp-section lp-pad-section" aria-labelledby="lp-pad-title">
   <div class="lp-section-head">
+    {kicker && <p class="lp-tape">{kicker}</p>}
     <Heading id="lp-pad-title" class="lp-pad-title">{title}</Heading>
     <p>{intro}</p>
   </div>
-  <div class="lp-pad" data-pad>
+  <div class="lp-pad" data-pad data-intro={introDoodle}>
     <div class="lp-sheet lp-pad-sheet">
       <canvas data-pad-canvas aria-label="Drawing pad. Draw with a mouse, pen or finger." role="img"></canvas>
       <p class="lp-pad-empty" data-pad-empty aria-hidden="true">draw here ✎</p>
@@ -73,5 +78,5 @@ const colors = [
   import { mountPad } from "../pad";
 
   const root = document.querySelector<HTMLElement>("[data-pad]");
-  if (root) mountPad(root, { keep: !!root.querySelector("[data-keep]") });
+  if (root) mountPad(root, { keep: !!root.querySelector("[data-keep]"), intro: root.dataset.intro });
 </script>

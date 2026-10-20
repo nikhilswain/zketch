@@ -1,7 +1,7 @@
 import type { BrushStyle, StrokeInput, StrokeLike } from "@/engine/types";
 import { createCanvas } from "@/engine/render/canvasFactory";
 import { renderStroke } from "@/engine/render/renderStroke";
-import { mulberry, pickDoodles } from "./doodles/library";
+import { doodleById, mulberry, pickDoodles, type Doodle } from "./doodles/library";
 import { grainWarm, landingRegistry, onBrushAssetsChanged, warmGrain, whenBrushesReady } from "./engine";
 import { keepDrawing } from "./handoff";
 import { getDoodleMode } from "./hero";
@@ -22,7 +22,7 @@ const BRUSHES: Record<string, PadBrush> = {
   eraser: { brush: "eraser", size: 26, opacity: 1, taper: [0, 0] },
 };
 
-export function mountPad(root: HTMLElement, opts: { keep: boolean } = { keep: true }): () => void {
+export function mountPad(root: HTMLElement, opts: { keep: boolean; intro?: string } = { keep: true }): () => void {
   const canvas = root.querySelector<HTMLCanvasElement>("[data-pad-canvas]")!;
   const empty = root.querySelector<HTMLElement>("[data-pad-empty]");
   const msg = root.querySelector<HTMLElement>("[data-pad-msg]");
@@ -180,14 +180,13 @@ export function mountPad(root: HTMLElement, opts: { keep: boolean } = { keep: tr
     say("");
   };
 
-  const surprise = async () => {
+  const surprise = async (fixed?: Doodle) => {
     finishReplay();
     const token = ++surpriseToken;
     if (empty) empty.hidden = true;
-    const [def] = pickDoodles(1, rand, new Set(), grainWarm() ? 0 : 1);
-    const doodle = def.make(Math.floor(rand() * 1e6), getDoodleMode());
-    const k = Math.min(cssW / doodle.w, cssH / doodle.h) * 0.62;
-    const ox = rand() * (cssW - doodle.w * k);
+    const doodle = fixed ?? pickDoodles(1, rand, new Set(), grainWarm() ? 0 : 1)[0].make(Math.floor(rand() * 1e6), getDoodleMode());
+    const k = Math.min(cssW / doodle.w, cssH / doodle.h) * (fixed ? 0.8 : 0.62);
+    const ox = fixed ? (cssW - doodle.w * k) / 2 : rand() * (cssW - doodle.w * k);
     const oy = (cssH - doodle.h * k) / 2;
     const base = Date.now();
     const list = doodle.strokes.map((s, i) => ({
@@ -290,6 +289,8 @@ export function mountPad(root: HTMLElement, opts: { keep: boolean } = { keep: tr
   });
   fit();
   setEmpty();
+  const intro = opts.intro ? doodleById(opts.intro) : undefined;
+  if (intro) void surprise(intro.make(Math.floor(rand() * 1e6)));
 
   return () => {
     finishReplay();
