@@ -15,6 +15,7 @@ interface Mark {
   el: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
   stroke: StrokeLike;
+  drawn: number;
   x: number;
   y: number;
   born: number;
@@ -205,7 +206,7 @@ export function mountPens(hero: HTMLElement, cta: HTMLElement | null): () => voi
       taperEnd: act.brush === "crayon" ? 10 : 0,
       input: "pen",
     };
-    const mark: Mark = { el, ctx, stroke, x, y, born: 0, cta: isCta, fading: false, fadeAt: 0, falling: false, vx: 0, vy: 0, rot: 0, vr: 0 };
+    const mark: Mark = { el, ctx, stroke, drawn: 0, x, y, born: 0, cta: isCta, fading: false, fadeAt: 0, falling: false, vx: 0, vy: 0, rot: 0, vr: 0 };
     marks.push(mark);
     while (marks.filter((m) => !m.fading && m.born).length > 7) {
       const old = marks.find((m) => !m.fading && m.born && !m.cta);
@@ -288,12 +289,23 @@ export function mountPens(hero: HTMLElement, cta: HTMLElement | null): () => voi
         const m = p.mark;
         const f = Math.min(1, (now - p.t0) / p.dur);
         const pts = m.stroke.points;
-        const n = Math.max(2, Math.ceil(pts.length * f));
-        m.ctx.save();
-        m.ctx.setTransform(1, 0, 0, 1, 0, 0);
-        m.ctx.clearRect(0, 0, m.el.width, m.el.height);
-        m.ctx.restore();
-        renderStroke(m.ctx, f >= 1 ? m.stroke : { ...m.stroke, id: `${m.stroke.id}~${n}`, points: pts.slice(0, n) }, landingRegistry());
+        const n = f >= 1 ? pts.length : Math.max(2, Math.ceil(pts.length * f));
+        const last = n === pts.length;
+        if (n - m.drawn >= (last ? 1 : 5)) {
+          const from = last && n - m.drawn < 2 ? Math.max(0, n - 2) : m.drawn;
+          renderStroke(
+            m.ctx,
+            {
+              ...m.stroke,
+              id: `${m.stroke.id}#${from}`,
+              points: pts.slice(from, n),
+              taperStart: from === 0 ? m.stroke.taperStart : 0,
+              taperEnd: last ? m.stroke.taperEnd : 0,
+            },
+            landingRegistry(),
+          );
+          m.drawn = n;
+        }
         const tip = pts[n - 1];
         p.pos = { x: m.x + tip.x, y: m.y + tip.y };
         if (f >= 1) {

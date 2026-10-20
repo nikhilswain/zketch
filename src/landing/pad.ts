@@ -232,7 +232,7 @@ export function mountPad(root: HTMLElement, opts: { keep: boolean } = { keep: tr
         return;
       }
       const f = Math.max(0, (t - cur.startTime!) / cur.duration!);
-      show(f > 0 ? { ...cur, id: `${cur.id}~`, points: cur.points.slice(0, Math.max(2, Math.ceil(cur.points.length * f))) } : null);
+      show(f > 0 ? { ...cur, points: cur.points.slice(0, Math.max(2, Math.ceil(cur.points.length * f))) } : null);
     });
   };
 
