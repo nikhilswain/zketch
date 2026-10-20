@@ -890,6 +890,16 @@ guards 150 KB).
   pine trees on the CTA, button springs), `line.ts` (pencil line redrawn in
   real pixels and driven by scroll, with a pencil on its tip),
   `eggs.ts` (scribble over the headline, Konami → watercolor mode).
+- `roller.ts`: the landing's own light/dark switch (header roller button),
+  separate from the app theme. It sets `data-lp-theme` on `<html>` and stores
+  it in `zketch-landing-theme`; first visits are always light (a pre-paint
+  script in `index.astro` restores dark). The switch is a view transition:
+  the new page is revealed through a per-frame `clip-path` of jittered roller
+  bands (4 strokes, 3 on phones), with one missed spot the roller comes back
+  to rub out, drawn on an overlay canvas named `lp-roller`. Esc or a second
+  click skips it; no view transitions or reduced motion switch instantly.
+  Dark tokens live under `html[data-lp-theme="dark"] .lp`; doodle canvases
+  are inverted with a CSS filter.
 - Everything pauses off-screen, and `prefers-reduced-motion` shows finished
   doodles with no cursors or boil. No sound anywhere, by design.
 - `landing.css` overrides the global `canvas { touch-action: none }` inside

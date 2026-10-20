@@ -45,6 +45,103 @@ html:has([data-landing]) {
   font-family: var(--font-ui);
 }
 
+html[data-lp-theme="dark"]:has([data-landing]) {
+  background: #1b1916;
+}
+
+.lp {
+  --roller-paint: #1b1916;
+}
+
+html[data-lp-theme="dark"] .lp {
+  --page: #1b1916;
+  --dot: #2e2a25;
+  --sheet: #24211d;
+  --sheet-edge: #36312b;
+  --line: #3f3a33;
+  --ink: #f1ece2;
+  --ink-soft: #f1ece2b8;
+  --text: #f1ece2;
+  --text-2: #cfc7b9;
+  --muted: #9a9284;
+  --accent-text: #ff8a7a;
+  --accent-big: #ff6b5b;
+  --roller-paint: #faf7f0;
+  color-scheme: dark;
+}
+
+html[data-lp-theme="dark"] .lp canvas {
+  filter: invert(0.9) hue-rotate(180deg);
+}
+
+html[data-lp-theme="dark"] .lp-btn {
+  color: #1d1b18 !important;
+}
+
+html[data-lp-theme="dark"] .lp-btn-ghost {
+  border-color: #f1ece299;
+  color: var(--text) !important;
+}
+
+html[data-lp-theme="dark"] .lp-final-sheet > p {
+  color: #4b4740;
+}
+
+html[data-lp-theme="dark"] .lp-final .lp-hand {
+  color: #77726a;
+}
+
+html[data-lp-theme="dark"] .lp-final .lp-phone-note {
+  color: #c63a2c;
+}
+
+html[data-lp-theme="dark"] .lp-pad-empty {
+  color: #f1ece266;
+}
+
+html[data-lp-theme="dark"] .lp-pencil-line {
+  color: #5a5348;
+}
+
+.lp-theme {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 2px solid var(--ink);
+  border-radius: 11px 9px 12px 10px;
+  background: var(--sheet);
+  color: var(--ink);
+  box-shadow: 2px 3px 0 var(--ink);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.lp-theme:hover {
+  transform: rotate(-6deg);
+}
+
+.lp-roller-layer {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 9999;
+  view-transition-name: lp-roller;
+}
+
+html.lp-painting::view-transition-old(root),
+html.lp-painting::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+html.lp-painting::view-transition-group(lp-roller),
+html.lp-painting::view-transition-new(lp-roller) {
+  animation: none;
+}
+
 .lp a {
   color: inherit;
 }

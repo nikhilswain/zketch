@@ -13,11 +13,20 @@ import { SITE } from "@/config";
     <a href="https://github.com/nikhilswain/zketch" rel="noopener">open source</a>
     <a href={SITE.zicons} rel="noopener">zicons</a>
   </nav>
+  <button type="button" class="lp-theme" data-lp-theme-toggle aria-label="Paint the page dark">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="2.5" y="3" width="15" height="6" rx="2" fill="var(--roller-paint)" />
+      <path d="M17.5 6h3v5.5H10.5v2.5" />
+      <rect x="9" y="14" width="3" height="7.5" rx="1.2" fill="var(--accent)" />
+    </svg>
+  </button>
   <a href="/draw" class="lp-btn lp-btn-sm lp-desktop-only" data-cta>start drawing</a>
 </header>
 
 <script>
   import { labelVaultLinks } from "../vaultCount";
+  import { installRoller } from "../roller";
 
   void labelVaultLinks();
+  installRoller();
 </script>
