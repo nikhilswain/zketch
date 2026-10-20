@@ -27,7 +27,7 @@ export function landingRegistry(): BrushRegistry {
   return registry;
 }
 
-export { onBrushAssetsChanged };
+export { brushAssetsPending, onBrushAssetsChanged };
 
 let probe: HTMLCanvasElement | null = null;
 
@@ -55,6 +55,23 @@ export function whenBrushesReady(doodle: Doodle, timeoutMs = 1500): Promise<void
   });
 }
 
+type IdleFn = (cb: () => void, o?: { timeout: number }) => number;
+
+const idle: IdleFn = (cb, o) => {
+  const ric = (globalThis as { requestIdleCallback?: IdleFn }).requestIdleCallback;
+  return ric ? ric(cb, o) : (setTimeout(cb, 120) as unknown as number);
+};
+
+export function prewarm(doodles: Doodle[]): void {
+  const queue = doodles.slice();
+  const step = () => {
+    const d = queue.shift();
+    if (!d) return;
+    void whenBrushesReady(d, 4000).then(() => idle(step, { timeout: 3000 }));
+  };
+  idle(step, { timeout: 3000 });
+}
+
 let warmed = false;
 let warm = false;
 
@@ -69,7 +86,5 @@ export function warmGrain(): void {
     getGrainMask("paper-noise", 0.85);
     warm = true;
   };
-  const idle = (globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
-  if (idle) idle(run, { timeout: 4000 });
-  else setTimeout(run, 200);
+  idle(run, { timeout: 4000 });
 }

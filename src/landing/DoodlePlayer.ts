@@ -1,10 +1,12 @@
 import type { StrokeLike } from "@/engine/types";
 import { createCanvas } from "@/engine/render/canvasFactory";
 import { renderStroke } from "@/engine/render/renderStroke";
-import { landingRegistry } from "./engine";
+import { brushAssetsPending, landingRegistry } from "./engine";
 import { mulberry, type Doodle, type Pt } from "./doodles/library";
 
 const BOIL_FRAMES = 3;
+const WHOLE = new Set(["ink", "marker", "highlighter", "calligraphy", "eraser"]);
+const BATCH = 8;
 
 function eraserPath(w: number, h: number): Pt[] {
   const rows = 6;
@@ -36,6 +38,10 @@ export class DoodlePlayer {
   private oy: number;
   private eraser: Pt[];
   private eraserLen: number[];
+  private live: HTMLCanvasElement | null = null;
+  private liveIndex = -1;
+  private liveDrawn = 0;
+  private stale = false;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -63,14 +69,54 @@ export class DoodlePlayer {
   }
 
   private paint(ctx: CanvasRenderingContext2D, s: StrokeLike) {
+    if (brushAssetsPending() > 0) this.stale = true;
     ctx.setTransform(this.k, 0, 0, this.k, this.ox, this.oy);
     renderStroke(ctx, s, landingRegistry());
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
+  private liveCtx(index: number): CanvasRenderingContext2D {
+    this.live ??= createCanvas(this.canvas.width, this.canvas.height);
+    const ctx = this.live.getContext("2d")!;
+    if (this.liveIndex !== index) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, this.live.width, this.live.height);
+      this.liveIndex = index;
+      this.liveDrawn = 0;
+    }
+    return ctx;
+  }
+
+  private extend(index: number, n: number) {
+    const s = this.doodle.strokes[index];
+    const ctx = this.liveCtx(index);
+    const end = Math.min(n, s.points.length);
+    const last = end === s.points.length;
+    if (end - this.liveDrawn < (last ? 1 : BATCH)) return;
+    const from = last && end - this.liveDrawn < 2 ? Math.max(0, end - 2) : this.liveDrawn;
+    this.paint(ctx, {
+      ...s,
+      id: `${s.id}#${from}`,
+      points: s.points.slice(from, end),
+      taperStart: from === 0 ? s.taperStart : 0,
+      taperEnd: last ? s.taperEnd : 0,
+    });
+    this.liveDrawn = end;
+  }
+
   private commit(upTo: number) {
     const strokes = this.doodle.strokes;
-    while (this.committed < upTo && this.committed < strokes.length) this.paint(this.dctx, strokes[this.committed++]);
+    while (this.committed < upTo && this.committed < strokes.length) {
+      const i = this.committed++;
+      const s = strokes[i];
+      if (!WHOLE.has(s.brushStyle) && this.liveIndex === i && this.liveDrawn > 0) {
+        this.extend(i, s.points.length);
+        this.dctx.drawImage(this.live!, 0, 0);
+        this.liveIndex = -1;
+      } else {
+        this.paint(this.dctx, s);
+      }
+    }
   }
 
   private show(src: HTMLCanvasElement) {
@@ -89,7 +135,12 @@ export class DoodlePlayer {
     if (s && ms > s.startTime!) {
       const f = (ms - s.startTime!) / s.duration!;
       const n = Math.max(2, Math.ceil(s.points.length * f));
-      this.paint(this.ctx, { ...s, id: `${s.id}~${n}`, points: s.points.slice(0, n) });
+      if (WHOLE.has(s.brushStyle)) {
+        this.paint(this.ctx, { ...s, id: `${s.id}~${n}`, points: s.points.slice(0, n) });
+      } else {
+        this.extend(this.committed, n);
+        if (this.liveIndex === this.committed) this.ctx.drawImage(this.live!, 0, 0);
+      }
     }
     return this.finished;
   }
@@ -168,10 +219,13 @@ export class DoodlePlayer {
   }
 
   rebake(): void {
+    if (!this.stale) return;
+    this.stale = false;
     const keep = this.committed;
     this.dctx.setTransform(1, 0, 0, 1, 0, 0);
     this.dctx.clearRect(0, 0, this.done.width, this.done.height);
     this.committed = 0;
+    this.liveIndex = -1;
     this.commit(keep);
     this.frames = [];
     if (this.finished) this.show(this.done);

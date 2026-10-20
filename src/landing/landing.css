@@ -529,22 +529,33 @@ html:has([data-landing]) {
   max-width: 1080px;
 }
 
-.lp-pencil-line {
+.lp-pencil-clip {
   position: absolute;
   top: 300px;
   left: 50%;
   width: 120px;
   height: calc(100% - 360px);
   margin-left: -60px;
-  overflow: visible;
-  color: #b5ab99;
+  overflow: hidden;
   pointer-events: none;
+  will-change: transform;
+  contain: strict;
+}
+
+.lp-pencil-line {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: #b5ab99;
+  will-change: transform;
 }
 
 .lp-pencil-tip {
   position: absolute;
   left: 0;
   top: 0;
+  will-change: transform;
   width: 30px;
   height: 30px;
   margin: -27px 0 0 -3px;
@@ -811,7 +822,7 @@ html:has([data-landing]) {
     gap: 90px;
   }
 
-  .lp-pencil-line {
+  .lp-pencil-clip {
     width: 70px;
     margin-left: -35px;
   }
@@ -821,7 +832,7 @@ html:has([data-landing]) {
   .lp-desktop-only,
   .lp-slot[data-desktop-only],
   .lp-nav a:not([data-vault-link]),
-  .lp-pencil-line,
+  .lp-pencil-clip,
   .lp-pencil-tip {
     display: none !important;
   }

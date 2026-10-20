@@ -1,6 +1,6 @@
 import { DoodlePlayer } from "./DoodlePlayer";
-import { doodleById, mulberry } from "./doodles/library";
-import { onBrushAssetsChanged, whenBrushesReady } from "./engine";
+import { doodleById, mulberry, type Doodle } from "./doodles/library";
+import { onBrushAssetsChanged, prewarm, whenBrushesReady } from "./engine";
 import { getDoodleMode } from "./hero";
 import { onFrame, prefersReducedMotion, watchVisible } from "./ticker";
 
@@ -9,9 +9,11 @@ interface Margin {
   canvas: HTMLCanvasElement;
   id: string;
   player: DoodlePlayer | null;
-  state: "idle" | "queued" | "drawing" | "done";
+  state: "idle" | "queued" | "drawing" | "paused" | "done";
   visible: boolean;
   t0: number;
+  pausedAt: number;
+  doodle: Doodle;
 }
 
 export function mountMargins(root: HTMLElement): () => void {
@@ -25,7 +27,10 @@ export function mountMargins(root: HTMLElement): () => void {
     state: "idle",
     visible: false,
     t0: 0,
+    pausedAt: 0,
+    doodle: doodleById(el.dataset.margin!)!.make(Math.floor(rand() * 1e6), getDoodleMode()),
   }));
+  if (!reduced) prewarm(margins.map((m) => m.doodle));
   const queue: Margin[] = [];
   let active = 0;
   let stopFrame: (() => void) | null = null;
@@ -81,15 +86,22 @@ export function mountMargins(root: HTMLElement): () => void {
     if (!m) return;
     const cur = m;
     active++;
-    const doodle = doodleById(cur.id)!.make(Math.floor(rand() * 1e6), getDoodleMode());
+    const doodle = getDoodleMode() === "normal" ? cur.doodle : doodleById(cur.id)!.make(Math.floor(rand() * 1e6), getDoodleMode());
     void whenBrushesReady(doodle).then(() => {
       cur.player = new DoodlePlayer(cur.canvas, doodle, cur.canvas.clientWidth || 260);
-      if (reduced || !cur.visible) {
+      if (reduced) {
         settle(cur);
         return;
       }
-      cur.state = "drawing";
       cur.t0 = performance.now();
+      if (!cur.visible) {
+        cur.state = "paused";
+        cur.pausedAt = cur.t0;
+        active--;
+        next();
+        return;
+      }
+      cur.state = "drawing";
       startLoop();
     });
     next();
@@ -105,6 +117,11 @@ export function mountMargins(root: HTMLElement): () => void {
           queue.push(m);
           next();
         }
+        if (v && m.state === "paused") {
+          m.t0 += performance.now() - m.pausedAt;
+          m.state = "drawing";
+          active++;
+        }
         if (v && m.state !== "idle") startLoop();
         if (!v && m.state === "queued") {
           const i = queue.indexOf(m);
@@ -113,7 +130,12 @@ export function mountMargins(root: HTMLElement): () => void {
             m.state = "idle";
           }
         }
-        if (!v && m.state === "drawing" && m.player) settle(m);
+        if (!v && m.state === "drawing") {
+          m.state = "paused";
+          m.pausedAt = performance.now();
+          active--;
+          next();
+        }
       },
       "0px",
     ),

@@ -1,7 +1,7 @@
 import type { BrushStyle } from "@/engine/types";
 import { DoodlePlayer } from "./DoodlePlayer";
 import { autograph } from "./doodles/library";
-import { onBrushAssetsChanged, whenBrushesReady } from "./engine";
+import { onBrushAssetsChanged, prewarm, whenBrushesReady } from "./engine";
 import { onFrame, prefersReducedMotion, watchVisible } from "./ticker";
 
 const SIGN_MS = 1300;
@@ -25,6 +25,12 @@ export function mountCards(root: HTMLElement): () => void {
     token: 0,
     seed: 11 + i * 97,
   }));
+
+  const sigOf = (c: Card) => {
+    const name = c.el.querySelector(".lp-card-name")?.textContent?.trim() ?? "zketch";
+    return autograph(name.toLowerCase(), c.el.dataset.brush as BrushStyle, c.el.dataset.color ?? "#23201c", c.seed);
+  };
+  if (!reduced) prewarm(cards.map(sigOf));
 
   const sign = async (c: Card) => {
     const token = ++c.token;
@@ -68,7 +74,7 @@ export function mountCards(root: HTMLElement): () => void {
           seen = true;
           setTimeout(() => {
             if (!c.player) void sign(c);
-          }, reduced ? 0 : 200 + i * 260);
+          }, reduced ? 0 : 250 + i * 450);
         },
         "0px",
       ),
