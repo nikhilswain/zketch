@@ -21,7 +21,7 @@ const SECTIONS = [
 
 const LAYOUTS: { id: Exclude<LayoutId, "custom">; label: string; hint: string }[] = [
   { id: "bottom", label: "Bottom deck", hint: "Brushes, presets, stroke and colour open above the bar; layers on the right." },
-  { id: "sidebars", label: "Sidebars", hint: "Layers and colour on the left; presets, brushes and stroke on the right. The bottom stays one slim bar." },
+  { id: "sidebars", label: "Sidebars", hint: "Colour and layers on the left; presets, brushes and stroke on the right. The bottom stays one slim bar." },
   { id: "simple", label: "Simple", hint: "One floating toolbar at the bottom and a small properties card, like a whiteboard. Number keys pick tools." },
 ];
 

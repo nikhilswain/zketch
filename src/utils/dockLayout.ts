@@ -44,8 +44,8 @@ function preset(id: Exclude<LayoutId, "custom">): DockState {
   if (id === "sidebars") {
     return {
       panels: place([
-        ["layers", "left"],
         ["colour", "left"],
+        ["layers", "left"],
         ["presets", "right"],
         ["brushes", "right"],
         ["stroke", "right"],

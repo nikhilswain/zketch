@@ -692,7 +692,7 @@ Persistence layers:
     wobble, width variation, taper, flat), notch knob, value tag, keyboard,
     double-click to type, `role="slider"`.
   - Dock state: `utils/dockLayout.ts` (panel → dock/order/collapsed, dock
-    open flags, layout bottom | sidebars | simple | custom; Sidebars puts layers + colour left and
+    open flags, layout bottom | sidebars | simple | custom; Sidebars puts colour + layers left and
     presets, brushes, stroke, properties right; localStorage `zketch-dock-layout-v1`, bad data or
     the retired `minimal` falls back to Bottom deck). In a sidebar the layer list caps at about five
     rows and scrolls on its own.
