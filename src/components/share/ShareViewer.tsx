@@ -107,7 +107,7 @@ const ShareViewer: React.FC<ShareViewerProps> = ({ loading, error, drawing, onRe
             <img
               src={drawing.data}
               alt={drawing.name}
-              className="max-h-[60vh] max-w-full rounded-[4px] bg-white shadow-[0_16px_60px_rgba(0,0,0,0.5)]"
+              className="max-h-[60vh] max-w-full rounded-[4px] bg-white shadow-(--zk-shadow-share)"
             />
             <div className="mt-8 flex flex-wrap justify-center gap-2">
               <button

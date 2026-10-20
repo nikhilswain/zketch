@@ -52,7 +52,7 @@ function store(choice: Choice, custom: { width: number; height: number }) {
 
 const PageShape: React.FC<{ width: number; height: number; max?: number }> = ({ width, height, max = 64 }) => {
   const k = Math.min(max / width, max / height);
-  return <span className="block rounded-[2px] bg-[#ECEBE7]" style={{ width: width * k, height: height * k }} />;
+  return <span className="block rounded-[2px] bg-(--zk-mini-page) shadow-(--zk-mini-edge)" style={{ width: width * k, height: height * k }} />;
 };
 
 const NewDrawingDialog: React.FC<NewDrawingDialogProps> = ({ open, onOpenChange, onCreate }) => {
@@ -84,7 +84,7 @@ const NewDrawingDialog: React.FC<NewDrawingDialogProps> = ({ open, onOpenChange,
   const tileClass = (id: string) =>
     `group relative flex h-full min-h-0 flex-col justify-between overflow-hidden rounded-[4px] p-2.5 text-left transition-colors outline-none focus-visible:ring-1 focus-visible:ring-zk-accent ${
       isSelected(id)
-        ? "bg-[#2E2E34] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-zk-accent"
+        ? "bg-zk-hover after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-zk-accent"
         : "bg-zk-raised hover:bg-zk-hover"
     }`;
 
@@ -173,7 +173,7 @@ const NewDrawingDialog: React.FC<NewDrawingDialogProps> = ({ open, onOpenChange,
                       onClick={() => select(t.id)}
                       className={`${tileClass(t.id)} !flex-row items-center gap-2`}
                     >
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[3px] border border-dashed border-[#4A4A50] text-zk-text-2">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[3px] border border-dashed border-(--zk-dashed) text-zk-text-2">
                         <PlusIcon size={14} />
                       </span>
                       <span className="flex flex-1 items-baseline justify-between">

@@ -298,7 +298,7 @@ const LayerItem: React.FC<LayerItemProps> = observer(
           e.preventDefault();
           setMenuOpen(true);
         }}
-        className={`group mx-1.5 mb-0.5 flex cursor-grab select-none flex-col rounded-[4px] transition-colors data-lifted:cursor-grabbing data-lifted:bg-zk-raised data-lifted:shadow-[0_8px_24px_rgba(0,0,0,0.45)] ${
+        className={`group mx-1.5 mb-0.5 flex cursor-grab select-none flex-col rounded-[4px] transition-colors data-lifted:cursor-grabbing data-lifted:bg-zk-raised data-lifted:shadow-(--zk-shadow-lift) ${
           isActive ? "bg-zk-selected" : "hover:bg-zk-raised"
         } ${!layer.visible ? "opacity-50" : ""}`}
       >
@@ -307,7 +307,7 @@ const LayerItem: React.FC<LayerItemProps> = observer(
           <span
             data-sort-handle
             aria-hidden="true"
-            className="flex h-9 w-3 shrink-0 touch-none items-center justify-center text-[#5C5B60] opacity-0 transition-opacity group-hover:opacity-100 group-data-lifted:opacity-100"
+            className="flex h-9 w-3 shrink-0 touch-none items-center justify-center text-(--zk-grip) opacity-0 transition-opacity group-hover:opacity-100 group-data-lifted:opacity-100"
           >
             <GripIcon size={12} />
           </span>

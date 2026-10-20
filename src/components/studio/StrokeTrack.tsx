@@ -94,8 +94,8 @@ const StrokeTrack: React.FC<StrokeTrackProps> = ({
     e.preventDefault();
   };
 
-  const tone = dragging ? "var(--zk-accent)" : hover ? "#ECEBE7" : "#8E8C87";
-  const base = hover || dragging ? "#34343A" : "#2A2A2F";
+  const tone = dragging ? "var(--zk-accent)" : hover ? "var(--zk-text)" : "var(--zk-track-tone)";
+  const base = hover || dragging ? "var(--zk-track-hover)" : "var(--zk-track)";
   const shape = trackPath(kind);
 
   return (
@@ -173,7 +173,7 @@ const StrokeTrack: React.FC<StrokeTrackProps> = ({
             style={{
               top: height / 2 - 6,
               height: 12,
-              background: `linear-gradient(to right, transparent, ${color}), repeating-conic-gradient(#3A3A40 0% 25%, #222226 0% 50%) 0 0 / 8px 8px`,
+              background: `linear-gradient(to right, transparent, ${color}), repeating-conic-gradient(var(--zk-checker-a) 0% 25%, var(--zk-checker-b) 0% 50%) 0 0 / 8px 8px`,
             }}
           />
         ) : (
@@ -234,8 +234,8 @@ const StrokeTrack: React.FC<StrokeTrackProps> = ({
             style={{
               left: `${pct}%`,
               top: -2,
-              background: dragging ? "var(--zk-accent)" : "#2A2A2F",
-              color: dragging ? "var(--zk-on-accent)" : "#ECEBE7",
+              background: dragging ? "var(--zk-accent)" : "var(--zk-track)",
+              color: dragging ? "var(--zk-on-accent)" : "var(--zk-text)",
             }}
           >
             {display}

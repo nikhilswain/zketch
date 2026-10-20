@@ -250,7 +250,7 @@ const SettingsPage: React.FC<{ onClose: () => void }> = observer(({ onClose }) =
                           ? "#FFFFFF"
                           : b.id === "grid"
                             ? "#FFFFFF repeating-linear-gradient(0deg, transparent 0 9px, #E5E5E5 9px 10px), repeating-linear-gradient(90deg, transparent 0 9px, #E5E5E5 9px 10px)"
-                            : "repeating-conic-gradient(#3A3A40 0% 25%, #222226 0% 50%) 0 0 / 10px 10px",
+                            : "repeating-conic-gradient(var(--zk-checker-a) 0% 25%, var(--zk-checker-b) 0% 50%) 0 0 / 10px 10px",
                     }}
                   />
                 </Option>

@@ -190,7 +190,7 @@ const StudioShell: React.FC<StudioShellProps> = observer(({ topLeft, topRight, o
               <DockArea dock="right" overlay />
             </DockSlot>
           </div>
-          <div className={`pointer-events-auto absolute inset-x-0 bottom-0 z-20 ${overlay && deckVisible ? "shadow-[0_-12px_40px_rgba(0,0,0,0.35)]" : ""}`}>
+          <div className={`pointer-events-auto absolute inset-x-0 bottom-0 z-20 ${overlay && deckVisible ? "shadow-(--zk-shadow-deck)" : ""}`}>
             <DockSlot open={overlay && deckVisible} axis="y" size={212} from="bottom">
               <DockArea dock="bottom" overlay />
             </DockSlot>

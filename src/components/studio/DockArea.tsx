@@ -80,7 +80,7 @@ const DockArea: React.FC<{ dock: DockId; overlay?: boolean }> = observer(({ dock
           side
             ? `flex h-full w-[300px] shrink-0 flex-col overflow-x-hidden overflow-y-auto bg-zk-surface text-zk-text ${
                 dock === "left" ? "border-r" : "border-l"
-              } border-zk-hairline ${overlay ? "shadow-[0_0_40px_rgba(0,0,0,0.35)]" : ""}`
+              } border-zk-hairline ${overlay ? "shadow-(--zk-shadow-dock)" : ""}`
             : "flex h-[212px] w-full shrink-0 overflow-x-auto overflow-y-hidden border-t border-zk-hairline bg-zk-surface text-zk-text"
         } ${dockLayout.dragging ? "outline-1 -outline-offset-1 outline-zk-accent/45" : ""}`}
       >

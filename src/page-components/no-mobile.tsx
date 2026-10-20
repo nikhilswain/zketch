@@ -9,12 +9,12 @@ const NoMobile = () => {
       </header>
       <main className="flex flex-1 flex-col justify-center px-6 pb-16">
         <svg viewBox="0 0 240 90" className="mb-10 w-56" aria-hidden="true">
-          <rect x="4" y="10" width="132" height="76" rx="4" fill="#202024" />
-          <rect x="150" y="18" width="52" height="68" rx="4" fill="#202024" />
-          <rect x="214" y="44" width="22" height="42" rx="3" fill="#2a2a2f" />
+          <rect x="4" y="10" width="132" height="76" rx="4" style={{ fill: "var(--zk-raised)" }} />
+          <rect x="150" y="18" width="52" height="68" rx="4" style={{ fill: "var(--zk-raised)" }} />
+          <rect x="214" y="44" width="22" height="42" rx="3" style={{ fill: "var(--zk-hover)" }} />
           <path d="M22 62 C 48 30, 74 76, 118 36" stroke="var(--zk-accent)" strokeWidth="5" fill="none" strokeLinecap="round" />
           <path d="M160 64 C 170 44, 182 72, 192 46" stroke="var(--zk-accent)" strokeWidth="4" fill="none" strokeLinecap="round" />
-          <path d="M209 40 L240 90" stroke="#6e6d72" strokeWidth="2.5" strokeLinecap="round" />
+          <path d="M209 40 L240 90" style={{ stroke: "var(--zk-disabled)" }} strokeWidth="2.5" strokeLinecap="round" />
         </svg>
         <h1 className="font-display text-[34px] leading-tight font-semibold">Made for bigger screens</h1>
         <p className="mt-4 max-w-md text-[15px] leading-relaxed text-zk-text-2">

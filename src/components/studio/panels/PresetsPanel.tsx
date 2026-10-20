@@ -1,5 +1,6 @@
 import type React from "react";
 import { observer } from "mobx-react-lite";
+import { themeInk } from "@/utils/theme";
 import { useCanvasStore } from "@/hooks/useStores";
 import { brushRegistry } from "@/engine/render/BrushRegistry";
 import { BRUSH_CATEGORIES } from "@/utils/brushCategories";
@@ -94,7 +95,7 @@ export const PresetsBody: React.FC = observer(() => {
       </div>
       <div className="overflow-hidden rounded-[4px] bg-zk-raised">
         <StrokeCanvas
-          look={{ ...look, color: "#ECEBE7" }}
+          look={{ ...look, color: themeInk() }}
           width={width}
           height={variant === "deck" ? 48 : 60}
           amplitude={variant === "deck" ? 10 : 13}

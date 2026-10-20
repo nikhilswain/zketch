@@ -91,7 +91,7 @@ const BrushPopover: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   return (
     <div
       ref={ref}
-      className="absolute bottom-full left-0 mb-2 flex h-[360px] w-[600px] overflow-hidden rounded-[6px] bg-zk-surface shadow-[0_14px_44px_rgba(0,0,0,0.35)]"
+      className="absolute bottom-full left-0 mb-2 flex h-[360px] w-[600px] overflow-hidden rounded-[6px] bg-zk-surface shadow-(--zk-shadow-pop)"
     >
       <PanelVariantContext.Provider value="popover">
         <div className="min-w-0 flex-1 pt-2">
@@ -381,7 +381,7 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
             backgroundImage: canvasStore.displayColor
               ? undefined
               : "linear-gradient(45deg, transparent 46%, #E5644D 46%, #E5644D 54%, transparent 54%)",
-            boxShadow: "0 0 0 1px var(--zk-surface), 0 0 0 2px #ECEBE7",
+            boxShadow: "0 0 0 1px var(--zk-surface), 0 0 0 2px var(--zk-ring-strong)",
           }}
         />
         <div className="hidden gap-1.5 min-[1200px]:flex">
@@ -391,7 +391,7 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
               aria-label={s.name}
               onClick={() => canvasStore.setColor(s.hex)}
               className="h-5 w-5 rounded-[3px]"
-              style={{ backgroundColor: s.hex, boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.1)" }}
+              style={{ backgroundColor: s.hex, boxShadow: "inset 0 0 0 1px var(--zk-swatch-edge)" }}
             />
           ))}
         </div>

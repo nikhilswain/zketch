@@ -96,7 +96,7 @@ const PanelFrame: React.FC<PanelFrameProps> = observer(
             title="Drag to move this panel to another dock"
             className="flex h-9 shrink-0 cursor-grab items-center gap-1.5 pl-1.5 pr-2 active:cursor-grabbing"
           >
-            <GripIcon size={12} className="text-[#5C5B60]" />
+            <GripIcon size={12} className="text-(--zk-grip)" />
             <button
               onClick={() => toggleCollapsed(id)}
               aria-expanded={!collapsed}

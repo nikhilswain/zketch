@@ -91,12 +91,12 @@ const PageSizeDialog: React.FC<PageSizeDialogProps> = ({ open, onOpenChange, pag
                     aria-pressed={selected}
                     className={`group relative flex h-[104px] flex-col justify-between overflow-hidden rounded-[4px] p-2.5 text-left transition-colors ${
                       selected
-                        ? "bg-[#2E2E34] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-zk-accent"
+                        ? "bg-zk-hover after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-zk-accent"
                         : "bg-zk-raised hover:bg-zk-hover"
                     }`}
                   >
                     <span className="flex flex-1 items-center justify-center">
-                      <span className="block rounded-[2px] bg-[#ECEBE7]" style={{ width: p.width * k, height: p.height * k }} />
+                      <span className="block rounded-[2px] bg-(--zk-mini-page) shadow-(--zk-mini-edge)" style={{ width: p.width * k, height: p.height * k }} />
                     </span>
                     <span className="flex items-baseline justify-between gap-1">
                       <span className="text-[13px] font-semibold text-zk-text group-aria-pressed:text-zk-accent">{p.label}</span>

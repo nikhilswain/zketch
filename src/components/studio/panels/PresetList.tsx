@@ -1,4 +1,6 @@
 import type React from "react";
+import { observer } from "mobx-react-lite";
+import { themeInk } from "@/utils/theme";
 import type { BrushPreset } from "@/engine/types";
 import StrokeCanvas, { type StrokeLook } from "./StrokeCanvas";
 
@@ -21,7 +23,7 @@ function describe(preset: BrushPreset) {
   return parts.join(" · ");
 }
 
-const PresetList: React.FC<PresetListProps> = ({
+const PresetList: React.FC<PresetListProps> = observer(({
   presets,
   activeId,
   modified,
@@ -44,7 +46,7 @@ const PresetList: React.FC<PresetListProps> = ({
           <StrokeCanvas
             look={{
               ...base,
-              color: "#ECEBE7",
+              color: themeInk(),
               size: preset.size ?? base.size,
               opacity: preset.opacity ?? base.opacity,
               angle: preset.angle ?? base.angle,
@@ -69,6 +71,6 @@ const PresetList: React.FC<PresetListProps> = ({
       );
     })}
   </div>
-);
+));
 
 export default PresetList;

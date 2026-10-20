@@ -55,7 +55,7 @@ const ColourBody: React.FC = observer(() => {
               className="h-3 w-3 rounded-[2px]"
               style={{
                 backgroundColor: swatch ?? "transparent",
-                boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.15)",
+                boxShadow: "inset 0 0 0 1px var(--zk-swatch-edge)",
                 backgroundImage:
                   swatch === null
                     ? "linear-gradient(45deg, transparent 45%, #ef4444 45%, #ef4444 55%, transparent 55%)"
@@ -78,7 +78,7 @@ const ColourBody: React.FC = observer(() => {
           onClick={() => canvasStore.clearSelectionColor()}
           className="relative aspect-square overflow-hidden rounded-[3px] bg-zk-raised"
           style={{
-            boxShadow: shown === null ? "0 0 0 2px var(--zk-surface), 0 0 0 3px #ECEBE7" : "inset 0 0 0 1px rgba(255,255,255,0.08)",
+            boxShadow: shown === null ? "0 0 0 2px var(--zk-surface), 0 0 0 3px var(--zk-ring-strong)" : "inset 0 0 0 1px var(--zk-swatch-edge)",
           }}
         >
           <span className="absolute top-1/2 left-1/2 h-px w-[140%] -translate-x-1/2 -translate-y-1/2 -rotate-45 bg-[#E5644D]" />
@@ -95,8 +95,8 @@ const ColourBody: React.FC = observer(() => {
             backgroundColor: s.hex,
             boxShadow:
               shown?.toUpperCase() === s.hex
-                ? "0 0 0 2px var(--zk-surface), 0 0 0 3px #ECEBE7"
-                : "inset 0 0 0 1px rgba(255,255,255,0.08)",
+                ? "0 0 0 2px var(--zk-surface), 0 0 0 3px var(--zk-ring-strong)"
+                : "inset 0 0 0 1px var(--zk-swatch-edge)",
           }}
         />
       ))}

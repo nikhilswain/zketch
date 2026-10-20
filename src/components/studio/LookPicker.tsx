@@ -1,5 +1,7 @@
 import type React from "react";
 import { useEffect, useRef } from "react";
+import { observer } from "mobx-react-lite";
+import { themeInk } from "@/utils/theme";
 import { brushRegistry } from "@/engine/render/BrushRegistry";
 import { onBrushAssetsChanged } from "@/engine/stamp/assets";
 import { renderStroke } from "@/engine/render/renderStroke";
@@ -73,7 +75,7 @@ const Preview: React.FC<{ look: ElementLook; color: string }> = ({ look, color }
   return <canvas ref={ref} aria-hidden="true" style={{ width: W, height: H }} />;
 };
 
-const LookPicker: React.FC<{ value: ElementLook | null; onPick: (look: ElementLook) => void }> = ({ value, onPick }) => (
+const LookPicker: React.FC<{ value: ElementLook | null; onPick: (look: ElementLook) => void }> = observer(({ value, onPick }) => (
   <div role="radiogroup" aria-label="Look" className="grid grid-cols-5 gap-1">
     {LOOKS.map((l) => {
       const on = value === l.id;
@@ -88,12 +90,12 @@ const LookPicker: React.FC<{ value: ElementLook | null; onPick: (look: ElementLo
             on ? "bg-zk-selected" : "bg-zk-raised hover:bg-zk-hover"
           }`}
         >
-          <Preview look={l.id} color={on ? "#FF6B5B" : "#ECEBE7"} />
+          <Preview look={l.id} color={on ? "#FF6B5B" : themeInk()} />
           <span className={`text-[10px] font-semibold ${on ? "text-zk-accent" : "text-zk-text-2"}`}>{l.label}</span>
         </button>
       );
     })}
   </div>
-);
+));
 
 export default LookPicker;

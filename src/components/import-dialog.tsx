@@ -274,7 +274,7 @@ const ImportDialog: React.FC<ImportDialogProps> = observer(
           )}
 
           {error && (
-            <div role="alert" className="flex items-start gap-2 rounded-[4px] bg-[#3a1f1f] px-3 py-2.5 text-[12px] text-[#ffb4a8]">
+            <div role="alert" className="flex items-start gap-2 rounded-[4px] bg-(--zk-danger-bg) px-3 py-2.5 text-[12px] text-(--zk-danger-text)">
               <AlertCircleIcon className="mt-px h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>

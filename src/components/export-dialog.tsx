@@ -197,14 +197,14 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
           }}
           className="flex h-[min(640px,calc(100vh-32px))] max-w-[960px] gap-0 overflow-hidden p-0"
         >
-          <div className="relative hidden min-w-0 flex-1 flex-col bg-[#0d0d0f] md:flex">
+          <div className="relative hidden min-w-0 flex-1 flex-col bg-(--zk-well) md:flex">
             <div className="flex min-h-0 flex-1 items-center justify-center p-8">
               {hasContent ? (
                 preview ? (
                   <img
                     src={preview}
                     alt={`Preview of ${drawingName}`}
-                    className={`max-h-full max-w-full rounded-[3px] shadow-[0_8px_40px_rgba(0,0,0,0.45)] transition-opacity duration-150 ${rendering ? "opacity-60" : ""}`}
+                    className={`max-h-full max-w-full rounded-[3px] shadow-(--zk-shadow-stage) transition-opacity duration-150 ${rendering ? "opacity-60" : ""}`}
                     style={transparent ? { background: CHECKER } : undefined}
                   />
                 ) : (

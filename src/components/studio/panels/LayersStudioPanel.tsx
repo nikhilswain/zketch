@@ -47,7 +47,7 @@ const StripThumb: React.FC<{
     return (
       <div
         {...sortProps}
-        className="cursor-grab touch-none select-none rounded-[3px] data-lifted:cursor-grabbing data-lifted:shadow-[0_8px_20px_rgba(0,0,0,0.5)]"
+        className="cursor-grab touch-none select-none rounded-[3px] data-lifted:cursor-grabbing data-lifted:shadow-(--zk-shadow-lift)"
         onContextMenu={(e) => {
           e.preventDefault();
           setMenuOpen(true);
@@ -165,7 +165,7 @@ export const LayersStrip: React.FC<{ onExpand: () => void }> = observer(({ onExp
         onClick={() => canvasStore.addLayer()}
         aria-label="Add layer"
         title="Add layer"
-        className="flex h-[30px] w-11 items-center justify-center rounded-[3px] border border-dashed border-[#4A4A50] text-zk-muted hover:border-zk-text-2 hover:text-zk-text"
+        className="flex h-[30px] w-11 items-center justify-center rounded-[3px] border border-dashed border-(--zk-dashed) text-zk-muted hover:border-zk-text-2 hover:text-zk-text"
       >
         <PlusIcon size={14} />
       </button>

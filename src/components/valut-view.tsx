@@ -300,7 +300,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
           Rename
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => setPendingDelete(drawing)} className="text-[#ff8a7a] focus:text-[#ff8a7a]">
+        <DropdownMenuItem onClick={() => setPendingDelete(drawing)} className="text-(--zk-danger) focus:text-(--zk-danger)">
           <TrashIcon className="h-4 w-4" />
           Delete…
         </DropdownMenuItem>
