@@ -158,7 +158,7 @@ const NewDrawingDialog: React.FC<NewDrawingDialogProps> = ({ open, onOpenChange,
                       className={tileClass(t.id)}
                     >
                       <span className="text-[13px] font-semibold text-zk-text group-aria-checked:text-zk-accent">Infinite</span>
-                      <span className="my-2 min-h-0 flex-1 rounded-[3px] bg-[radial-gradient(#3A3A40_1px,transparent_1px)] bg-[length:12px_12px]" />
+                      <span className="my-2 min-h-0 flex-1 rounded-[3px] bg-[radial-gradient(var(--zk-checker-a)_1px,transparent_1px)] bg-[length:12px_12px]" />
                       <span className="text-[11px] text-zk-muted">Endless canvas, pan anywhere</span>
                     </button>
                   );

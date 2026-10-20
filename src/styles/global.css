@@ -118,6 +118,7 @@
   --zk-track-hover: #d0d4d9;
   --zk-track-tone: #7d828b;
   --zk-scroll: #c3c8cf;
+  --zk-preview-filter: opacity(0.82);
   --zk-shadow-pop: 0 14px 44px rgba(28, 34, 44, 0.16), 0 0 0 1px rgba(28, 34, 44, 0.06);
   --zk-shadow-dialog: 0 24px 80px rgba(28, 34, 44, 0.2), 0 0 0 1px rgba(28, 34, 44, 0.06);
   --zk-shadow-dock: 0 0 40px rgba(28, 34, 44, 0.12);
@@ -158,6 +159,7 @@
   --zk-track-hover: #34343a;
   --zk-track-tone: #8e8c87;
   --zk-scroll: #3a3a40;
+  --zk-preview-filter: invert(0.92);
   --zk-shadow-pop: 0 14px 44px rgba(0, 0, 0, 0.35);
   --zk-shadow-dialog: 0 24px 80px rgba(0, 0, 0, 0.55);
   --zk-shadow-dock: 0 0 40px rgba(0, 0, 0, 0.35);

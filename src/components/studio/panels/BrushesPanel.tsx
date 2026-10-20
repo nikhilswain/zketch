@@ -72,7 +72,7 @@ export const BrushLibrary: React.FC<{ onPicked?: () => void }> = observer(({ onP
                     alt=""
                     draggable={false}
                     className="block h-9 w-full object-contain"
-                    style={{ filter: "invert(0.92)" }}
+                    style={{ filter: "var(--zk-preview-filter)" }}
                   />
                   <span
                     className={`truncate text-[11.5px] ${

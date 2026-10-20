@@ -9,6 +9,7 @@ import { applyLayout, dockLayout, type LayoutId } from "@/utils/dockLayout";
 import { KEY_BINDINGS, type KeyBinding } from "@/utils/keyBindings";
 import HsvPicker from "./HsvPicker";
 import { SURROUND, type SurroundTone } from "@/utils/page";
+import type { SurroundMode, ThemePreference } from "@/models/SettingsModel";
 
 const SECTIONS = [
   { id: "appearance", label: "Appearance" },
@@ -25,10 +26,80 @@ const LAYOUTS: { id: Exclude<LayoutId, "custom">; label: string; hint: string }[
   { id: "simple", label: "Simple", hint: "One toolbar on top and a small properties card, like a whiteboard. Number keys pick tools." },
 ];
 
-const SURROUNDS: { id: SurroundTone; label: string }[] = [
-  { id: "light", label: "Light" },
-  { id: "dark", label: "Dark" },
+const THEMES: { id: ThemePreference; label: string; hint: string }[] = [
+  { id: "light", label: "Light", hint: "Cool, quiet greys. The default." },
+  { id: "dark", label: "Dark", hint: "Deep charcoal, easy on the eyes at night." },
+  { id: "system", label: "Match system", hint: "Follows your device's light or dark setting." },
 ];
+
+const SURROUNDS: { id: SurroundMode; label: string; hint: string }[] = [
+  { id: "auto", label: "Auto", hint: "Matches the theme." },
+  { id: "light", label: "Light", hint: "Always light grey." },
+  { id: "dark", label: "Dark", hint: "Always near-black." },
+];
+
+const PREVIEW = {
+  light: { surround: SURROUND.light, panel: "#F4F5F7", raised: "#E9EBEE", line: "#C9CDD3", edge: "rgba(28,34,44,0.1)" },
+  dark: { surround: SURROUND.dark, panel: "#141416", raised: "#202024", line: "#3A3A40", edge: "rgba(0,0,0,0)" },
+} as const;
+
+function StudioPreview({ theme }: { theme: SurroundTone }) {
+  const c = PREVIEW[theme];
+  const block = { background: c.panel, boxShadow: `0 0 0 1px ${c.edge}` };
+  return (
+    <div className="absolute inset-0" style={{ background: c.surround }}>
+      <div className="absolute top-1.5 left-1.5 flex h-3 w-14 items-center gap-1 rounded-[2px] px-1" style={block}>
+        <span className="h-1.5 w-1.5 rounded-[1px] bg-zk-accent" />
+        <span className="h-1 w-7 rounded-full" style={{ background: c.line }} />
+      </div>
+      <div className="absolute top-1.5 right-1.5 flex h-3 w-9 items-center justify-end rounded-[2px] px-0.5" style={block}>
+        <span className="h-2 w-4 rounded-[1px] bg-zk-accent" />
+      </div>
+      <div className="absolute top-6 bottom-1.5 left-1.5 flex w-3 flex-col items-center gap-1 rounded-[2px] pt-1" style={block}>
+        <span className="h-1.5 w-1.5 rounded-[1px] ring-1 ring-zk-accent" />
+        <span className="h-1.5 w-1.5 rounded-[1px]" style={{ background: c.line }} />
+        <span className="h-1.5 w-1.5 rounded-[1px]" style={{ background: c.line }} />
+      </div>
+      <div className="absolute top-6 right-1.5 bottom-1.5 flex w-10 flex-col gap-1 rounded-[2px] p-1" style={block}>
+        <span className="h-1 w-6 rounded-full" style={{ background: c.line }} />
+        <span className="h-2.5 rounded-[1px]" style={{ background: c.raised }} />
+        <span className="h-2.5 rounded-[1px]" style={{ background: c.raised }} />
+      </div>
+      <div className="absolute top-6 right-[52px] bottom-2.5 left-6 bg-white shadow-[0_2px_6px_rgba(0,0,0,0.18)]">
+        <svg viewBox="0 0 60 30" className="h-full w-full" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M8 22 C 18 6, 26 6, 32 16 S 46 26, 52 8" fill="none" stroke="#1F2126" strokeWidth="1.6" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function ThemePreview({ theme }: { theme: ThemePreference }) {
+  return (
+    <div className="relative h-24 w-full overflow-hidden rounded-[4px] shadow-[0_0_0_1px_var(--zk-divider)]" aria-hidden="true">
+      {theme === "system" ? (
+        <>
+          <StudioPreview theme="light" />
+          <div className="absolute inset-0" style={{ clipPath: "polygon(62% 0, 100% 0, 100% 100%, 38% 100%)" }}>
+            <StudioPreview theme="dark" />
+          </div>
+        </>
+      ) : (
+        <StudioPreview theme={theme} />
+      )}
+    </div>
+  );
+}
+
+function SurroundPreview({ tone }: { tone: SurroundTone | "split" }) {
+  const background =
+    tone === "split" ? `linear-gradient(115deg, ${SURROUND.light} 0 50%, ${SURROUND.dark} 50% 100%)` : SURROUND[tone];
+  return (
+    <span className="flex h-12 w-full items-center justify-center rounded-[4px]" style={{ background }}>
+      <span className="h-8 w-6 bg-white shadow-[0_2px_6px_rgba(0,0,0,0.25)]" />
+    </span>
+  );
+}
 
 const BACKGROUNDS = [
   { id: "white", label: "White" },
@@ -180,7 +251,19 @@ const SettingsPage: React.FC<{ onClose: () => void }> = observer(({ onClose }) =
           <CloseIcon className="h-4 w-4" />
         </button>
         <div className="mx-auto flex max-w-3xl flex-col gap-10 px-8 py-8">
-          <Section id="appearance" title="Appearance" lead="Your accent colour marks the active tool, primary buttons, the slider you drag, the active layer and selections on the canvas.">
+          <Section id="appearance" title="Appearance" lead="How zketch looks around your drawing. The page you draw on stays white in every theme.">
+            <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-zk-muted">Theme</h3>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {THEMES.map((t) => (
+                <Option key={t.id} selected={settings.theme === t.id} label={t.label} hint={t.hint} onClick={() => settings.setTheme(t.id)}>
+                  <ThemePreview theme={t.id} />
+                </Option>
+              ))}
+            </div>
+            <h3 className="mt-8 mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-zk-muted">Accent</h3>
+            <p className="mb-3 max-w-xl text-[13px] text-zk-muted">
+              Marks the active tool, primary buttons, the slider you drag, the active layer and selections on the canvas.
+            </p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {ACCENTS.map((a) => (
                 <Option key={a.id} selected={accent === a.hex} label={a.name} onClick={() => settings.setAccent(a.hex)}>
@@ -202,8 +285,8 @@ const SettingsPage: React.FC<{ onClose: () => void }> = observer(({ onClose }) =
               <div className="mt-4 flex gap-6 rounded-[6px] bg-zk-raised/60 p-4">
                 <HsvPicker value={accent} onChange={(hex) => settings.setAccent(hex)} size={180} />
                 <p className="max-w-xs text-[12px] leading-relaxed text-zk-muted">
-                  Pick any colour. Mid-to-bright colours work best: the accent sits on the dark interface and
-                  on your light canvas, and text on accent buttons is dark.
+                  Pick any colour. Mid-to-bright colours work best: the accent sits on the interface in both
+                  themes and on your white page, and text on accent buttons is dark.
                 </p>
               </div>
             )}
@@ -249,7 +332,7 @@ const SettingsPage: React.FC<{ onClose: () => void }> = observer(({ onClose }) =
                         b.id === "white"
                           ? "#FFFFFF"
                           : b.id === "grid"
-                            ? "#FFFFFF repeating-linear-gradient(0deg, transparent 0 9px, #E5E5E5 9px 10px), repeating-linear-gradient(90deg, transparent 0 9px, #E5E5E5 9px 10px)"
+                            ? "repeating-linear-gradient(0deg, transparent 0 9px, #E5E5E5 9px 10px), repeating-linear-gradient(90deg, transparent 0 9px, #E5E5E5 9px 10px) #FFFFFF"
                             : "repeating-conic-gradient(var(--zk-checker-a) 0% 25%, var(--zk-checker-b) 0% 50%) 0 0 / 10px 10px",
                     }}
                   />
@@ -257,12 +340,10 @@ const SettingsPage: React.FC<{ onClose: () => void }> = observer(({ onClose }) =
               ))}
             </div>
             <p className="mb-3 mt-6 text-[13px] text-zk-muted">Around fixed-size pages, the workspace outside the page.</p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {SURROUNDS.map((t) => (
-                <Option key={t.id} selected={settings.surroundMode === t.id} label={t.label} onClick={() => settings.setSurroundMode(t.id)}>
-                  <span className="flex h-12 w-full items-center justify-center rounded-[4px]" style={{ background: SURROUND[t.id] }}>
-                    <span className="h-8 w-6 bg-white shadow-[0_2px_6px_rgba(0,0,0,0.25)]" />
-                  </span>
+                <Option key={t.id} selected={settings.surroundMode === t.id} label={t.label} hint={t.hint} onClick={() => settings.setSurroundMode(t.id)}>
+                  <SurroundPreview tone={t.id === "auto" ? "split" : t.id} />
                 </Option>
               ))}
             </div>

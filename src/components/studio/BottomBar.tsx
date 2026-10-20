@@ -213,7 +213,7 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
               src={`/brushes/previews/${brushKey}.png`}
               alt=""
               className="h-6 w-[68px] object-contain"
-              style={{ filter: "invert(0.92)" }}
+              style={{ filter: "var(--zk-preview-filter)" }}
             />
             <span className="hidden max-w-[110px] truncate text-[13px] font-medium min-[900px]:inline">{brush?.label ?? brushKey}</span>
             <ChevronUpIcon className="h-3 w-3 text-zk-muted" />

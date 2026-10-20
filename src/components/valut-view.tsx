@@ -152,7 +152,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
     if (page && natural) {
       return (
         <div
-          className={`w-full overflow-hidden rounded-[4px] ${checker ? CHECKER_BG : "bg-white"}`}
+          className={`w-full overflow-hidden rounded-[4px] shadow-(--zk-mini-edge) ${checker ? CHECKER_BG : "bg-white"}`}
           style={{ aspectRatio: `${page.width} / ${page.height}` }}
         >
           <ThumbnailImage thumbnailId={drawing.thumbnail} alt={drawing.name} className="h-full w-full object-cover" />
@@ -161,7 +161,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
     }
     if (page) {
       return (
-        <div className="flex aspect-[4/3] w-full items-center justify-center overflow-hidden rounded-[4px] p-2" style={{ backgroundColor: surround }}>
+        <div className="flex aspect-[4/3] w-full items-center justify-center overflow-hidden rounded-[4px] p-2 shadow-(--zk-mini-edge)" style={{ backgroundColor: surround }}>
           <ThumbnailImage
             thumbnailId={drawing.thumbnail}
             alt={drawing.name}
@@ -171,7 +171,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
       );
     }
     return (
-      <div className={`aspect-[4/3] w-full overflow-hidden rounded-[4px] ${checker ? CHECKER_BG : "bg-white"}`}>
+      <div className={`aspect-[4/3] w-full overflow-hidden rounded-[4px] shadow-(--zk-mini-edge) ${checker ? CHECKER_BG : "bg-white"}`}>
         <ThumbnailImage thumbnailId={drawing.thumbnail} alt={drawing.name} className="h-full w-full object-cover" />
       </div>
     );
@@ -490,7 +490,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
               >
                 <div
                   role="cell"
-                  className={`flex h-12 w-16 items-center justify-center overflow-hidden rounded-[3px] ${drawing.page ? "" : "bg-white"}`}
+                  className={`flex h-12 w-16 items-center justify-center overflow-hidden rounded-[3px] shadow-(--zk-mini-edge) ${drawing.page ? "" : "bg-white"}`}
                   style={drawing.page ? { backgroundColor: surround } : undefined}
                 >
                   <ThumbnailImage
