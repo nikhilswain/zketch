@@ -598,8 +598,10 @@ drawings need no migration).
 Persisted to `localStorage` key `drawing-app-settings`: defaults (pen size,
 brush, color, background), export settings (format/quality/transparent/scale),
 UI prefs (autoHideDock/delay/showGrid/snapToGrid), `touchMode`,
-`eraserMode`, `accent`, `surround` (`light` default / `dark`, the
-workspace tone around fixed pages).
+`eraserMode`, `accent`, `theme` (`light` default / `dark` / `system`) and
+`surroundMode` (`auto` default follows the theme / `light` / `dark`, the
+workspace tone around fixed pages; a legacy `surround: "dark"` migrates to
+`dark`, anything else to `auto`).
 
 ---
 
@@ -614,7 +616,7 @@ drawing-canvas.tsx
   ├─ reaction(renderVersion) → engine.invalidate()
   ├─ reaction(pan/zoom) → engine.setPanZoom
   ├─ useEffect[background] → engine.setBackground
-  ├─ reaction(page) → engine.setPage; reaction(surround) → engine.setSurround
+  ├─ reaction(page) → engine.setPage; reaction(resolveSurround(surroundMode, theme)) → engine.setSurround
   └─ useEffect[animatingLayerId] → engine.setAnimationState
 
 canvas-view.tsx
@@ -715,9 +717,10 @@ Persistence layers:
   Settings opens the same `SettingsPage`.
 - **`studio/SettingsPage.tsx`** — full-page Settings over the studio (Z menu →
   Settings, Esc closes; key events stop at the page so drawing shortcuts don't
-  fire): Appearance (5 accents + custom HSV, live preview), Layout (3 layouts +
+  fire): Appearance (theme Light / Dark / Match system with mini studio
+  previews; 5 accents + custom HSV, live preview), Layout (3 layouts +
   reset), Canvas (default background for new drawings, applied in
-  `canvas-view` when a new drawing starts), Drawing (touch & stylus mode,
+  `canvas-view` when a new drawing starts; surround Auto / Light / Dark), Drawing (touch & stylus mode,
   eraser mode), Shortcuts (from `KEY_BINDINGS`, one row per action).
 - **Brand**: the Zketch mark is a swoosh with two fading "earlier frames"
   (`components/ZketchMark.tsx`, coloured with the accent in-app). Containers with
@@ -732,9 +735,20 @@ Persistence layers:
   rules in `icons/README.md`). The app never imports from `icons/`; the pack can
   be deleted without breaking the build. To add an icon to the app: draw it in
   `icons/defs/`, add its name to `icons/app.json`, run `npm run icons`.
-- **Tokens and accent**: `styles/global.css` defines `--zk-*` colours (Tailwind
-  `bg-zk-surface`, `text-zk-muted`, `bg-zk-accent`, …) and `font-display`
-  (Fraunces) / `font-ui` (Instrument Sans); shadcn variables map onto them.
+- **Tokens, themes and accent**: `styles/global.css` defines `--zk-*` colours (Tailwind
+  `bg-zk-surface`, `text-zk-muted`, `bg-zk-accent`, …; one-off tokens such as
+  `--zk-well`, `--zk-scrim`, `--zk-shadow-*` are used as `bg-(--zk-well)`) and
+  `font-display` (Fraunces) / `font-ui` (Instrument Sans); shadcn variables map
+  onto `--zk-*`. `:root` holds the light "Mist" theme (cool greys, the default);
+  `[data-theme="dark"]` on `<html>` holds the dark values. `Layout.astro` sets
+  `data-theme` before first paint from `drawing-app-settings.theme` (app pages
+  only; the landing and 404 pass `appTheme={false}` and keep their own palette).
+  `utils/theme.ts` `installTheme` keeps it in sync with `SettingsModel.theme`
+  and the OS for `system`, updates `meta[name=theme-color]`, and exposes
+  `themeState.resolved` / `themeInk()` for canvas-drawn UI (brush preset and
+  look previews) that can't read CSS variables. Never hardcode a UI colour in a
+  component: add a token with a light and a dark value. Canvas content (page,
+  grid, export) is not themed.
   `SettingsModel.accent` (default Coral `#FF6B5B`) is applied live by
   `utils/accent.ts` to `--zk-accent` and to on-canvas selection overlays via
   `engine/render/overlayColor.ts`.
