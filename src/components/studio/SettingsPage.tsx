@@ -21,9 +21,8 @@ const SECTIONS = [
 
 const LAYOUTS: { id: Exclude<LayoutId, "custom">; label: string; hint: string }[] = [
   { id: "bottom", label: "Bottom deck", hint: "Brushes, presets, stroke and colour open above the bar; layers on the right." },
-  { id: "sidebars", label: "Sidebars", hint: "Layers on the left, everything else in a right sidebar. The bottom stays one slim bar." },
-  { id: "minimal", label: "Minimal", hint: "Just the bar and a layers strip. The brush chip opens brushes in a popover." },
-  { id: "simple", label: "Simple", hint: "One toolbar on top and a small properties card, like a whiteboard. Number keys pick tools." },
+  { id: "sidebars", label: "Sidebars", hint: "Layers and colour on the left; presets, brushes and stroke on the right. The bottom stays one slim bar." },
+  { id: "simple", label: "Simple", hint: "One floating toolbar at the bottom and a small properties card, like a whiteboard. Number keys pick tools." },
 ];
 
 const THEMES: { id: ThemePreference; label: string; hint: string }[] = [
@@ -136,11 +135,10 @@ function Schematic({ id }: { id: Exclude<LayoutId, "custom"> }) {
           <div className={`absolute top-0 right-0 bottom-2 w-9 ${panel}`} />
         </>
       )}
-      {id === "minimal" && <div className={`absolute top-3 right-1.5 h-8 w-3 ${panel}`} />}
       {id === "simple" && (
         <>
-          <div className={`absolute top-1.5 left-1/2 h-2.5 w-16 -translate-x-1/2 ${panel}`} />
-          <div className={`absolute top-6 left-1.5 h-9 w-6 ${panel}`} />
+          <div className={`absolute top-3 left-1.5 h-9 w-6 ${panel}`} />
+          <div className={`absolute bottom-1.5 left-1/2 h-2.5 w-16 -translate-x-1/2 ${panel}`} />
         </>
       )}
     </div>

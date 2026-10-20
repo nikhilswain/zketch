@@ -1,5 +1,4 @@
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import {
   AlignCenterIcon,
@@ -37,9 +36,6 @@ import { FAMILIES, HEADS, SIZES, Segmented } from "./ElementProperties";
 import LookPicker from "./LookPicker";
 import type { ElementLook } from "@/engine/types";
 import StrokeTrack from "./StrokeTrack";
-import { PanelVariantContext } from "./PanelFrame";
-import { BrushLibrary } from "./panels/BrushesPanel";
-import { PresetsBody } from "./panels/PresetsPanel";
 import { SWATCHES } from "./panels/ColourPanel";
 import { PANELS } from "./panels";
 import { visibleCanvasCenter } from "@/utils/viewport";
@@ -73,38 +69,6 @@ const ToolButton: React.FC<{
   </button>
 );
 
-const BrushPopover: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const down = (e: PointerEvent) => {
-      const t = e.target as Element | null;
-      if (t && !ref.current?.contains(t) && !t.closest("[data-brush-chip]")) onClose();
-    };
-    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("pointerdown", down, true);
-    document.addEventListener("keydown", key);
-    return () => {
-      document.removeEventListener("pointerdown", down, true);
-      document.removeEventListener("keydown", key);
-    };
-  }, [onClose]);
-  return (
-    <div
-      ref={ref}
-      className="absolute bottom-full left-0 mb-2 flex h-[360px] w-[600px] overflow-hidden rounded-[6px] bg-zk-surface shadow-(--zk-shadow-pop)"
-    >
-      <PanelVariantContext.Provider value="popover">
-        <div className="min-w-0 flex-1 pt-2">
-          <BrushLibrary onPicked={onClose} />
-        </div>
-        <div className="w-[230px] shrink-0 border-l border-zk-hairline pt-2">
-          <PresetsBody />
-        </div>
-      </PanelVariantContext.Provider>
-    </div>
-  );
-};
-
 const ToolLook: React.FC = observer(() => {
   const canvasStore = useCanvasStore();
   return (
@@ -117,7 +81,6 @@ const ToolLook: React.FC = observer(() => {
 const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
   const canvasStore = useCanvasStore();
   const settingsStore = useSettingsStore();
-  const [popover, setPopover] = useState(false);
   const tool = canvasStore.activeTool;
   const style = canvasStore.currentBrushStyle;
   const erasing = tool === "brush" && style === "eraser";
@@ -128,22 +91,26 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
   const deckOpen = isDockShown("bottom");
   const bs = canvasStore.brushSettings;
 
-  useEffect(() => {
-    if (!drawing) setPopover(false);
-  }, [drawing]);
-
   const zoomBy = (factor: number) => {
     const c = visibleCanvasCenter();
     canvasStore.zoomAt(canvasStore.zoom * factor, c.x, c.y);
   };
 
+  const brushesInDeck = dockLayout.state.panels.brushes.dock === "bottom";
+  const brushChip = (
+    <>
+      <img
+        src={`/brushes/previews/${brushKey}.png`}
+        alt=""
+        className="h-6 w-[68px] object-contain"
+        style={{ filter: "var(--zk-preview-filter)" }}
+      />
+      <span className="hidden max-w-[110px] truncate text-[13px] font-medium min-[900px]:inline">{brush?.label ?? brushKey}</span>
+    </>
+  );
+
   const openBrushes = () => {
-    const dock = dockLayout.state.panels.brushes.dock;
-    if (dockLayout.state.layout === "minimal") {
-      setPopover((v) => !v);
-      return;
-    }
-    if (dock === "bottom" && deckOpen && !dockLayout.state.panels.brushes.collapsed) {
+    if (deckOpen && !dockLayout.state.panels.brushes.collapsed) {
       setDeckOpen(false);
       return;
     }
@@ -201,24 +168,22 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
 
       {drawing && (
         <div className="relative flex items-center gap-3">
-          <button
-            data-brush-chip
-            aria-label={`Brush: ${brush?.label ?? brushKey}. Show brushes`}
-            onClick={openBrushes}
-            className={`flex h-10 items-center gap-2 rounded-[4px] pr-2.5 pl-1.5 ${
-              popover || (deckOpen && dockLayout.state.panels.brushes.dock === "bottom") ? "bg-zk-hover" : "bg-zk-raised hover:bg-zk-hover"
-            }`}
-          >
-            <img
-              src={`/brushes/previews/${brushKey}.png`}
-              alt=""
-              className="h-6 w-[68px] object-contain"
-              style={{ filter: "var(--zk-preview-filter)" }}
-            />
-            <span className="hidden max-w-[110px] truncate text-[13px] font-medium min-[900px]:inline">{brush?.label ?? brushKey}</span>
-            <ChevronUpIcon className="h-3 w-3 text-zk-muted" />
-          </button>
-          {popover && <BrushPopover onClose={() => setPopover(false)} />}
+          {brushesInDeck ? (
+            <button
+              aria-label={`Brush: ${brush?.label ?? brushKey}. Show brushes`}
+              onClick={openBrushes}
+              className={`flex h-10 items-center gap-2 rounded-[4px] pr-2.5 pl-1.5 ${
+                deckOpen ? "bg-zk-hover" : "bg-zk-raised hover:bg-zk-hover"
+              }`}
+            >
+              {brushChip}
+              <ChevronUpIcon className="h-3 w-3 text-zk-muted" />
+            </button>
+          ) : (
+            <div className="flex h-10 items-center gap-2 rounded-[4px] pr-2.5 pl-1.5" title={brush?.label ?? brushKey}>
+              {brushChip}
+            </div>
+          )}
           <div className="w-[112px] min-[900px]:w-[136px]">
             <StrokeTrack
               dense

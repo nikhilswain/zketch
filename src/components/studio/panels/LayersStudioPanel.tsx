@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import LayersPanel, { LayersActions, useLayerThumbnail } from "@/components/layers-panel";
 import { useSortableList } from "@/hooks/useSortableList";
-import PanelFrame from "../PanelFrame";
+import PanelFrame, { usePanelVariant } from "../PanelFrame";
 import { useStudio } from "../StudioContext";
 
 type SortProps = ReturnType<ReturnType<typeof useSortableList>["itemProps"]>;
@@ -175,11 +175,13 @@ export const LayersStrip: React.FC<{ onExpand: () => void }> = observer(({ onExp
 
 const LayersStudioPanel: React.FC = () => {
   const { onAnimationFrame, onAnimationStateChange } = useStudio();
+  const variant = usePanelVariant();
   return (
     <PanelFrame id="layers" title="Layers" actions={<LayersActions />}>
       <LayersPanel
         embedded
         className="h-full bg-transparent"
+        listClassName={variant === "side" ? "max-h-[286px]" : ""}
         onAnimationFrame={onAnimationFrame}
         onAnimationStateChange={onAnimationStateChange}
       />

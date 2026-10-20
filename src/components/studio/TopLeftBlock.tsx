@@ -43,7 +43,6 @@ const TOUCH_MODES = [
 const LAYOUTS = [
   { id: "bottom", label: "Bottom deck" },
   { id: "sidebars", label: "Sidebars" },
-  { id: "minimal", label: "Minimal" },
   { id: "simple", label: "Simple" },
 ] as const;
 

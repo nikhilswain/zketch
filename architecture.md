@@ -677,8 +677,8 @@ Persistence layers:
     redo, clear canvas, Share → export dialog).
   - `BottomBar` — tools (select, draw, erase, shapes, pan), tool-dependent area
     (brush chip + Size/Opacity, eraser size + whole-stroke mode, shape kinds +
-    stroke; empty for Select and Pan), colour + swatches, zoom/fit, deck toggle. In the Minimal layout
-    the brush chip opens a popover (brush grid + presets).
+    stroke; empty for Select and Pan), colour + swatches, zoom/fit, deck toggle. The brush chip
+    toggles the deck when Brushes sits in it; with Brushes in a sidebar it is a plain label.
   - `DockArea` (one per dock; drag-and-drop target with drop line),
     `PanelFrame` (grip, title, collapse, dock-left/bottom/right buttons;
     `PanelVariantContext` = deck | side | popover), `panels/` (Brushes,
@@ -692,8 +692,10 @@ Persistence layers:
     wobble, width variation, taper, flat), notch knob, value tag, keyboard,
     double-click to type, `role="slider"`.
   - Dock state: `utils/dockLayout.ts` (panel → dock/order/collapsed, dock
-    open flags, layout bottom | sidebars | minimal | custom; localStorage
-    `zketch-dock-layout-v1`, bad data falls back to Bottom deck).
+    open flags, layout bottom | sidebars | simple | custom; Sidebars puts layers + colour left and
+    presets, brushes, stroke, properties right; localStorage `zketch-dock-layout-v1`, bad data or
+    the retired `minimal` falls back to Bottom deck). In a sidebar the layer list caps at about five
+    rows and scrolls on its own.
 - **Dock motion and dragging**: `studio/DockSlot.tsx` animates each dock's
   width/height (200 ms) and unmounts it after closing; the canvas sits under
   the docks, so the drawing stays put.

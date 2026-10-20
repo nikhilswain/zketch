@@ -541,6 +541,7 @@ interface LayersPanelProps {
   className?: string;
   collapsed?: boolean;
   embedded?: boolean;
+  listClassName?: string;
   onAnimationFrame?: (layerId: string, strokes: StrokeLike[]) => void;
   onAnimationStateChange?: (layerId: string, state: PlaybackState) => void;
 }
@@ -593,6 +594,7 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
     className = "",
     collapsed = false,
     embedded = false,
+    listClassName = "",
     onAnimationFrame,
     onAnimationStateChange,
   }) => {
@@ -688,7 +690,7 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
         )}
 
         {/* Layers List */}
-        <div className={`flex-1 overflow-y-auto ${embedded ? "" : "max-h-72"}`}>
+        <div className={`flex-1 overflow-y-auto ${embedded ? listClassName : "max-h-72"}`}>
           {displayLayers.map(renderLayerItem)}
         </div>
 
