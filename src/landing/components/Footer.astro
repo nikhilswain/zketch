@@ -1,0 +1,13 @@
+---
+import { SITE } from "@/config";
+---
+
+<footer class="lp-footer">
+  <p>made by <a href={SITE.authorUrl} rel="noopener">zero</a></p>
+  <nav aria-label="Footer">
+    <a href="https://github.com/nikhilswain/zketch" rel="noopener">github (MIT)</a>
+    <a href={SITE.zicons} rel="noopener">zicons</a>
+    <a href={`https://x.com/${SITE.x.replace("@", "")}`} rel="noopener">{SITE.x}</a>
+    <a href="/vault">your drawings</a>
+  </nav>
+</footer>

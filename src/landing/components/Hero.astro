@@ -1,0 +1,47 @@
+---
+const slots = [
+  { x: "4%", y: "6%", r: "-6deg", s: 1 },
+  { x: "13%", y: "38%", r: "4deg", s: 0.9 },
+  { x: "80%", y: "4%", r: "5deg", s: 1 },
+  { x: "87%", y: "36%", r: "-4deg", s: 0.92 },
+  { x: "3%", y: "68%", r: "3deg", s: 0.95 },
+  { x: "79%", y: "68%", r: "-5deg", s: 1 },
+  { x: "25%", y: "84%", r: "-2deg", s: 0.8 },
+  { x: "62%", y: "86%", r: "6deg", s: 0.82 },
+];
+---
+
+<section class="lp-hero" data-hero aria-labelledby="lp-title">
+  <div class="lp-slots" aria-label="Doodles drawing themselves. Click one to get a new doodle.">
+    {
+      slots.map((s, i) => (
+        <button
+          type="button"
+          class="lp-scrap lp-slot"
+          data-slot={i}
+          data-desktop-only={i >= 4 ? "" : undefined}
+          style={`--x:${s.x};--y:${s.y};--r:${s.r};--s:${s.s}`}
+          aria-label="redraw this doodle"
+        >
+          <canvas aria-hidden="true" />
+        </button>
+      ))
+    }
+  </div>
+  <div class="lp-cursors" data-cursors aria-hidden="true"></div>
+  <div class="lp-hero-copy">
+    <p class="lp-tape">free · no sign-up · nothing to install</p>
+    <h1 id="lp-title" class="lp-title" data-headline>
+      Doodle, diagram <span class="lp-amp">&amp;</span> <span class="lp-paint">paint</span>, right in your browser.
+    </h1>
+    <p class="lp-sub">
+      zketch is a free drawing app with real textured brushes, sketchy diagrams and layers. Your drawings stay on your device.
+    </p>
+    <div class="lp-actions">
+      <a href="/draw" class="lp-btn lp-desktop-only" data-cta>start drawing <span aria-hidden="true">→</span></a>
+      <a href="/vault" class="lp-btn lp-btn-ghost lp-desktop-only" data-vault-link>your drawings</a>
+      <p class="lp-phone-note lp-phone-only">zketch works on tablets and computers. open zketch.zerro.dev there.</p>
+    </div>
+    <p class="lp-hint lp-desktop-only" aria-hidden="true">psst, the doodles are clickable</p>
+  </div>
+</section>

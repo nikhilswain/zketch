@@ -1,0 +1,56 @@
+---
+import ZIcon from "./ZIcon.astro";
+
+const brushes = [
+  { key: "pencil", label: "pencil", icon: "pencil" },
+  { key: "ink", label: "ink", icon: "pen-nib" },
+  { key: "watercolor", label: "watercolor", icon: "droplet" },
+  { key: "pine", label: "pine trees", icon: "sparkle" },
+  { key: "eraser", label: "eraser", icon: "eraser" },
+];
+const colors = [
+  { value: "#23201c", label: "ink black" },
+  { value: "#ff6b5b", label: "coral" },
+  { value: "#3d7cc9", label: "blue" },
+  { value: "#4f9d4a", label: "green" },
+  { value: "#f2c230", label: "yellow" },
+];
+---
+
+<section class="lp-section lp-pad-section" aria-labelledby="lp-pad-title">
+  <div class="lp-section-head">
+    <h2 id="lp-pad-title">your turn. the pencil's warm.</h2>
+    <p>These are the real zketch brushes, right here on the page. Scribble something, then take it with you.</p>
+  </div>
+  <div class="lp-pad" data-pad>
+    <div class="lp-sheet lp-pad-sheet">
+      <canvas data-pad-canvas aria-label="Drawing pad. Draw with a mouse, pen or finger." role="img"></canvas>
+      <p class="lp-pad-empty" data-pad-empty aria-hidden="true">draw here ✎</p>
+    </div>
+    <div class="lp-tray" role="toolbar" aria-label="Pad tools">
+      <div class="lp-tray-group" role="radiogroup" aria-label="Brush">
+        {
+          brushes.map((b, i) => (
+            <button type="button" class="lp-tool" data-brush={b.key} role="radio" aria-checked={i === 0 ? "true" : "false"} aria-label={b.label} title={b.label}>
+              <ZIcon name={b.icon} size={20} />
+            </button>
+          ))
+        }
+      </div>
+      <div class="lp-tray-group" role="radiogroup" aria-label="Color">
+        {
+          colors.map((c, i) => (
+            <button type="button" class="lp-swatch" data-color={c.value} role="radio" aria-checked={i === 0 ? "true" : "false"} aria-label={c.label} style={`--c:${c.value}`} />
+          ))
+        }
+      </div>
+      <div class="lp-tray-group">
+        <button type="button" class="lp-tool lp-tool-wide" data-surprise><ZIcon name="magic-wand" size={18} /> surprise me</button>
+        <button type="button" class="lp-tool lp-tool-wide" data-clear><ZIcon name="trash" size={18} /> clear</button>
+      </div>
+      <button type="button" class="lp-btn lp-desktop-only" data-keep>keep drawing in zketch <span aria-hidden="true">→</span></button>
+    </div>
+    <p class="lp-pad-msg" data-pad-msg role="status" aria-live="polite"></p>
+    <p class="lp-phone-note lp-phone-only">zketch works on tablets and computers. open zketch.zerro.dev there to keep drawing.</p>
+  </div>
+</section>

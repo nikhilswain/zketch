@@ -1,0 +1,33 @@
+---
+const BRUSH_CARDS = [
+  { key: "pencil", name: "Pencil", line: "sketches first, asks questions later.", color: "#4a4744" },
+  { key: "ink", name: "Ink", line: "never takes anything back.", color: "#23201c" },
+  { key: "watercolor", name: "Watercolor", line: "always late. bleeds everywhere.", color: "#3d7cc9" },
+  { key: "gouache", name: "Gouache", line: "opaque about its feelings.", color: "#e5483b" },
+  { key: "crayon", name: "Crayon", line: "peaked in kindergarten. still peaking.", color: "#f08a2c" },
+  { key: "pine", name: "Pine", line: "plants trees on things uninvited.", color: "#2f6b3a" },
+  { key: "charcoal", name: "Charcoal", line: "smudges everything it touches.", color: "#2b2b2b" },
+  { key: "marker", name: "Marker", line: "loud, confident, never subtle.", color: "#8a63c9" },
+];
+---
+
+<section class="lp-section" aria-labelledby="lp-cards-title">
+  <div class="lp-section-head">
+    <h2 id="lp-cards-title">meet the brushes.</h2>
+    <p>Each one has a personality. Hover or tap a card and it signs an autograph. There are plenty more inside.</p>
+  </div>
+  <ul class="lp-cards">
+    {
+      BRUSH_CARDS.map((c, i) => (
+        <li>
+          <button type="button" class="lp-card" data-card data-brush={c.key} data-color={c.color} style={`--r:${(i % 2 ? 1 : -1) * (1 + (i % 3))}deg;--c:${c.color}`} aria-label={`${c.name}: ${c.line} Signs an autograph.`}>
+            <span class="lp-card-name">{c.name}</span>
+            <span class="lp-card-line">{c.line}</span>
+            <canvas data-autograph aria-hidden="true" />
+            <span class="lp-card-dot" aria-hidden="true" />
+          </button>
+        </li>
+      ))
+    }
+  </ul>
+</section>

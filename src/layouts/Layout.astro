@@ -10,6 +10,7 @@ interface Props {
 	imageAlt?: string
 	noindex?: boolean
 	jsonLd?: Record<string, unknown>
+	zoomable?: boolean
 }
 
 const {
@@ -20,6 +21,7 @@ const {
 	imageAlt = "The zketch swoosh next to a hand-drawn idea, sketch and art diagram",
 	noindex = false,
 	jsonLd,
+	zoomable = false,
 } = Astro.props
 const path = canonicalPath ?? (Astro.url.pathname.replace(/(.)\/$/, "$1") || "/")
 const canonical = new URL(path, SITE.url).href
@@ -30,7 +32,7 @@ const ogImage = new URL(image, SITE.url).href
 <html lang="en">
 	<head>
 		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+		<meta name="viewport" content={zoomable ? "width=device-width, initial-scale=1.0" : "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"} />
 		<title>{pageTitle}</title>
 		<meta name="description" content={description} />
 		{noindex ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={canonical} />}

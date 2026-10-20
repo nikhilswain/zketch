@@ -1,0 +1,17 @@
+---
+import ZketchMark from "@/components/ZketchMark";
+import { SITE } from "@/config";
+---
+
+<header class="lp-header">
+  <a href="/" class="lp-brand zk-logo-hover" aria-label="zketch home">
+    <ZketchMark size={30} />
+    <span>zketch</span>
+  </a>
+  <nav class="lp-nav" aria-label="Main">
+    <a href="/vault" data-vault-link>your drawings</a>
+    <a href="https://github.com/nikhilswain/zketch" rel="noopener">open source</a>
+    <a href={SITE.zicons} rel="noopener">zicons</a>
+  </nav>
+  <a href="/draw" class="lp-btn lp-btn-sm lp-desktop-only" data-cta>start drawing</a>
+</header>

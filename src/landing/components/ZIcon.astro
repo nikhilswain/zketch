@@ -1,0 +1,15 @@
+---
+interface Props {
+  name: string;
+  size?: number;
+  class?: string;
+}
+
+const { name, size = 20, class: cls = "" } = Astro.props;
+const icons = import.meta.glob<string>("../../../node_modules/zicons/svg/*.svg", { query: "?raw", import: "default", eager: true });
+const raw = icons[`../../../node_modules/zicons/svg/${name}.svg`];
+if (!raw) throw new Error(`zicon not found: ${name}`);
+const svg = raw.replace("<svg ", `<svg aria-hidden="true" focusable="false" class="zi ${cls}" `).replace(/width="24" height="24"/, `width="${size}" height="${size}"`);
+---
+
+<Fragment set:html={svg} />

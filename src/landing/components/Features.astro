@@ -1,0 +1,68 @@
+---
+const features = [
+  {
+    id: "mini-diagram",
+    title: "sketchy diagrams that keep up.",
+    body: "Boxes, diamonds, circles and arrows with a hand-drawn look. Arrows stick to the shapes they point at, so moving a box drags its arrows along. Label anything with text.",
+  },
+  {
+    id: "brush-jar",
+    title: "real textures, not just lines.",
+    body: "Pencil with paper grain, watercolor that pools, gouache, crayon, charcoal and oil, plus nature brushes that plant a row of pine trees or a meadow in one stroke.",
+  },
+  {
+    id: "paper-stack",
+    title: "layers, like a grown-up app.",
+    body: "Put sketch, ink and color on their own layers. Hide them, lock them, reorder them, or focus on one while the rest fades back.",
+  },
+  {
+    id: "film-replay",
+    title: "watch it draw itself.",
+    body: "zketch remembers every stroke, so any drawing can replay stroke by stroke, at the speed you like. This page is doing it right now.",
+  },
+  {
+    id: "share-arrow",
+    title: "send it anywhere.",
+    body: "Share a link anyone can open, or export your drawing as PNG, JPG or SVG.",
+  },
+  {
+    id: "padlock",
+    title: "your drawings never leave your browser.",
+    body: "No account, no upload. Everything is saved on your device, in the browser you drew in.",
+    aside: "we can't see your drawings. we tried.",
+  },
+];
+---
+
+<section class="lp-section lp-features" aria-labelledby="lp-features-title">
+  <svg class="lp-pencil-line" data-pencil-line viewBox="0 0 100 1000" preserveAspectRatio="none" aria-hidden="true">
+    <path
+      d="M50 0 C 18 60, 82 120, 50 170 S 16 260, 52 330 S 86 420, 48 500 S 14 590, 50 670 S 84 760, 50 840 S 22 930, 50 1000"
+      pathLength="1"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.2"
+      stroke-linecap="round"
+      vector-effect="non-scaling-stroke"></path>
+  </svg>
+  <div class="lp-section-head">
+    <h2 id="lp-features-title">everything you need to think on paper.</h2>
+    <p>Quick doodles, tidy-ish diagrams and proper paintings, all in one app.</p>
+  </div>
+  <ol class="lp-feature-list">
+    {
+      features.map((f, i) => (
+        <li class:list={["lp-feature", { "lp-feature-flip": i % 2 === 1 }]}>
+          <div class="lp-feature-copy">
+            <h3>{f.title}</h3>
+            <p>{f.body}</p>
+            {f.aside && <p class="lp-aside">{f.aside}</p>}
+          </div>
+          <div class="lp-scrap lp-feature-art" data-margin={f.id} style={`--r:${i % 2 ? 2.5 : -2.5}deg`} aria-hidden="true">
+            <canvas />
+          </div>
+        </li>
+      ))
+    }
+  </ol>
+</section>
