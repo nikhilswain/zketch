@@ -741,3 +741,21 @@
     transform: rotate(var(--r));
   }
 }
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .lp-pencil-line path {
+      stroke-dasharray: 1 1;
+      stroke-dashoffset: 1;
+      animation: lp-draw-line linear both;
+      animation-timeline: view();
+      animation-range: cover 8% cover 72%;
+    }
+  }
+}
+
+@keyframes lp-draw-line {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
