@@ -4,6 +4,7 @@ import { registerGrain, setGrainLoader } from "./grain";
 
 const listeners = new Set<() => void>();
 const requested = new Set<string>();
+let inflight = 0;
 let base = "/brushes/";
 
 async function decode(url: string) {
@@ -24,6 +25,7 @@ function request(kind: "tip" | "grain", id: string) {
   const key = `${kind}:${id}`;
   if (requested.has(key)) return;
   requested.add(key);
+  inflight++;
   decode(`${base}${id}.png`)
     .then((canvas) => {
       if (kind === "tip") {
@@ -37,9 +39,12 @@ function request(kind: "tip" | "grain", id: string) {
         for (let i = 0; i < values.length; i++) values[i] = data[i * 4] / 255;
         registerGrain(id, values, size);
       }
+      inflight--;
       notify();
     })
     .catch((error) => {
+      inflight--;
+      notify();
       console.warn("Brush asset failed to load", id, error);
     });
 }
@@ -51,6 +56,10 @@ export function installBrushAssetLoader(baseUrl = "/brushes/") {
   base = baseUrl;
   setTipLoader((id) => request("tip", id));
   setGrainLoader((id) => request("grain", id));
+}
+
+export function brushAssetsPending() {
+  return inflight;
 }
 
 export function onBrushAssetsChanged(fn: () => void) {

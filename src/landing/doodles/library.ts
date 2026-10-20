@@ -818,6 +818,40 @@ const SPECS: Spec[] = [
   },
 ];
 
+function chunk(path: Pt[], max: number): Pt[][] {
+  if (path.length < 2) return [];
+  const out: Pt[][] = [];
+  let cur: Pt[] = [path[0]];
+  let run = 0;
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1];
+    const b = path[i];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (run + len > max && cur.length > 1 && len < max) {
+      out.push(cur);
+      cur = [a];
+      run = 0;
+    }
+    if (len >= max) {
+      const steps = Math.ceil(len / max);
+      for (let k = 1; k <= steps; k++) {
+        const p = { x: a.x + ((b.x - a.x) * k) / steps, y: a.y + ((b.y - a.y) * k) / steps };
+        cur.push(p);
+        if (k < steps) {
+          out.push(cur);
+          cur = [p];
+        }
+      }
+      run = len / steps;
+      continue;
+    }
+    cur.push(b);
+    run += len;
+  }
+  if (cur.length > 1) out.push(cur);
+  return out;
+}
+
 function build(spec: Spec, seed: number, mode: DoodleMode): Doodle {
   const w = spec.w ?? 200;
   const h = spec.h ?? 200;
@@ -841,8 +875,9 @@ function build(spec: Spec, seed: number, mode: DoodleMode): Doodle {
       const size = mode === "watercolor" ? st.size : (o?.size ?? st.size);
       const gap = mode === "watercolor" ? st.gap : (o?.gap ?? st.gap);
       const path = fill.scrub(poly, gap, o?.angle ?? -0.5 + (r() - 0.5) * 0.4);
-      if (path.length < 2) return;
-      strokes.push(pen.stroke(path, { brush, color, size, opacity: st.opacity, speed: st.speed, wobble: 0.6 }, "f"));
+      for (const piece of chunk(path, 260)) {
+        strokes.push(pen.stroke(piece, { brush, color, size, opacity: st.opacity, speed: st.speed, wobble: 0.6 }, "f"));
+      }
     },
     shade(poly, color, angle = 0.8) {
       const brush: FillBrush = mode === "watercolor" ? "watercolor" : "crayon";
