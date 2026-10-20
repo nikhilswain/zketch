@@ -177,6 +177,7 @@ src/
 │
 ├── hooks/            # useStores, useKeyboardShortcuts, useMobile, useCanvasResize, useSortableList
 ├── pages/            # Astro routes (see §10)
+├── landing/          # Static landing page at / (see §10.1): doodles, player, pad, cards, cursors
 ├── page-components/  # React page shells mounted by Astro
 ├── layouts/Layout.astro      # Head: title, description, canonical, OG/X cards, JSON-LD
 ├── config.ts         # SITE: name, url (zketch.zerro.dev), title, description, X handle
@@ -810,8 +811,9 @@ Ctrl+S save · Ctrl+E export · Ctrl+N new · Ctrl+V vault · B/W/R colors ·
 
 | Route | Astro page | React component |
 |---|---|---|
-| `/` | `pages/index.astro` | `vault-page.tsx` → `VaultView` (or `NoMobile`) |
-| `/vault` | `pages/vault.astro` | `VaultPage` |
+| `/` | `pages/index.astro` (prerendered) | none: static landing page, vanilla TS in `src/landing/` |
+| `/vault` | `pages/vault.astro` | `vault-page.tsx` → `VaultView` (or `NoMobile`) |
+| any unknown path | `pages/404.astro` (prerendered) | static, reuses the landing pad |
 | `/draw` | `pages/draw/index.astro` | `draw-pages/draw-page.tsx` → `CanvasView` |
 | `/draw/[id]` | `pages/draw/[id].astro` (`prerender=false`) | `draw-pages/draw-by-id.tsx` → `CanvasView` |
 | `/share` | `pages/share.astro` | `share-page.tsx` (legacy `?data=` links) |
@@ -819,9 +821,10 @@ Ctrl+S save · Ctrl+E export · Ctrl+N new · Ctrl+V vault · B/W/R colors ·
 | `/api/share/store` | `pages/api/share/store.ts` | POST → writes KV w/ 30-day TTL |
 | `/api/share/[shareId]` | `pages/api/share/[shareId].ts` | GET → reads KV |
 
-`Layout.astro` wires global CSS, viewport (`user-scalable=no`), favicons, fonts
+`Layout.astro` wires global CSS, viewport (`user-scalable=no` unless the
+`zoomable` prop is set, which the landing and 404 pages do), favicons, fonts
 and SEO: props `pageTitle`, `description`, `canonicalPath`, `image`, `noindex`,
-`jsonLd`. It emits the canonical link (or `noindex` instead), Open Graph and X
+`jsonLd`, `zoomable`. It emits the canonical link (or `noindex` instead), Open Graph and X
 card tags (image `/og/default.png`), and JSON-LD when given. Defaults come from
 `SITE` in `src/config.ts`. The home page passes JSON-LD; `/draw/[id]` and the
 share pages are `noindex`.
@@ -833,6 +836,45 @@ renders `public/og/default.png` from `src/lib/og.ts` with `@resvg/resvg-js` and
 the fonts in `src/assets/og/`, plus `favicon.ico` (16/32/48) and
 `favicon-96.png` from `public/favicon.svg`. Those outputs are gitignored. It
 runs with `node --experimental-strip-types` so it works on Node 22.
+
+"Back to vault" in the app goes to `/vault`; the phone redirect from `/draw`
+goes to `/` (the landing page works on phones, the app does not). The
+new-drawing shortcut opens `/vault?new=1`.
+
+### 10.1 Landing page (`src/landing/`)
+
+Static HTML for all copy (h1 is the LCP element), with small `<script>`
+modules per section. Only `engine/render/renderStroke`, the brush classes and
+`engine/stamp` are imported, never MST, React, tiles or `CanvasEngine`
+(about 29 KB gzip of JS loads with the page; `tests/landingBuild.test.ts`
+guards 150 KB).
+
+- `doodles/pen.ts`, `doodles/library.ts`: doodles made in code. A seeded
+  `Pen` turns paths into real `StrokeLike`s with wobble, overshoot, pressure
+  and `startTime`/`duration`. Outline strokes come first, then fills (ids end
+  `-o#` / `-f#`, read by `strokeRole`). Long fills are chunked to 260 px so a
+  partial redraw stays cheap. `make(seed, "watercolor")` repaints fills with
+  watercolor. `autograph()` makes the brush-card signatures.
+- `engine.ts`: a landing-only brush map (no Spray/Texture),
+  `whenBrushesReady` (waits on `brushAssetsPending()` from
+  `engine/stamp/assets.ts`), `warmGrain` (pencil paper noise in idle time).
+- `DoodlePlayer.ts`: plays a doodle onto a canvas by slicing stroke points
+  over time, caches finished strokes, bakes 3 "boil" frames by strip-warping
+  the finished bitmap, and erases with a real eraser zig-zag.
+- `ticker.ts`: one shared rAF loop (stops when nothing subscribes or the tab
+  is hidden), `watchVisible`, reduced-motion check, and the draw-slot cap
+  (2 doodles drawing or erasing at once; clicks bypass it).
+- `hero.ts`: 8 taped paper scraps (4 on phones) cycling draw → boil 8–15 s →
+  erase → new doodle; click to swap. `pad.ts` + `handoff.ts`: the scribble pad
+  with real brushes; "keep drawing" saves an `ISavedDrawingData` through
+  `DexieService` and opens `/draw/<id>`. `vaultCount.ts` counts drawings with
+  raw IndexedDB (never creates the database). `cards.ts`, `margins.ts`,
+  `cursors.ts` (fake brush cursors, pine trees on the CTA, button springs),
+  `eggs.ts` (scribble over the headline, Konami → watercolor mode).
+- Everything pauses off-screen, and `prefers-reduced-motion` shows finished
+  doodles with no cursors or boil. No sound anywhere, by design.
+- `landing.css` overrides the global `canvas { touch-action: none }` inside
+  `@layer base` so phones can scroll over doodles; only the pad captures touch.
 
 ---
 
