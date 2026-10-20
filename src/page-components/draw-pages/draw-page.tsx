@@ -14,11 +14,11 @@ const DrawPage: React.FC = observer(() => {
   );
 
   const handleBackToVault = () => {
-    window.location.href = "/";
+    window.location.href = "/vault";
   };
 
   if (isMobile) {
-    handleBackToVault();
+    window.location.href = "/";
   }
 
   return (

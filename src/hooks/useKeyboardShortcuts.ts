@@ -110,7 +110,7 @@ export const useKeyboardShortcuts = (
     KeyBindingManager.registerHandler("save", () => onSave?.());
     KeyBindingManager.registerHandler("export", () => onExport?.());
     KeyBindingManager.registerHandler("newDrawing", () => {
-      window.location.href = "/?new=1";
+      window.location.href = "/vault?new=1";
     });
 
     // UI controls

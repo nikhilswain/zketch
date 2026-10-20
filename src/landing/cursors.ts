@@ -35,9 +35,9 @@ interface Tree {
 }
 
 const NAMES = [
-  { name: "pine (unsupervised)", color: "#3f8a4f", pine: true },
-  { name: "watercolor (late again)", color: "#3d7cc9", pine: false },
-  { name: "pencil (on a break)", color: "#8b8580", pine: false },
+  { name: "pine (unsupervised)", color: "#2f6b3a", pine: true },
+  { name: "watercolor (late again)", color: "#2d63a8", pine: false },
+  { name: "pencil (on a break)", color: "#5e5953", pine: false },
 ];
 
 const ARROW = `<svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M3 2 L19 10.5 L11.5 12.5 L8 20 Z" fill="currentColor" stroke="#141416" stroke-width="1.6" stroke-linejoin="round"/></svg>`;

@@ -1,27 +1,42 @@
 ---
-import { Toaster } from '@/components/ui/sonner';
-import Layout from '@/layouts/Layout.astro';
-import VaultPage from '@/page-components/vault-page';
-import { SITE } from '@/config';
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/landing/components/Header.astro";
+import Hero from "@/landing/components/Hero.astro";
+import Pad from "@/landing/components/Pad.astro";
+import Cards from "@/landing/components/Cards.astro";
+import Features from "@/landing/components/Features.astro";
+import FinalCta from "@/landing/components/FinalCta.astro";
+import Footer from "@/landing/components/Footer.astro";
+import { SITE } from "@/config";
+import "@/landing/landing.css";
+
+export const prerender = true;
 
 const jsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'WebApplication',
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
   name: SITE.name,
   url: `${SITE.url}/`,
   description: SITE.description,
-  applicationCategory: 'DesignApplication',
-  operatingSystem: 'Any',
-  browserRequirements: 'Requires a modern web browser',
-  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-  inLanguage: 'en',
-  creator: { '@type': 'Person', name: SITE.author, url: SITE.authorUrl },
+  applicationCategory: "DesignApplication",
+  operatingSystem: "Any",
+  browserRequirements: "Requires a modern web browser",
+  offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+  inLanguage: "en",
+  creator: { "@type": "Person", name: SITE.author, url: SITE.authorUrl },
 };
 ---
 
-<Layout jsonLd={jsonLd}>
-	<VaultPage client:only="react" />
-	<Toaster richColors client:only="react" />
+<Layout jsonLd={jsonLd} zoomable>
+  <div class="lp" data-landing>
+    <Header />
+    <main>
+      <Hero />
+      <Pad />
+      <Cards />
+      <Features />
+      <FinalCta />
+    </main>
+    <Footer />
+  </div>
 </Layout>
-  
- 

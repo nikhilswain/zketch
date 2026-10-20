@@ -42,7 +42,7 @@ const DrawByIdPage: React.FC = observer(() => {
   }, [drawingId, vaultStore, vaultStore.isLoading]);
 
   const handleBackToVault = () => {
-    window.location.href = "/";
+    window.location.href = "/vault";
   };
 
   if (drawingExists === null) {
