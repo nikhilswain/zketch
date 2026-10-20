@@ -38,7 +38,7 @@ function formatTime(ms: number): string {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-const SPEED_OPTIONS: PlaybackSpeed[] = [0.5, 1, 2, 4];
+const SPEED_OPTIONS: PlaybackSpeed[] = [0.5, 1, 2, 4, 8, 16, 32];
 
 const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
   ({ layer, onPlaybackFrame, onPlaybackStateChange, className = "" }) => {
@@ -50,7 +50,8 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
     const [originalDuration, setOriginalDuration] = useState(0);
     const [gapCompressionActive, setGapCompressionActive] = useState(false);
     const [speed, setSpeed] = useState<PlaybackSpeed>(1);
-    const [isSeeking, setIsSeeking] = useState(false);
+    const playbackStateRef = useRef<PlaybackState>("stopped");
+    const resumeAfterSeek = useRef(false);
     const [loop, setLoop] = useState(false);
 
     // Store callbacks in refs to avoid stale closures
@@ -66,12 +67,11 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
     useEffect(() => {
       const engine = new AnimationPlaybackEngine({
         onFrame: (info, visibleStrokes) => {
-          if (!isSeeking) {
-            setCurrentTime(info.currentTime);
-          }
+          setCurrentTime(info.currentTime);
           onPlaybackFrameRef.current?.(visibleStrokes);
         },
         onStateChange: (state) => {
+          playbackStateRef.current = state;
           setPlaybackState(state);
           onPlaybackStateChangeRef.current?.(state);
         },
@@ -140,7 +140,9 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
     }, []);
 
     const handleSeekStart = useCallback(() => {
-      setIsSeeking(true);
+      if (playbackStateRef.current !== "playing") return;
+      resumeAfterSeek.current = true;
+      engineRef.current?.pause();
     }, []);
 
     const handleSeekChange = useCallback((values: number[]) => {
@@ -150,7 +152,9 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
     }, []);
 
     const handleSeekEnd = useCallback(() => {
-      setIsSeeking(false);
+      if (!resumeAfterSeek.current) return;
+      resumeAfterSeek.current = false;
+      engineRef.current?.play();
     }, []);
 
     // Don't render if no strokes or no timing data
@@ -245,6 +249,7 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
         <div
           onPointerDownCapture={handleSeekStart}
           onPointerUpCapture={handleSeekEnd}
+          onPointerCancelCapture={handleSeekEnd}
           title={
             gapCompressionActive
               ? `Long pauses shortened: ${formatTime(originalDuration)} → ${formatTime(totalDuration)}`

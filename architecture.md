@@ -457,7 +457,8 @@ classifies intent (`draw` / `gesture` / `ignore`), and emits callbacks.
 Replays a draw layer's strokes over time using each stroke's `startTime` /
 `duration`. **Gap compression** collapses idle gaps > `maxGap` (default 500ms)
 so a drawing made across hours plays in seconds. Supports play/pause/stop,
-seek, speed (0.5/1/2/4), loop, partial strokes for progressive draw-on, and
+seek (playback pauses while the timeline is dragged and resumes on release),
+speed (0.5/1/2/4/8/16/32), loop, partial strokes for progressive draw-on, and
 emits `onFrame(info, visibleStrokes)`. Shapes are not animated (they stay static).
 
 ---

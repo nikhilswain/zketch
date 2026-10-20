@@ -13,7 +13,7 @@
 import type { StrokeLike } from "./types";
 
 export type PlaybackState = "stopped" | "playing" | "paused";
-export type PlaybackSpeed = 0.5 | 1 | 2 | 4;
+export type PlaybackSpeed = 0.5 | 1 | 2 | 4 | 8 | 16 | 32;
 
 // ============================================================================
 // GAP COMPRESSION SYSTEM

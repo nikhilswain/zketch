@@ -89,7 +89,7 @@ export function useSortableList(ids: string[], onMove: (id: string, to: number) 
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
     const onHandle = !!target.closest("[data-sort-handle]");
-    if (!onHandle && (e.pointerType === "touch" || target.closest("button, input, [role=menuitem]"))) return;
+    if (!onHandle && (e.pointerType === "touch" || target.closest("button, input, [role=menuitem], [role=slider]"))) return;
     const list = idsRef.current;
     const from = list.indexOf(id);
     if (from === -1) return;
