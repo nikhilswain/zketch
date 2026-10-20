@@ -4,6 +4,7 @@ import { VaultModel } from "../models/VaultModel";
 import { SettingsModel } from "../models/SettingsModel";
 import { installBrushMemory } from "../utils/brushMemory";
 import { installAccent } from "../utils/accent";
+import { installTheme } from "../utils/theme";
 import { loadDockLayout } from "../utils/dockLayout";
 
 export const RootStore = types
@@ -26,6 +27,7 @@ export const rootStore = RootStore.create({});
 if (typeof window !== "undefined") {
   installBrushMemory(rootStore.canvasModel);
   installAccent(rootStore.settingsModel);
+  installTheme(rootStore.settingsModel);
   loadDockLayout();
 }
 
