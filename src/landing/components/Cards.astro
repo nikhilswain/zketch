@@ -31,3 +31,10 @@ const BRUSH_CARDS = [
     }
   </ul>
 </section>
+
+<script>
+  import { mountCards } from "../cards";
+
+  const root = document.querySelector<HTMLElement>(".lp-cards");
+  if (root) mountCards(root);
+</script>
