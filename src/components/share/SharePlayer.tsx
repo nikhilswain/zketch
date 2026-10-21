@@ -27,11 +27,12 @@ const TEASE_MAX_ITEMS = 3;
 const DRAG_PX = 4;
 const STEP_MS = 1000;
 const MAX_LONG_SIDE = 2048;
+const RAIL = "M2 5 C 60 3, 120 7, 180 4 S 270 6, 298 5";
 
 export function stageSize(width: number, height: number): React.CSSProperties {
   return {
     aspectRatio: `${width} / ${height}`,
-    width: `min(100%, calc(60vh * ${width / height}))`,
+    width: `min(100%, calc(max(220px, min(64vh, 100dvh - 380px)) * ${width / height}))`,
   };
 }
 
@@ -78,6 +79,8 @@ const SharePlayer = forwardRef<SharePlayerHandle, SharePlayerProps>(({ drawing, 
   const stageRef = useRef<HTMLDivElement>(null);
   const pencilRef = useRef<HTMLSpanElement>(null);
   const clockRef = useRef<HTMLSpanElement>(null);
+  const inkRef = useRef<SVGPathElement>(null);
+  const [hovering, setHovering] = useState(false);
   const rendererRef = useRef<ReplayRenderer | null>(null);
   const st = useRef({
     phase: "idle" as Phase,
@@ -113,6 +116,8 @@ const SharePlayer = forwardRef<SharePlayerHandle, SharePlayerProps>(({ drawing, 
   const updateClock = () => {
     const speed = speedFor(st.mode, st.total);
     if (clockRef.current) clockRef.current.textContent = `${clock(st.t / speed)} / ${clock(st.total / speed)}`;
+    const ink = inkRef.current;
+    if (ink) ink.style.strokeDashoffset = String(1 - (st.total > 0 ? st.t / st.total : 1));
   };
 
   const hidePencil = () => {
@@ -289,8 +294,14 @@ const SharePlayer = forwardRef<SharePlayerHandle, SharePlayerProps>(({ drawing, 
     if (!drag || drag.id !== e.pointerId) return;
     st.drag = null;
     if (drag.moved) {
-      hidePencil();
-      setPhase("paused");
+      cancelAnimationFrame(st.scrubRaf);
+      st.scrubRaf = 0;
+      seek(st.scrubT);
+      if (st.t < st.total) run(st.t, "play");
+      else {
+        hidePencil();
+        setPhase("idle");
+      }
     } else if (tapped) {
       play();
     }
@@ -317,6 +328,7 @@ const SharePlayer = forwardRef<SharePlayerHandle, SharePlayerProps>(({ drawing, 
 
   const watchable = total > 0;
   const tagOn = phase === "play" || phase === "scrub";
+  const railOn = phase === "scrub" || (phase === "play" && hovering);
 
   return (
     <div
@@ -328,6 +340,8 @@ const SharePlayer = forwardRef<SharePlayerHandle, SharePlayerProps>(({ drawing, 
       onPointerMove={onPointerMove}
       onPointerUp={(e) => endDrag(e, true)}
       onPointerCancel={(e) => endDrag(e, false)}
+      onPointerEnter={(e) => e.pointerType === "mouse" && setHovering(true)}
+      onPointerLeave={() => setHovering(false)}
     >
       <canvas
         ref={canvasRef}
@@ -353,6 +367,26 @@ const SharePlayer = forwardRef<SharePlayerHandle, SharePlayerProps>(({ drawing, 
       >
         <Pencil />
       </span>
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 300 10"
+        preserveAspectRatio="none"
+        className={`pointer-events-none absolute right-3 bottom-2.5 left-3 h-2.5 transition-opacity duration-200 ${railOn ? "opacity-100" : "opacity-0"}`}
+      >
+        <path d={RAIL} fill="none" stroke="rgba(27,29,33,0.14)" strokeWidth="2" strokeLinecap="round" />
+        <path
+          ref={inkRef}
+          d={RAIL}
+          pathLength={1}
+          fill="none"
+          stroke="#1b1d21"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeDasharray="1"
+          strokeDashoffset="0"
+         
+        />
+      </svg>
       <div
         aria-hidden={!tagOn}
         className={`absolute top-2 right-2.5 flex items-center gap-1 rounded-[4px] bg-white/85 px-1.5 py-0.5 font-['JetBrains_Mono',ui-monospace,monospace] text-[11px] text-[#6a6f78] transition-opacity duration-200 ${tagOn ? "opacity-100" : "pointer-events-none opacity-0"}`}

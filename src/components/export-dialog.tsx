@@ -205,7 +205,7 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
             e.preventDefault();
             (e.currentTarget as HTMLElement | null)?.focus();
           }}
-          className="flex h-[min(640px,calc(100vh-32px))] max-w-[960px] gap-0 overflow-hidden p-0"
+          className="flex max-h-[calc(100dvh-32px)] min-h-[min(560px,calc(100dvh-32px))] max-w-[960px] gap-0 overflow-hidden p-0"
         >
           <div className="relative hidden min-w-0 flex-1 flex-col bg-(--zk-well) md:flex">
             <div className="flex min-h-0 flex-1 items-center justify-center p-8">
@@ -242,7 +242,7 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
               <DialogDescription className="mt-1 truncate text-[13px] text-zk-muted">{drawingName}</DialogDescription>
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 pb-4">
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 pb-4">
               <div>
                 <SectionLabel>Format</SectionLabel>
                 <div className="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="Format">
@@ -403,7 +403,7 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
                   </div>
                 )}
                 {links.length > 0 && (
-                  <div className="mt-4 flex flex-col gap-1.5">
+                  <div className="mt-4 flex max-h-[112px] flex-col gap-1.5 overflow-y-auto">
                     {links.map((l) => (
                       <div key={l.id} className="flex items-center gap-1.5 rounded-[4px] bg-zk-raised/50 px-2.5 py-1.5">
                         <span className="min-w-0 flex-1 truncate text-[12px] text-zk-text-2" title={l.url}>
