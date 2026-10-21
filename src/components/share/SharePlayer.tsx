@@ -6,6 +6,7 @@ import { autoSpeed, nextSpeedMode, speedFor, type Replay, type SpeedMode } from 
 
 export interface SharePlayerHandle {
   getRenderer(): ReplayRenderer | null;
+  getSpeed(): number;
 }
 
 interface SharePlayerProps {
@@ -95,7 +96,11 @@ const SharePlayer = forwardRef<SharePlayerHandle, SharePlayerProps>(({ drawing, 
   const [mode, setMode] = useState<SpeedMode>("auto");
   const frame = useMemo(() => shareFrame(drawing), [drawing]);
 
-  useImperativeHandle(ref, () => ({ getRenderer: () => rendererRef.current }), []);
+  useImperativeHandle(
+    ref,
+    () => ({ getRenderer: () => rendererRef.current, getSpeed: () => speedFor(st.mode, st.total) }),
+    [],
+  );
 
   const setPhase = (p: Phase) => {
     st.phase = p;

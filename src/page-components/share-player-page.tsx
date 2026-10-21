@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import ZketchMark from "@/components/ZketchMark";
 import SharePlayer, { stageSize, type SharePlayerHandle } from "@/components/share/SharePlayer";
-import { DownloadIcon, LoaderIcon, PencilIcon } from "@/components/icons";
+import { CloseIcon, DownloadIcon, LoaderIcon, PencilIcon } from "@/components/icons";
 import { useIsMobile } from "@/hooks/useMobile";
 import type { ISavedDrawingData } from "@/models/VaultModel";
 import { parseBackup } from "@/services/BackupService";
@@ -21,10 +21,23 @@ function fileBase(name: string): string {
   return name.replace(/[\\/:*?"<>|]+/g, "").trim() || "drawing";
 }
 
+function saveBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 const SharePlayerPage: React.FC<SharePlayerPageProps> = ({ meta }) => {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [continuing, setContinuing] = useState(false);
+  const [videoProgress, setVideoProgress] = useState<number | null>(null);
+  const videoAbort = useRef<AbortController | null>(null);
   const playerRef = useRef<SharePlayerHandle>(null);
   const isMobile = useIsMobile();
   const pictureUrl = `/api/shares/${meta.id}/picture.png`;
@@ -49,7 +62,43 @@ const SharePlayerPage: React.FC<SharePlayerPageProps> = ({ meta }) => {
     load();
   }, [meta.id]);
 
+  useEffect(() => () => videoAbort.current?.abort(), []);
+
   const watchable = useMemo(() => (loaded ? buildReplay(loaded.drawing.layers).total > 0 : false), [loaded]);
+
+  const makeVideo = async () => {
+    if (!loaded || videoAbort.current) return;
+    const controller = new AbortController();
+    videoAbort.current = controller;
+    setVideoProgress(0);
+    try {
+      const { makeReplayVideo } = await import("@/share/video");
+      const { blob, ext } = await makeReplayVideo({
+        drawing: loaded.drawing,
+        blobs: loaded.blobs,
+        speed: playerRef.current?.getSpeed() ?? 1,
+        onProgress: (p) => setVideoProgress(p),
+        signal: controller.signal,
+      });
+      if (!controller.signal.aborted) saveBlob(blob, `${fileBase(meta.name)}.${ext}`);
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        console.error("Failed to make the video:", err);
+        toast.error("Couldn't make the video");
+      }
+    } finally {
+      if (videoAbort.current === controller) {
+        videoAbort.current = null;
+        setVideoProgress(null);
+      }
+    }
+  };
+
+  const cancelVideo = () => {
+    videoAbort.current?.abort();
+    videoAbort.current = null;
+    setVideoProgress(null);
+  };
 
   const continueDrawing = async () => {
     if (!loaded || continuing) return;
@@ -150,13 +199,30 @@ const SharePlayerPage: React.FC<SharePlayerPageProps> = ({ meta }) => {
                 <DownloadIcon className="h-4 w-4" />
                 Picture
               </a>
-              <button
-                disabled
-                className="flex h-10 items-center gap-2 rounded-[4px] bg-zk-raised px-4 text-[14px] font-medium text-zk-text hover:bg-zk-hover disabled:cursor-default disabled:text-zk-disabled disabled:hover:bg-zk-raised"
-              >
-                <DownloadIcon className="h-4 w-4" />
-                Video
-              </button>
+              {videoProgress === null ? (
+                <button
+                  onClick={makeVideo}
+                  disabled={!loaded || !watchable}
+                  className="flex h-10 items-center gap-2 rounded-[4px] bg-zk-raised px-4 text-[14px] font-medium text-zk-text hover:bg-zk-hover disabled:cursor-default disabled:text-zk-disabled disabled:hover:bg-zk-raised"
+                >
+                  <DownloadIcon className="h-4 w-4" />
+                  Video
+                </button>
+              ) : (
+                <div className="flex h-10 items-center rounded-[4px] bg-zk-raised text-[14px] font-medium text-zk-text">
+                  <span className="flex items-center gap-2 pr-2 pl-4 tabular-nums" role="status">
+                    <LoaderIcon className="h-4 w-4 animate-spin" />
+                    Making video… {Math.round(videoProgress * 100)}%
+                  </span>
+                  <button
+                    onClick={cancelVideo}
+                    aria-label="Cancel video"
+                    className="flex h-10 w-9 items-center justify-center rounded-r-[4px] text-zk-muted hover:bg-zk-hover hover:text-zk-text"
+                  >
+                    <CloseIcon className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
               {meta.allowContinue &&
                 (isMobile ? (
                   <span className="px-2 text-[13px] text-zk-muted">Open on a computer to continue it</span>

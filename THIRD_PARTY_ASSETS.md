@@ -22,3 +22,9 @@ only ships tips converted for its own brush engine, and must not offer them as
 downloadable brushes. Photoshop stock tips and patterns bundled inside that
 `.abr` are not used. Assets are served as
 separate files and are not part of the MIT-licensed source code bundle.
+
+## Libraries
+
+| Package | Used for | Author | License |
+|---|---|---|---|
+| [mediabunny](https://github.com/Vanilagy/mediabunny) | Muxing the share page's replay video into MP4, loaded only when a viewer downloads a video | Vanilagy | MPL-2.0 |
