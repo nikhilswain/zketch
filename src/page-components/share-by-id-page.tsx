@@ -3,6 +3,8 @@ import ShareViewer from "@/components/share/ShareViewer";
 import { useState, useEffect } from "react";
 import { ShareService, type ShareData } from "@/services/ShareService";
 
+const SHARE_ID = /^[A-Za-z0-9]{12}$/;
+
 interface ShareByIdPageProps {
   shareId: string;
 }
@@ -43,7 +45,13 @@ const ShareByIdPage: React.FC<ShareByIdPageProps> = ({ shareId }) => {
   };
 
   return (
-    <ShareViewer loading={loading} error={error} drawing={sharedDrawing} onRetry={loadSharedDrawing} />
+    <ShareViewer
+      loading={loading}
+      error={error}
+      drawing={sharedDrawing}
+      onRetry={loadSharedDrawing}
+      expiryNote={!SHARE_ID.test(shareId)}
+    />
   );
 };
 

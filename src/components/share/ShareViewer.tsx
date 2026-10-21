@@ -10,6 +10,7 @@ interface ShareViewerProps {
   error: string | null;
   drawing: ShareData | null;
   onRetry?: () => void;
+  expiryNote?: boolean;
 }
 
 function fileName(drawing: ShareData) {
@@ -25,7 +26,7 @@ const Mark: React.FC = () => (
   </a>
 );
 
-const ShareViewer: React.FC<ShareViewerProps> = ({ loading, error, drawing, onRetry }) => {
+const ShareViewer: React.FC<ShareViewerProps> = ({ loading, error, drawing, onRetry, expiryNote = true }) => {
   const [copied, setCopied] = useState(false);
 
   const download = () => {
@@ -70,7 +71,8 @@ const ShareViewer: React.FC<ShareViewerProps> = ({ loading, error, drawing, onRe
           <div className="max-w-md text-center">
             <h1 className="font-display text-[32px] font-semibold">This link doesn’t open</h1>
             <p className="mt-3 text-[14px] leading-relaxed text-zk-muted">
-              {(error || "The drawing couldn't be found").replace(/\.?\s*$/, ".")} Share links expire 30 days after they're created.
+              {(error || "The drawing couldn't be found").replace(/\.?\s*$/, ".")}
+              {expiryNote && " Share links expire 30 days after they're created."}
             </p>
             <div className="mt-6 flex justify-center gap-2">
               {onRetry && (
@@ -129,9 +131,11 @@ const ShareViewer: React.FC<ShareViewerProps> = ({ loading, error, drawing, onRe
         )}
       </main>
 
-      <footer className="shrink-0 px-6 pb-6 text-center text-[12px] text-zk-muted">
-        View-only. Shared drawings are deleted automatically after 30 days.
-      </footer>
+      {(expiryNote || (!loading && !error && drawing)) && (
+        <footer className="shrink-0 px-6 pb-6 text-center text-[12px] text-zk-muted">
+          View-only. Shared drawings are deleted automatically after 30 days.
+        </footer>
+      )}
     </div>
   );
 };

@@ -243,7 +243,9 @@ const SharePlayerPage: React.FC<SharePlayerPageProps> = ({ meta }) => {
         )}
       </main>
 
-      <footer className="shrink-0 px-6 pb-6 text-center text-[12px] text-zk-muted">View-only link.</footer>
+      {!meta.allowContinue && (
+        <footer className="shrink-0 px-6 pb-6 text-center text-[12px] text-zk-muted">View-only link.</footer>
+      )}
     </div>
   );
 };
