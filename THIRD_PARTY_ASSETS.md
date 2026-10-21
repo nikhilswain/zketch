@@ -28,3 +28,4 @@ separate files and are not part of the MIT-licensed source code bundle.
 | Package | Used for | Author | License |
 |---|---|---|---|
 | [mediabunny](https://github.com/Vanilagy/mediabunny) | Muxing the share page's replay video into MP4, loaded only when a viewer downloads a video | Vanilagy | MPL-2.0 |
+| [aws4fetch](https://github.com/mhart/aws4fetch) | Signing the server's requests to the private Backblaze B2 bucket that stores shared drawings (S3 API) | Michael Hart | MIT |
