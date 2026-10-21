@@ -80,21 +80,23 @@ export function buildReplay(layers: ILayerData[], maxGap = 500): Replay {
   const base = raw[0].start;
   let removed = 0;
   let lastEnd = base;
+  let total = -Infinity;
   const items = raw.map((r) => {
     if (maxGap > 0) {
       const gap = r.start - lastEnd;
       if (gap > maxGap) removed += gap - maxGap;
     }
     lastEnd = Math.max(lastEnd, r.end);
+    const end = r.end - base - removed;
+    total = Math.max(total, end);
     return {
       layer: r.layer,
       element: r.element,
       start: r.start - base - removed,
-      end: r.end - base - removed,
+      end,
     };
   });
 
-  const total = Math.max(...items.map((i) => i.end));
   return { items, total };
 }
 
