@@ -432,6 +432,9 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
                 <p className="mt-3 text-[11px] text-zk-muted">
                   Links are remembered in this browser. Clearing site data means you can't unshare them.
                 </p>
+                <a href="/vault?tab=shared" className="mt-1.5 inline-block text-[12px] font-semibold text-zk-text-2 hover:text-zk-text">
+                  Manage all links
+                </a>
               </div>
             </div>
 

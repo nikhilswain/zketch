@@ -36,6 +36,8 @@ import { toast } from "sonner";
 import { SURROUND, resolveSurround } from "@/utils/page";
 import { themeState } from "@/utils/theme";
 import MasonryColumns from "./MasonryColumns";
+import SharedLinks from "./share/SharedLinks";
+import { formatDate } from "@/utils/date";
 
 type SortOrder = "updated" | "created" | "name";
 
@@ -120,15 +122,26 @@ function plural(n: number, word: string) {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
-function formatDate(date: Date) {
-  const days = Math.floor((Date.now() - date.getTime()) / 86400000);
-  if (days <= 0) return "today";
-  if (days === 1) return "yesterday";
-  if (days < 7) return `${days} days ago`;
-  return date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-}
-
 type ViewMode = "grid" | "masonry" | "list";
+type VaultTab = "drawings" | "shared";
+
+const TABS: { id: VaultTab; label: string }[] = [
+  { id: "drawings", label: "Your drawings" },
+  { id: "shared", label: "Shared" },
+];
+
+function initialTab(): VaultTab {
+  try {
+    const fromUrl = new URLSearchParams(window.location.search).get("tab");
+    if (fromUrl === "shared" || fromUrl === "drawings") {
+      localStorage.setItem("zketch-vault-tab", fromUrl);
+      return fromUrl;
+    }
+    return localStorage.getItem("zketch-vault-tab") === "shared" ? "shared" : "drawings";
+  } catch {
+    return "drawings";
+  }
+}
 const CHECKER_BG = "bg-[repeating-conic-gradient(#efefef_0%_25%,#ffffff_0%_50%)] bg-[length:14px_14px]";
 
 const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDrawing }) => {
@@ -142,6 +155,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
       return "grid";
     }
   });
+  const [tab, setTab] = useState<VaultTab>(initialTab);
   const settingsStore = useSettingsStore();
   const surround = SURROUND[resolveSurround(settingsStore.surroundMode, themeState.resolved)];
   const [sortBy, setSortBy] = useState<SortOrder>("updated");
@@ -257,6 +271,22 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
       </div>
     </div>
   );
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("tab")) return;
+    url.searchParams.delete("tab");
+    window.history.replaceState({}, "", url.pathname + url.search);
+  }, []);
+
+  const chooseTab = (next: VaultTab) => {
+    setTab(next);
+    try {
+      localStorage.setItem("zketch-vault-tab", next);
+    } catch {
+      return;
+    }
+  };
 
   const chooseView = (mode: ViewMode) => {
     setViewMode(mode);
@@ -445,11 +475,28 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
       </header>
 
       <main className="mx-auto max-w-[1400px] px-6 pt-10 pb-16 sm:px-10">
+        <div className="mb-6 flex h-9 w-fit items-center gap-0.5 rounded-[4px] bg-zk-raised/60 p-0.5" role="tablist" aria-label="Vault">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              role="tab"
+              aria-selected={tab === t.id}
+              onClick={() => chooseTab(t.id)}
+              className={`h-8 rounded-[3px] px-3 text-[13px] transition-colors ${
+                tab === t.id ? "bg-zk-selected font-semibold text-zk-text" : "text-zk-muted hover:text-zk-text"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
         <div className="mb-8 flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
           <div>
-            <h1 className="font-display text-[40px] leading-none font-semibold">Your drawings</h1>
+            <h1 className="font-display text-[40px] leading-none font-semibold">{tab === "shared" ? "Shared links" : "Your drawings"}</h1>
             <p className="mt-3 text-[13px] text-zk-muted">
-              {vaultStore.isLoading
+              {tab === "shared"
+                ? "Links you've made in this browser. Changes to a link reach everyone within a minute."
+                : vaultStore.isLoading
                 ? "Loading…"
                 : `${count} drawing${count === 1 ? "" : "s"}${
                     vaultStore.storageInfo.quota > 0
@@ -459,7 +506,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
             </p>
           </div>
 
-          {!vaultStore.isEmpty && (
+          {tab === "drawings" && !vaultStore.isEmpty && (
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
                 <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-zk-muted" />
@@ -519,7 +566,9 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
           )}
         </div>
 
-        {vaultStore.isLoading ? (
+        {tab === "shared" ? (
+          <SharedLinks onOpenDrawing={onEditDrawing} />
+        ) : vaultStore.isLoading ? (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-5 gap-y-7">
             {Array.from({ length: 6 }, (_, i) => (
               <div key={i} className="aspect-[4/3] animate-pulse rounded-[6px] bg-zk-raised" />
