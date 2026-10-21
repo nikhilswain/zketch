@@ -1,4 +1,5 @@
 import type { CacheLike } from "./edgeCache";
+import { isGzip } from "./shareText";
 
 export interface R2ObjectLike {
   body?: BodyInit | null;
@@ -141,6 +142,15 @@ function asFile(value: FormDataEntryValue | null): File | null {
   return value && typeof value !== "string" ? value : null;
 }
 
+async function drawingTypeOf(drawing: File): Promise<string | null> {
+  const head = new Uint8Array(await drawing.slice(0, 32).arrayBuffer());
+  if (isGzip(head)) {
+    return drawing.type === "application/gzip" ? "application/gzip" : null;
+  }
+  const isZketch = new TextDecoder().decode(head).startsWith(DRAWING_PREFIX);
+  return isZketch && drawing.type === "application/json" ? "application/json" : null;
+}
+
 export function checkContentLength(header: string | null): Response | null {
   const length = header !== null && /^\d+$/.test(header) ? Number(header) : NaN;
   if (!(length <= MAX_BODY)) {
@@ -187,8 +197,8 @@ export async function createShare(
   ) {
     return json({ error: "Share is too large" }, 413);
   }
-  const head = await drawing.slice(0, 32).text();
-  if (!head.startsWith(DRAWING_PREFIX)) {
+  const drawingType = await drawingTypeOf(drawing);
+  if (!drawingType) {
     return json({ error: "Not a zketch drawing" }, 400);
   }
 
@@ -220,7 +230,7 @@ export async function createShare(
     httpMetadata: { contentType: "image/jpeg" },
   });
   await env.bucket.put(keyFor(id, "drawing"), drawing, {
-    httpMetadata: { contentType: "application/json" },
+    httpMetadata: { contentType: drawingType },
     customMetadata: {
       version: "1",
       name,

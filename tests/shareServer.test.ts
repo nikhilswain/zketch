@@ -11,6 +11,7 @@ import {
   type ShareEnv,
 } from "../src/share/shareServer";
 import type { CacheLike } from "../src/share/edgeCache";
+import { gzipShareText, readShareText } from "../src/share/shareText";
 
 function makeEnv() {
   const objects = new Map<
@@ -77,11 +78,13 @@ function makeCache() {
 
 const DRAWING = '{"format":"zketch","version":1,"layers":[]}';
 
-function form(over: { drawing?: Blob } = {}) {
+function form(over: { drawing?: Blob; drawingType?: string } = {}) {
   const f = new FormData();
   f.set(
     "drawing",
-    new File([over.drawing ?? DRAWING], "d.zketch", { type: "application/json" })
+    new File([over.drawing ?? DRAWING], "d.zketch", {
+      type: over.drawingType ?? "application/json",
+    })
   );
   f.set("picture", new File([new Uint8Array([1, 2, 3])], "p.png", { type: "image/png" }));
   f.set("preview", new File([new Uint8Array([4, 5])], "p.jpg", { type: "image/jpeg" }));
@@ -270,5 +273,32 @@ describe("shareServer", () => {
     expect((await shareMeta(id, cached))?.name).toBe("My cat");
     expect((await getShareFile(id, "picture.png", cached)).status).toBe(200);
     expect((await deleteShare(id, deleteKey, cached)).status).toBe(204);
+  });
+
+  it("accepts a gzipped drawing and serves it back as stored", async () => {
+    const { env, objects } = makeEnv();
+    const gz = await gzipShareText(DRAWING);
+    const res = await createShare(form({ drawing: gz, drawingType: "application/gzip" }), env, "https://z.test");
+    expect(res.status).toBe(201);
+    const { id } = await res.json();
+    expect(objects.get(`shares/${id}/drawing.zketch`)!.httpMetadata.contentType).toBe("application/gzip");
+    const file = await getShareFile(id, "drawing", env);
+    expect(file.headers.get("content-type")).toBe("application/gzip");
+    expect(await readShareText(file)).toBe(DRAWING);
+  });
+
+  it("rejects random bytes and mislabelled drawings", async () => {
+    const { env } = makeEnv();
+    const random = new Blob([new Uint8Array([7, 3, 9, 1, 0, 255, 12, 40])]);
+    const gz = await gzipShareText(DRAWING);
+    const cases = [
+      form({ drawing: random, drawingType: "application/gzip" }),
+      form({ drawing: random }),
+      form({ drawing: gz }),
+      form({ drawingType: "application/gzip" }),
+    ];
+    for (const f of cases) {
+      expect((await createShare(f, env, "https://z.test")).status).toBe(400);
+    }
   });
 });

@@ -9,6 +9,7 @@ import type { ISavedDrawingData } from "@/models/VaultModel";
 import { parseBackup } from "@/services/BackupService";
 import { importAsNewDrawing } from "@/services/VaultBackup";
 import { buildReplay } from "@/share/replay";
+import { readShareText } from "@/share/shareText";
 import type { ShareMeta } from "@/share/shareServer";
 
 interface SharePlayerPageProps {
@@ -47,7 +48,7 @@ const SharePlayerPage: React.FC<SharePlayerPageProps> = ({ meta }) => {
     try {
       const response = await fetch(`/api/shares/${meta.id}`);
       if (!response.ok) throw new Error("The drawing couldn't be found.");
-      const text = await response.text();
+      const text = await readShareText(response);
       const backup = parseBackup(text);
       const drawing = backup.drawings[0];
       if (!drawing) throw new Error("The drawing couldn't be found.");

@@ -1,6 +1,7 @@
 import { BlobStorageService } from "@/services/BlobStorageService";
 import type { ISavedDrawingData } from "@/models/VaultModel";
 import { buildShareFile, renderSharePictures, MAX_SHARE_BYTES } from "./sharePayload";
+import { gzipShareText } from "./shareText";
 
 export type SharedLink = {
   id: string;
@@ -63,12 +64,12 @@ export async function createShareLink(input: {
 }): Promise<SharedLink> {
   const { drawing, allowContinue, drawingId } = input;
   const file = await buildShareFile(drawing, (id) => BlobStorageService.getBlob(id), crypto.randomUUID());
-  const json = JSON.stringify(file);
-  if (new Blob([json]).size > MAX_SHARE_BYTES) throw new Error("too large");
+  const packed = await gzipShareText(JSON.stringify(file));
+  if (packed.size > MAX_SHARE_BYTES) throw new Error("too large");
 
   const { picture, preview, previewWidth, previewHeight } = await renderSharePictures(drawing);
   const form = new FormData();
-  form.append("drawing", new File([json], "drawing.zketch", { type: "application/json" }));
+  form.append("drawing", new File([packed], "drawing.zketch", { type: "application/gzip" }));
   form.append("picture", picture, "picture.png");
   form.append("preview", preview, "preview.jpg");
   form.append("previewWidth", String(previewWidth));
