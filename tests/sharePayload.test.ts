@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildShareFile, stripForShare } from "@/share/sharePayload";
+import { parseBackup } from "@/services/BackupService";
 import type { ISavedDrawingData } from "@/models/VaultModel";
 import type { IStoredBlob } from "@/services/BlobStorageService";
 
@@ -80,5 +81,19 @@ describe("share payload", () => {
     expect(ids.some((id) => id.startsWith("thumb_"))).toBe(false);
     expect(file.blobs.every((b) => !b.originalName)).toBe(true);
     expect(JSON.stringify(file).startsWith('{"format":"zketch"')).toBe(true);
+  });
+
+  it("share file round-trips through parseBackup with the kept layers", async () => {
+    const d = drawing(
+      [drawLayer("hidden", false), drawLayer("l1", true), imageLayer("l2", "blob_kept", true)],
+      "l1",
+    );
+    const file = await buildShareFile(d, async (id) => stored(id), "share-x");
+    const parsed = parseBackup(JSON.stringify(file));
+    expect(parsed.drawings).toHaveLength(1);
+    expect(parsed.drawings[0].id).toBe("share-x");
+    expect(parsed.drawings[0].layers.map((l) => l.id)).toEqual(["l1", "l2"]);
+    expect(parsed.blobs.map((b) => b.id)).toEqual(["blob_kept"]);
+    expect(parsed.blobs[0].size).toBe(png.length);
   });
 });
