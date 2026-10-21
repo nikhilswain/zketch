@@ -3,9 +3,12 @@ import {
   createShareLink,
   findReusable,
   forgetShare,
+  listAllShares,
   listShares,
   rememberShare,
+  setShareContinue,
   shareHash,
+  unshareLinks,
   type SharedLink,
 } from "@/share/shareClient";
 import type { ISavedDrawingData } from "@/models/VaultModel";
@@ -110,5 +113,60 @@ describe("share reuse", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("all links", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("lists every link newest first, old entries without a name included", () => {
+    store.set(KEY, JSON.stringify([link("a", "d1", 1), link("b", null, 5)]));
+    rememberShare({ ...link("c", "d2", 3), name: "Cat" });
+    const all = listAllShares();
+    expect(all.map((l) => l.id)).toEqual(["b", "c", "a"]);
+    expect(all[1].name).toBe("Cat");
+    expect(all[0].name).toBeUndefined();
+  });
+
+  it("setShareContinue saves the new setting", async () => {
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify({ allowContinue: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    rememberShare({ ...link("a", "d1", 1), contentHash: "h" });
+    const updated = await setShareContinue(listAllShares()[0], true);
+    expect(updated.allowContinue).toBe(true);
+    expect(listAllShares()[0].allowContinue).toBe(true);
+    expect(findReusable("d1", "h", true)?.id).toBe("a");
+    const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/shares/a");
+    expect(init.method).toBe("PATCH");
+    expect((init.headers as Record<string, string>)["x-delete-key"]).toBe("key-a");
+    expect(JSON.parse(init.body as string)).toEqual({ allowContinue: true });
+  });
+
+  it("setShareContinue forgets a link that is gone", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("Not found", { status: 404 })));
+    rememberShare(link("a", "d1", 1));
+    await expect(setShareContinue(link("a", "d1", 1), true)).rejects.toThrow("gone");
+    expect(listAllShares()).toEqual([]);
+  });
+
+  it("setShareContinue keeps the link on other failures", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("Forbidden", { status: 403 })));
+    rememberShare(link("a", "d1", 1));
+    await expect(setShareContinue(link("a", "d1", 1), true)).rejects.toThrow();
+    expect(listAllShares()[0].allowContinue).toBe(false);
+  });
+
+  it("unshareLinks counts removed and failed links", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => new Response(null, { status: url.endsWith("/b") ? 500 : 204 }))
+    );
+    for (const [i, id] of ["a", "b", "c", "d"].entries()) rememberShare(link(id, "d1", i));
+    const result = await unshareLinks(listAllShares());
+    expect(result).toEqual({ removed: 3, failed: 1 });
+    expect(listAllShares().map((l) => l.id)).toEqual(["b"]);
   });
 });

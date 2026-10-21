@@ -11,6 +11,7 @@ export type SharedLink = {
   createdAt: number;
   allowContinue: boolean;
   contentHash?: string;
+  name?: string;
 };
 
 const STORAGE_KEY = "zketch-shares-v1";
@@ -38,6 +39,10 @@ export function listShares(drawingId: string | null): SharedLink[] {
   return readAll()
     .filter((l) => l.drawingId === drawingId)
     .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export function listAllShares(): SharedLink[] {
+  return readAll().sort((a, b) => b.createdAt - a.createdAt);
 }
 
 export function rememberShare(link: SharedLink): void {
@@ -116,6 +121,7 @@ export async function createShareLink(input: {
     createdAt: Date.now(),
     allowContinue,
     contentHash,
+    name: drawing.name,
   };
   rememberShare(link);
   return { link, reused: false };
@@ -131,4 +137,39 @@ export async function unshareLink(link: SharedLink): Promise<void> {
     return;
   }
   throw new Error(await errorMessage(response));
+}
+
+export async function setShareContinue(link: SharedLink, allowContinue: boolean): Promise<SharedLink> {
+  const response = await fetch(`/api/shares/${encodeURIComponent(link.id)}`, {
+    method: "PATCH",
+    headers: { "x-delete-key": link.deleteKey, "content-type": "application/json" },
+    body: JSON.stringify({ allowContinue }),
+  });
+  if (response.status === 404) {
+    forgetShare(link.id);
+    throw new Error("gone");
+  }
+  if (!response.ok) throw new Error(await errorMessage(response));
+  const current = readAll().find((l) => l.id === link.id) ?? link;
+  const updated = { ...current, allowContinue };
+  writeAll(readAll().map((l) => (l.id === link.id ? updated : l)));
+  return updated;
+}
+
+export async function unshareLinks(links: SharedLink[]): Promise<{ removed: number; failed: number }> {
+  const queue = [...links];
+  let removed = 0;
+  let failed = 0;
+  const worker = async () => {
+    for (let next = queue.shift(); next; next = queue.shift()) {
+      try {
+        await unshareLink(next);
+        removed++;
+      } catch {
+        failed++;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker));
+  return { removed, failed };
 }
