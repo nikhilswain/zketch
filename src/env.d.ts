@@ -2,6 +2,7 @@
 declare global {
   interface CloudflareEnv {
     ZKETCH_SHARES: KVNamespace;
+    ZKETCH_SHARE_FILES: unknown;
   }
 
   interface KVNamespace {
