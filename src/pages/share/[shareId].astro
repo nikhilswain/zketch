@@ -1,10 +1,36 @@
 ---
 import Layout from '@/layouts/Layout.astro';
 import ShareByIdPage from '@/page-components/share-by-id-page';
+import SharePlayerPage from '@/page-components/share-player-page';
 import { Toaster } from '@/components/ui/sonner';
+import { shareMeta, type ShareEnv } from '@/share/shareServer';
+
+export const prerender = false;
+
+const shareId = Astro.params.shareId ?? '';
+const runtimeEnv = (Astro.locals as any)?.runtime?.env;
+const meta =
+  runtimeEnv?.ZKETCH_SHARE_FILES && runtimeEnv?.ZKETCH_SHARES
+    ? await shareMeta(shareId, { bucket: runtimeEnv.ZKETCH_SHARE_FILES, kv: runtimeEnv.ZKETCH_SHARES } as ShareEnv).catch(() => null)
+    : null;
 ---
 
-<Layout pageTitle="shared drawing | zketch" description="A drawing made in zketch, the doodle app." noindex>
-  {Astro.params.shareId && <ShareByIdPage client:only="react" shareId={Astro.params.shareId} />}
-  <Toaster richColors client:only="react" />
-</Layout>
+{meta ? (
+  <Layout
+    pageTitle={meta.name}
+    description=""
+    image={`/api/shares/${meta.id}/preview.jpg`}
+    imageAlt={meta.name}
+    imageWidth={meta.previewWidth}
+    imageHeight={meta.previewHeight}
+    noindex
+  >
+    <SharePlayerPage client:only="react" meta={meta} />
+    <Toaster richColors client:only="react" />
+  </Layout>
+) : (
+  <Layout pageTitle="shared drawing | zketch" description="A drawing made in zketch, the doodle app." noindex>
+    {shareId && <ShareByIdPage client:only="react" shareId={shareId} />}
+    <Toaster richColors client:only="react" />
+  </Layout>
+)}

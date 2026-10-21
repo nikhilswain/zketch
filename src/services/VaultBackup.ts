@@ -19,6 +19,14 @@ export async function exportDrawings(ids?: string[]): Promise<number> {
   return drawings.length;
 }
 
+function newImportId(kind: "drawing" | "blob" | "thumb"): string {
+  return kind === "drawing"
+    ? crypto.randomUUID()
+    : kind === "thumb"
+      ? BlobStorageService.generateThumbnailId()
+      : BlobStorageService.generateBlobId();
+}
+
 export async function importBackupFile(file: File): Promise<{ added: ISavedDrawingData[]; skipped: number }> {
   const backup = parseBackup(await file.text());
   const existing = await DexieService.loadAllDrawings();
@@ -26,16 +34,29 @@ export async function importBackupFile(file: File): Promise<{ added: ISavedDrawi
     backup,
     new Map(existing.map((d) => [d.id, new Date(d.updatedAt).getTime()])),
     new Set(await BlobStorageService.getAllBlobIds()),
-    (kind) =>
-      kind === "drawing"
-        ? crypto.randomUUID()
-        : kind === "thumb"
-          ? BlobStorageService.generateThumbnailId()
-          : BlobStorageService.generateBlobId(),
+    newImportId,
   );
   if (plan.blobs.length) await BlobStorageService.putBlobs(plan.blobs);
   if (plan.drawings.length) await DexieService.saveDrawings(plan.drawings);
   return { added: plan.drawings, skipped: plan.skipped };
+}
+
+export async function importAsNewDrawing(text: string): Promise<string> {
+  const backup = parseBackup(text);
+  const original = backup.drawings[0];
+  if (!original) throw new Error("This isn't a zketch file.");
+  const existing = await DexieService.loadAllDrawings();
+  const name = existing.some((d) => d.name === original.name) ? `${original.name} (copy)` : original.name;
+  const plan = planImport(
+    { drawings: [{ ...original, id: crypto.randomUUID(), name }], blobs: backup.blobs },
+    new Map(existing.map((d) => [d.id, new Date(d.updatedAt).getTime()])),
+    new Set(await BlobStorageService.getAllBlobIds()),
+    newImportId,
+  );
+  const drawing = plan.drawings[0];
+  if (plan.blobs.length) await BlobStorageService.putBlobs(plan.blobs);
+  await DexieService.saveDrawings([drawing]);
+  return drawing.id;
 }
 
 export async function keepStorage(): Promise<void> {
