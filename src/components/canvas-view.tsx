@@ -66,6 +66,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
     const isDirtyRef = useRef(false);
     const lastSavedRef = useRef<unknown[] | null>(null);
+    const loadedStoreRef = useRef<unknown>(null);
     const autosaveTimerRef = useRef<number | null>(null);
     const saveStatusResetTimerRef = useRef<number | null>(null);
 
@@ -112,6 +113,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
       if (editingDrawingId) {
         const drawing = vaultStore.loadDrawing(editingDrawingId);
         if (drawing) {
+          loadedStoreRef.current = canvasStore;
           setDrawingName(drawing.name);
           canvasStore.setBackground(drawing.background as any);
           canvasStore.loadPage(
@@ -222,6 +224,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           }
         }
       } else {
+        loadedStoreRef.current = canvasStore;
         canvasStore.loadPage(newPageSize ? newPage(newPageSize.width, newPageSize.height) : null);
         canvasStore.clear();
         canvasStore.setBackground(settingsStore.defaultBackground as BackgroundType);
@@ -233,6 +236,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     }, [editingDrawingId, canvasStore, vaultStore]);
 
     const performSave = async (): Promise<boolean> => {
+      if (loadedStoreRef.current !== canvasStore) return false;
       if (canvasStore.isEmpty && !currentDrawingId) return false;
 
       const saved = [

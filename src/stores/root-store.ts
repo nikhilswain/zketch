@@ -24,6 +24,8 @@ export interface IRootStore extends Instance<typeof RootStore> {}
 
 export const rootStore = RootStore.create({});
 
+if (import.meta.hot) import.meta.hot.accept(() => window.location.reload());
+
 if (typeof window !== "undefined") {
   installBrushMemory(rootStore.canvasModel);
   installAccent(rootStore.settingsModel);
