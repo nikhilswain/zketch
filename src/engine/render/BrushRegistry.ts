@@ -40,6 +40,7 @@ export class BrushRegistry {
 export const brushRegistry = new BrushRegistry();
 
 export function registerDefaultBrushes() {
+  if (brushRegistry.has("ink")) return;
   brushRegistry.register(new FreehandBrush());
   brushRegistry.register(new MarkerBrush());
   brushRegistry.register(new HighlighterBrush());

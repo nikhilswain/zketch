@@ -11,6 +11,7 @@ import {
   type Bounds,
   type ElementLookup,
 } from "@/engine/render";
+import { registerDefaultBrushes } from "@/engine/render/BrushRegistry";
 import { createCanvas } from "@/engine/render/canvasFactory";
 import { labelsByContainer } from "@/engine/geometry/labels";
 import {
@@ -141,6 +142,7 @@ export class ReplayRenderer {
     scale: number,
     private readonly blobs?: Map<string, Blob>,
   ) {
+    registerDefaultBrushes();
     this.frame = shareFrame(drawing);
     this.width = Math.max(1, Math.round(this.frame.width * scale));
     this.height = Math.max(1, Math.round(this.frame.height * scale));
