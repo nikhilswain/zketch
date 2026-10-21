@@ -1,6 +1,6 @@
 import { BlobStorageService } from "@/services/BlobStorageService";
 import type { ISavedDrawingData } from "@/models/VaultModel";
-import { buildShareFile, renderSharePictures, MAX_SHARE_BYTES } from "./sharePayload";
+import { buildShareFile, renderSharePictures, stripForShare, MAX_SHARE_BYTES } from "./sharePayload";
 import { gzipShareText } from "./shareText";
 
 export type SharedLink = {
@@ -10,6 +10,7 @@ export type SharedLink = {
   drawingId: string | null;
   createdAt: number;
   allowContinue: boolean;
+  contentHash?: string;
 };
 
 const STORAGE_KEY = "zketch-shares-v1";
@@ -57,12 +58,36 @@ async function errorMessage(response: Response): Promise<string> {
   return `Request failed (${response.status})`;
 }
 
+export async function shareHash(drawing: ISavedDrawingData): Promise<string> {
+  const { layers } = stripForShare(drawing, "");
+  const stable = JSON.stringify({
+    name: drawing.name,
+    background: drawing.background,
+    page: drawing.page ?? null,
+    layers,
+  });
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(stable));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export function findReusable(
+  drawingId: string | null,
+  contentHash: string,
+  allowContinue: boolean
+): SharedLink | undefined {
+  if (drawingId === null) return undefined;
+  return listShares(drawingId).find((l) => l.contentHash === contentHash && l.allowContinue === allowContinue);
+}
+
 export async function createShareLink(input: {
   drawing: ISavedDrawingData;
   allowContinue: boolean;
   drawingId: string | null;
-}): Promise<SharedLink> {
+}): Promise<{ link: SharedLink; reused: boolean }> {
   const { drawing, allowContinue, drawingId } = input;
+  const contentHash = await shareHash(drawing);
+  const existing = findReusable(drawingId, contentHash, allowContinue);
+  if (existing) return { link: existing, reused: true };
   const file = await buildShareFile(drawing, (id) => BlobStorageService.getBlob(id), crypto.randomUUID());
   const packed = await gzipShareText(JSON.stringify(file));
   if (packed.size > MAX_SHARE_BYTES) throw new Error("too large");
@@ -90,9 +115,10 @@ export async function createShareLink(input: {
     drawingId,
     createdAt: Date.now(),
     allowContinue,
+    contentHash,
   };
   rememberShare(link);
-  return link;
+  return { link, reused: false };
 }
 
 export async function unshareLink(link: SharedLink): Promise<void> {

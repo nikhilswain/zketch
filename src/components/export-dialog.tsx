@@ -149,10 +149,11 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
           background: canvasStore.background,
           ...(canvasStore.page ? { page: { ...canvasStore.page } } : {}),
         };
-        const link = await createShareLink({ drawing, allowContinue, drawingId });
+        const { link, reused } = await createShareLink({ drawing, allowContinue, drawingId });
         setShareUrl(link.url);
         setLinks(listShares(drawingId));
         await copy(link.url);
+        if (reused) toast("Nothing changed since your last link, so here it is again.");
       } catch (error) {
         console.error("Failed to share:", error);
         const message = error instanceof Error ? error.message : "";
