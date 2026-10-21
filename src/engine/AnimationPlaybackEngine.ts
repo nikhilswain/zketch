@@ -56,7 +56,7 @@ interface TimelineKeyframe {
  * The compressed timeline - maps between compressed and original time.
  * Keyframes are sorted by compressedTime.
  */
-interface CompressedTimeline {
+export interface CompressedTimeline {
   /** Keyframes marking where gaps were compressed */
   keyframes: TimelineKeyframe[];
   /** Total duration after compression */
@@ -75,7 +75,7 @@ interface CompressedTimeline {
  * @param maxGap - Maximum allowed gap (gaps larger than this get compressed)
  * @returns A compressed timeline for time translation
  */
-function buildCompressedTimeline(
+export function buildCompressedTimeline(
   strokes: StrokeLike[],
   baseTime: number,
   maxGap: number,
@@ -158,7 +158,7 @@ function buildCompressedTimeline(
  * @param compressedTime - Time in the compressed timeline
  * @returns Corresponding time in the original timeline
  */
-function compressedToOriginal(
+export function compressedToOriginal(
   timeline: CompressedTimeline,
   compressedTime: number,
 ): number {
