@@ -28,6 +28,7 @@ export interface KVLike {
     value: string,
     options?: { expirationTtl?: number }
   ): Promise<unknown>;
+  delete(key: string): Promise<unknown>;
 }
 
 export interface ShareEnv {
@@ -59,6 +60,7 @@ const DRAWING_PREFIX = '{"format":"zketch"';
 const CACHE_ORIGIN = "https://zketch-share-cache";
 const CACHE_DAY = 86400;
 const CACHE_MISSING = 60;
+const CACHE_META = 60;
 const BASE62 =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -85,6 +87,21 @@ function fileCacheKey(id: string, file: ShareFile): string {
 
 function metaCacheKey(id: string): string {
   return `${CACHE_ORIGIN}/meta/${id}`;
+}
+
+function continueKey(id: string): string {
+  return `share-continue:${id}`;
+}
+
+async function continueOverride(id: string, env: ShareEnv): Promise<boolean | null> {
+  try {
+    const value = await env.kv.get(continueKey(id));
+    if (value === "1") return true;
+    if (value === "0") return false;
+  } catch (err) {
+    console.error("Share setting read failed:", err);
+  }
+  return null;
 }
 
 async function cacheMatch(env: ShareEnv, key: string): Promise<Response | null> {
@@ -256,12 +273,13 @@ export async function shareMeta(
   if (cached !== undefined) return cached as ShareMeta | null;
   const object = await env.bucket.head(keyFor(id, "drawing"));
   const stored = object?.customMetadata;
+  const override = stored ? await continueOverride(id, env) : null;
   const meta: ShareMeta | null = stored
     ? {
         id,
         name: stored.name || "Untitled drawing",
         createdAt: Number(stored.createdAt) || 0,
-        allowContinue: stored.allowContinue === "1",
+        allowContinue: override ?? stored.allowContinue === "1",
         previewWidth: Number(stored.previewWidth) || 0,
         previewHeight: Number(stored.previewHeight) || 0,
       }
@@ -272,7 +290,7 @@ export async function shareMeta(
       new Response(JSON.stringify(meta), {
         headers: {
           "content-type": "application/json",
-          "cache-control": `public, max-age=${meta ? CACHE_DAY : CACHE_MISSING}`,
+          "cache-control": `public, max-age=${meta ? CACHE_META : CACHE_MISSING}`,
         },
       })
     )
@@ -319,11 +337,11 @@ export async function getShareFile(
   return response;
 }
 
-export async function deleteShare(
+async function checkOwner(
   id: string,
   key: string,
   env: ShareEnv
-): Promise<Response> {
+): Promise<Response | null> {
   if (!ID_PATTERN.test(id)) return new Response("Not found", { status: 404 });
   const object = await env.bucket.head(keyFor(id, "drawing"));
   if (!object) return new Response("Not found", { status: 404 });
@@ -331,8 +349,45 @@ export async function deleteShare(
   if (!key || !stored || (await sha256hex(key)) !== stored) {
     return new Response("Forbidden", { status: 403 });
   }
+  return null;
+}
+
+export async function updateShare(
+  id: string,
+  key: string,
+  body: unknown,
+  env: ShareEnv
+): Promise<Response> {
+  const denied = await checkOwner(id, key, env);
+  if (denied) return denied;
+  const allowContinue = (body as { allowContinue?: unknown } | null)?.allowContinue;
+  if (typeof allowContinue !== "boolean") {
+    return json({ error: "Missing allowContinue" }, 400);
+  }
+  try {
+    await env.kv.put(continueKey(id), allowContinue ? "1" : "0");
+  } catch (err) {
+    console.error("Share setting write failed:", err);
+    return json({ error: "Couldn't save the setting" }, 500);
+  }
+  await cacheUpdate(env, (cache) => cache.delete(metaCacheKey(id)));
+  return json({ allowContinue }, 200);
+}
+
+export async function deleteShare(
+  id: string,
+  key: string,
+  env: ShareEnv
+): Promise<Response> {
+  const denied = await checkOwner(id, key, env);
+  if (denied) return denied;
   await env.bucket.delete([keyFor(id, "picture.png"), keyFor(id, "preview.jpg")]);
   await env.bucket.delete([keyFor(id, "drawing")]);
+  try {
+    await env.kv.delete(continueKey(id));
+  } catch (err) {
+    console.error("Share setting delete failed:", err);
+  }
   await cacheUpdate(env, (cache) =>
     Promise.all([
       cache.delete(fileCacheKey(id, "drawing")),

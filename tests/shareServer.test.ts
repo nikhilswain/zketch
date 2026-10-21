@@ -6,6 +6,7 @@ import {
   shareMeta,
   getShareFile,
   deleteShare,
+  updateShare,
   type R2Like,
   type KVLike,
   type ShareEnv,
@@ -55,9 +56,12 @@ function makeEnv() {
     async put(key, value) {
       kvStore.set(key, value);
     },
+    async delete(key) {
+      kvStore.delete(key);
+    },
   };
   const env: ShareEnv = { bucket, kv };
-  return { env, objects, calls };
+  return { env, objects, calls, kvStore };
 }
 
 function makeCache() {
@@ -145,6 +149,9 @@ describe("shareServer", () => {
       put: async () => {
         throw new Error("kv down");
       },
+      delete: async () => {
+        throw new Error("kv down");
+      },
     };
     expect(await checkRateLimit("4.4.4.4", { ...env, kv: broken })).toBeNull();
   });
@@ -218,7 +225,7 @@ describe("shareServer", () => {
     ).toBe("public, max-age=60");
   });
 
-  it("meta is cached for a day and a missing share for a minute", async () => {
+  it("meta is cached for a minute, found or missing", async () => {
     const { env, calls } = makeEnv();
     const { cache, entries } = makeCache();
     const cached = { ...env, cache };
@@ -227,7 +234,7 @@ describe("shareServer", () => {
     expect(await shareMeta(id, cached)).toEqual(meta);
     expect(calls.head).toBe(1);
     expect(entries.get(`https://zketch-share-cache/meta/${id}`)?.headers.get("cache-control")).toBe(
-      "public, max-age=86400"
+      "public, max-age=60"
     );
     expect(await shareMeta("BBBBBBBBBBBB", cached)).toBeNull();
     expect(await shareMeta("BBBBBBBBBBBB", cached)).toBeNull();
@@ -313,5 +320,88 @@ describe("shareServer", () => {
     for (const f of cases) {
       expect((await createShare(f, env, "https://z.test")).status).toBe(400);
     }
+  });
+
+  describe("updateShare", () => {
+    it("needs the right key and writes nothing otherwise", async () => {
+      const { env, kvStore } = makeEnv();
+      const { id } = await (await createShare(form(), env, "https://z.test")).json();
+      expect((await updateShare(id, "wrong", { allowContinue: false }, env)).status).toBe(403);
+      expect((await updateShare(id, "", { allowContinue: false }, env)).status).toBe(403);
+      expect(kvStore.has(`share-continue:${id}`)).toBe(false);
+      expect((await shareMeta(id, env))?.allowContinue).toBe(true);
+    });
+
+    it("switches can continue off and on and purges the cached meta", async () => {
+      const { env, kvStore } = makeEnv();
+      const { cache, entries } = makeCache();
+      const cached = { ...env, cache };
+      const { id, deleteKey } = await (await createShare(form(), cached, "https://z.test")).json();
+      expect((await shareMeta(id, cached))?.allowContinue).toBe(true);
+      const res = await updateShare(id, deleteKey, { allowContinue: false }, cached);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ allowContinue: false });
+      expect(kvStore.get(`share-continue:${id}`)).toBe("0");
+      expect(entries.has(`https://zketch-share-cache/meta/${id}`)).toBe(false);
+      expect((await shareMeta(id, cached))?.allowContinue).toBe(false);
+      expect((await updateShare(id, deleteKey, { allowContinue: true }, cached)).status).toBe(200);
+      expect(kvStore.get(`share-continue:${id}`)).toBe("1");
+      expect((await shareMeta(id, cached))?.allowContinue).toBe(true);
+    });
+
+    it("rejects a body without a boolean allowContinue", async () => {
+      const { env, kvStore } = makeEnv();
+      const { id, deleteKey } = await (await createShare(form(), env, "https://z.test")).json();
+      for (const body of [null, {}, { allowContinue: "1" }, { allowContinue: 1 }, "x"]) {
+        expect((await updateShare(id, deleteKey, body as never, env)).status).toBe(400);
+      }
+      expect(kvStore.size).toBe(0);
+    });
+
+    it("unknown or bad ids are 404", async () => {
+      const { env } = makeEnv();
+      expect((await updateShare("AAAAAAAAAAAA", "k", { allowContinue: true }, env)).status).toBe(404);
+      expect((await updateShare("../x", "k", { allowContinue: true }, env)).status).toBe(404);
+    });
+
+    it("unshare removes the override", async () => {
+      const { env, kvStore } = makeEnv();
+      const { id, deleteKey } = await (await createShare(form(), env, "https://z.test")).json();
+      await updateShare(id, deleteKey, { allowContinue: false }, env);
+      expect(kvStore.has(`share-continue:${id}`)).toBe(true);
+      expect((await deleteShare(id, deleteKey, env)).status).toBe(204);
+      expect(kvStore.has(`share-continue:${id}`)).toBe(false);
+    });
+
+    it("unshare still works when the override can't be removed", async () => {
+      const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+      const { env, objects } = makeEnv();
+      const { id, deleteKey } = await (await createShare(form(), env, "https://z.test")).json();
+      const kv: KVLike = {
+        ...env.kv,
+        delete: async () => {
+          throw new Error("kv down");
+        },
+      };
+      expect((await deleteShare(id, deleteKey, { ...env, kv })).status).toBe(204);
+      expect(objects.size).toBe(0);
+      errors.mockRestore();
+    });
+
+    it("meta falls back to the stored value when the override can't be read", async () => {
+      const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+      const { env } = makeEnv();
+      const { id, deleteKey } = await (await createShare(form(), env, "https://z.test")).json();
+      await updateShare(id, deleteKey, { allowContinue: false }, env);
+      const kv: KVLike = {
+        ...env.kv,
+        get: async () => {
+          throw new Error("kv down");
+        },
+      };
+      expect((await shareMeta(id, { ...env, kv }))?.allowContinue).toBe(true);
+      expect(errors).toHaveBeenCalled();
+      errors.mockRestore();
+    });
   });
 });
