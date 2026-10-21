@@ -59,6 +59,7 @@ export interface IShapeElementData {
   opacity: number;
   look?: ElementLook;
   seed?: number;
+  createdAt?: number;
 }
 
 export interface IArrowElementData {
@@ -76,6 +77,7 @@ export interface IArrowElementData {
   opacity: number;
   look: ElementLook;
   seed: number;
+  createdAt?: number;
 }
 
 export interface ITextElementData {
@@ -91,6 +93,7 @@ export interface ITextElementData {
   opacity: number;
   rotation: number;
   containerId: string | null;
+  createdAt?: number;
 }
 
 // New unified draw layer — holds an ordered mix of stroke and shape elements.

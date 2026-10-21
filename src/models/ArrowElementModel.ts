@@ -24,6 +24,7 @@ export const ArrowElement = types
     opacity: types.optional(types.number, 1),
     look: types.optional(types.enumeration("ElementLook", [...ELEMENT_LOOKS]), "clean"),
     seed: types.optional(types.number, () => newSeed()),
+    createdAt: types.maybe(types.number),
   })
   .actions((self) => ({
     setEnds(start: Vec, end: Vec) {

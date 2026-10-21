@@ -33,6 +33,7 @@ export const ShapeElement = types
     opacity: types.optional(types.number, 1),
     look: types.optional(types.enumeration("ElementLook", [...ELEMENT_LOOKS]), "clean"),
     seed: types.optional(types.number, () => newSeed()),
+    createdAt: types.maybe(types.number),
   })
   .views((self) => ({
     get bounds() {

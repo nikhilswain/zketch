@@ -119,6 +119,7 @@ export interface ShapeElementLike {
   opacity: number;
   look?: ElementLook;
   seed?: number;
+  createdAt?: number | null;
 }
 
 export const ELEMENT_LOOKS = ["clean", "sketchy", "pencil", "crayon", "charcoal"] as const;
@@ -142,6 +143,7 @@ export interface ArrowElementLike {
   opacity: number;
   look: ElementLook;
   seed: number;
+  createdAt?: number | null;
 }
 
 export interface TextElementLike {
@@ -157,6 +159,7 @@ export interface TextElementLike {
   opacity: number;
   rotation: number;
   containerId: string | null;
+  createdAt?: number | null;
 }
 
 export type ElementLike = StrokeLike | ShapeElementLike | ArrowElementLike | TextElementLike;

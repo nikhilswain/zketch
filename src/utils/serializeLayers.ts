@@ -23,6 +23,7 @@ function serializeElement(el: any) {
       opacity: el.opacity,
       look: el.look ?? "clean",
       seed: el.seed,
+      ...(el.createdAt != null ? { createdAt: el.createdAt } : {}),
     };
   }
   return optimizeStroke({

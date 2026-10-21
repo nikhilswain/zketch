@@ -1052,6 +1052,7 @@ export const CanvasModel = types
           fillColor: self.shapeFillColor,
           look: self.elementLook as ElementLook,
         });
+        shapeData.createdAt = Date.now();
         const elementId = drawLayer.addShape(shapeData);
         self.saveToHistory();
         return elementId
@@ -1152,6 +1153,7 @@ export const CanvasModel = types
           color: self.currentColor,
           containerId: options.containerId ?? null,
         });
+        data.createdAt = Date.now();
         layer.elements.push(data as any);
         self.editingTextId = data.id as string;
         return { layerId: layer.id, elementId: data.id as string, createdLayer: created };
@@ -1222,6 +1224,7 @@ export const CanvasModel = types
           opacity: self.shapeOpacity,
           look: self.elementLook as ElementLook,
         });
+        data.createdAt = Date.now();
         if (seed !== undefined) (data as any).seed = seed;
         target.layer.elements.push(data as any);
         self.saveToHistory();

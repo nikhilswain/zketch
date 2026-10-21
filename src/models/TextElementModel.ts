@@ -19,6 +19,7 @@ export const TextElement = types
     opacity: types.optional(types.number, 1),
     rotation: types.optional(types.number, 0),
     containerId: types.optional(types.maybeNull(types.string), null),
+    createdAt: types.maybe(types.number),
   })
   .views((self) => ({
     get layout() {

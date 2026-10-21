@@ -9,7 +9,7 @@ export function cloneElements(snaps: any[], dx: number, dy: number, keepOutsideL
     return keepOutsideLinks ? id : null;
   };
   return snaps.map((s) => {
-    const c = { ...s, id: ids.get(s.id) };
+    const c = { ...s, id: ids.get(s.id), ...(s.createdAt != null ? { createdAt: Date.now() } : {}) };
     switch (elementKind(s)) {
       case "arrow": {
         const startId = link(s.startBinding?.elementId);
