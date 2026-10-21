@@ -12,6 +12,7 @@ const PREVIEW_LONG_SIDE = 1200;
 const PREVIEW_MAX_BYTES = 300 * 1024;
 const PREVIEW_START_QUALITY = 0.85;
 const PREVIEW_MIN_QUALITY = 0.45;
+const PREVIEW_MIN_LONG_SIDE = 320;
 
 export function stripForShare(drawing: ISavedDrawingData, newId: string): ISavedDrawingData {
   const layers = drawing.layers.filter((l) => l.visible);
@@ -83,19 +84,30 @@ export async function renderSharePictures(
   const picture = await toBlob(canvas, "image/png");
 
   const shrink = Math.min(1, PREVIEW_LONG_SIDE / Math.max(canvas.width, canvas.height));
-  const previewWidth = Math.max(1, Math.round(canvas.width * shrink));
-  const previewHeight = Math.max(1, Math.round(canvas.height * shrink));
-  const small = document.createElement("canvas");
-  small.width = previewWidth;
-  small.height = previewHeight;
-  const ctx = small.getContext("2d");
-  if (!ctx) throw new Error("Could not get canvas context");
-  ctx.drawImage(canvas, 0, 0, previewWidth, previewHeight);
+  let previewWidth = Math.max(1, Math.round(canvas.width * shrink));
+  let previewHeight = Math.max(1, Math.round(canvas.height * shrink));
 
+  const draw = (w: number, h: number): HTMLCanvasElement => {
+    const small = document.createElement("canvas");
+    small.width = w;
+    small.height = h;
+    const ctx = small.getContext("2d");
+    if (!ctx) throw new Error("Could not get canvas context");
+    ctx.drawImage(canvas, 0, 0, w, h);
+    return small;
+  };
+
+  let small = draw(previewWidth, previewHeight);
   let quality = PREVIEW_START_QUALITY;
   let preview = await toBlob(small, "image/jpeg", quality);
   while (preview.size > PREVIEW_MAX_BYTES && quality - 0.1 >= PREVIEW_MIN_QUALITY - 1e-9) {
     quality -= 0.1;
+    preview = await toBlob(small, "image/jpeg", quality);
+  }
+  while (preview.size > PREVIEW_MAX_BYTES && Math.max(previewWidth, previewHeight) * 0.85 >= PREVIEW_MIN_LONG_SIDE) {
+    previewWidth = Math.max(1, Math.round(previewWidth * 0.85));
+    previewHeight = Math.max(1, Math.round(previewHeight * 0.85));
+    small = draw(previewWidth, previewHeight);
     preview = await toBlob(small, "image/jpeg", quality);
   }
   return { picture, preview, previewWidth, previewHeight };
