@@ -116,11 +116,15 @@ export async function checkRateLimit(
   env: ShareEnv
 ): Promise<Response | null> {
   const rateKey = `rl:${ip}:${hourStamp(new Date())}`;
-  const used = parseInt((await env.kv.get(rateKey)) ?? "0", 10) || 0;
-  if (used >= RATE_LIMIT) {
-    return json({ error: "Too many shares, try again later" }, 429);
+  try {
+    const used = parseInt((await env.kv.get(rateKey)) ?? "0", 10) || 0;
+    if (used >= RATE_LIMIT) {
+      return json({ error: "Too many shares, try again later" }, 429);
+    }
+    await env.kv.put(rateKey, String(used + 1), { expirationTtl: 3600 });
+  } catch (err) {
+    console.error("Rate limit check failed:", err);
   }
-  await env.kv.put(rateKey, String(used + 1), { expirationTtl: 3600 });
   return null;
 }
 

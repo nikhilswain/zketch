@@ -113,6 +113,19 @@ describe("shareServer", () => {
     expect(await checkRateLimit("3.3.3.3", env)).toBeNull();
   });
 
+  it("allows sharing when the rate limit store fails", async () => {
+    const { env } = makeEnv();
+    const broken: KVLike = {
+      get: async () => {
+        throw new Error("kv down");
+      },
+      put: async () => {
+        throw new Error("kv down");
+      },
+    };
+    expect(await checkRateLimit("4.4.4.4", { ...env, kv: broken })).toBeNull();
+  });
+
   it("content-length guard rejects missing, bad and oversized bodies", () => {
     expect(checkContentLength(null)?.status).toBe(413);
     expect(checkContentLength("abc")?.status).toBe(413);
