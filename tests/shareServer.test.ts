@@ -136,6 +136,7 @@ describe("shareServer", () => {
     const res = await getShareFile(id, "preview.jpg", env);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/jpeg");
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
   });
 
   it("delete needs the right key", async () => {

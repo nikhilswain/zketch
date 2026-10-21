@@ -228,6 +228,7 @@ export async function getShareFile(
     headers: {
       "content-type": object.httpMetadata?.contentType ?? FILES[file].type,
       "cache-control": "public, max-age=86400",
+      "x-content-type-options": "nosniff",
     },
   });
 }
