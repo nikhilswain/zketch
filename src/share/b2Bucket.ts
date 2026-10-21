@@ -28,6 +28,29 @@ function decodeMeta(value: string | null): Record<string, string> | undefined {
   }
 }
 
+function unescapeXml(text: string): string {
+  return text
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)))
+    .replace(/&amp;/g, "&");
+}
+
+function versionIdsFor(xml: string, key: string): string[] {
+  const ids: string[] = [];
+  for (const entry of xml.matchAll(/<(Version|DeleteMarker)>([\s\S]*?)<\/\1>/g)) {
+    const entryKey = entry[2].match(/<Key>([\s\S]*?)<\/Key>/)?.[1];
+    const versionId = entry[2].match(/<VersionId>([\s\S]*?)<\/VersionId>/)?.[1];
+    if (entryKey !== undefined && versionId !== undefined && unescapeXml(entryKey) === key) {
+      ids.push(unescapeXml(versionId));
+    }
+  }
+  return ids;
+}
+
 async function fail(method: string, key: string, response: Response): Promise<never> {
   const detail = await response.text().catch(() => "");
   throw new Error(`B2 ${method} ${key} failed (${response.status}) ${detail.slice(0, 200)}`);
@@ -84,10 +107,25 @@ export function b2Bucket(cfg: B2Config, fetchFn: typeof fetch = fetch): R2Like {
       return read(response, undefined);
     },
     async delete(keys) {
-      for (const key of keys) {
-        const response = await send("DELETE", key);
+      const remove = async (key: string, query = "") => {
+        const response = await fetchFn(await client.sign(urlFor(key) + query, { method: "DELETE" }));
         if (!response.ok && response.status !== 404) await fail("DELETE", key, response);
         await response.body?.cancel();
+      };
+      for (const key of keys) {
+        const listing = await fetchFn(
+          await client.sign(
+            `https://${host}/${encodeURIComponent(cfg.bucket)}?versions&prefix=${encodeURIComponent(key)}`,
+            { method: "GET" }
+          )
+        );
+        if (!listing.ok) await fail("LIST", key, listing);
+        const ids = versionIdsFor(await listing.text(), key);
+        if (ids.length === 0) {
+          await remove(key);
+          continue;
+        }
+        for (const id of ids) await remove(key, `?versionId=${encodeURIComponent(id)}`);
       }
     },
   };

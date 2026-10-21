@@ -93,19 +93,46 @@ describe("b2Bucket", () => {
     expect(await bucket.head("shares/abc/picture.png")).toBeNull();
   });
 
-  it("delete sends one DELETE per key and tolerates missing ones", async () => {
-    const { objects, requests, fetchFn } = fakeS3();
+  it("delete removes every version and delete marker of the exact key", async () => {
+    const requests: Request[] = [];
+    const listing = `<?xml version="1.0"?><ListVersionsResult>
+<Version><Key>shares/abc/a&amp;b.png</Key><VersionId>v1</VersionId></Version>
+<Version><Key>shares/abc/a&amp;b.png</Key><VersionId>v2</VersionId></Version>
+<DeleteMarker><Key>shares/abc/a&amp;b.png</Key><VersionId>m1</VersionId></DeleteMarker>
+<Version><Key>shares/abc/a&amp;b.png.bak</Key><VersionId>other</VersionId></Version>
+</ListVersionsResult>`;
+    const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      requests.push(request);
+      if (request.method === "GET") return new Response(listing, { status: 200 });
+      return new Response(null, { status: 204 });
+    }) as typeof fetch;
     const bucket = b2Bucket(CFG, fetchFn);
-    await bucket.put("shares/abc/picture.png", new Blob(["p"]), {
-      httpMetadata: { contentType: "image/png" },
-    });
-    requests.length = 0;
-    await bucket.delete(["shares/abc/picture.png", "shares/abc/preview.jpg"]);
-    expect(requests.map((r) => `${r.method} ${r.url}`)).toEqual([
-      `DELETE ${URL_BASE}/picture.png`,
-      `DELETE ${URL_BASE}/preview.jpg`,
-    ]);
-    expect(objects.size).toBe(0);
+    await bucket.delete(["shares/abc/a&b.png"]);
+    expect(requests[0].method).toBe("GET");
+    expect(requests[0].url).toBe(
+      "https://s3.us-west-004.backblazeb2.com/zketch-shares?versions&prefix=shares%2Fabc%2Fa%26b.png"
+    );
+    const deletes = requests.slice(1).map((r) => `${r.method} ${r.url}`);
+    expect(deletes).toEqual(
+      ["v1", "v2", "m1"].map((id) => `DELETE ${URL_BASE}/a%26b.png?versionId=${id}`)
+    );
+  });
+
+  it("delete falls back to a plain DELETE when nothing is listed", async () => {
+    const requests: Request[] = [];
+    const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      requests.push(request);
+      if (request.method === "GET") {
+        return new Response("<ListVersionsResult></ListVersionsResult>", { status: 200 });
+      }
+      return new Response(null, { status: 404 });
+    }) as typeof fetch;
+    const bucket = b2Bucket(CFG, fetchFn);
+    await bucket.delete(["shares/abc/picture.png"]);
+    expect(requests.map((r) => r.method)).toEqual(["GET", "DELETE"]);
+    expect(requests[1].url).toBe(`${URL_BASE}/picture.png`);
   });
 
   it("throws on server errors", async () => {
@@ -114,6 +141,11 @@ describe("b2Bucket", () => {
     await expect(bucket.put("shares/abc/picture.png", new Blob(["p"]))).rejects.toThrow();
     await expect(bucket.get("shares/abc/picture.png")).rejects.toThrow();
     await expect(bucket.delete(["shares/abc/picture.png"])).rejects.toThrow();
+    const listed = (async (input: RequestInfo | URL, init?: RequestInit) =>
+      new Request(input, init).method === "GET"
+        ? new Response("<Version><Key>shares/abc/picture.png</Key><VersionId>v</VersionId></Version>")
+        : new Response("nope", { status: 500 })) as typeof fetch;
+    await expect(b2Bucket(CFG, listed).delete(["shares/abc/picture.png"])).rejects.toThrow();
   });
 
   it("rejects an endpoint without a region", () => {
