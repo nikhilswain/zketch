@@ -1032,8 +1032,10 @@ stage first shows `picture.png` as an `<img>` so the page paints at once, while
 the drawing file loads. Once ready: a teaser replays the last few elements
 every 5 s until the viewer interacts (skipped off-screen, in a hidden tab or
 with reduced motion); tap or Space/Enter plays from the start; dragging more
-than 4 px scrubs (pointer-captured, pauses playback; arrow keys step); a mono
-tag shows the clock and the speed mode, clickable to cycle. Below it: Picture
+than 4 px scrubs (pointer-captured; on release it plays on from that point;
+arrow keys step); a hand-drawn pencil rail along the bottom fills with ink up to
+"now" while scrubbing, and on hover while playing; a mono tag shows the clock
+and the speed mode, clickable to cycle. Below it: Picture
 (downloads `picture.png`), Video, and "Continue in zketch".
 
 **Continue.** Off by default ("Let people continue this drawing" in the export
