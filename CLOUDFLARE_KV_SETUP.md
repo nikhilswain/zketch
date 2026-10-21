@@ -86,20 +86,34 @@ The new system uses:
 - Share not found: Clear explanation with retry option
 - Network issues: Automatic retry suggestions
 
-## R2 bucket for playable shares
+## Backblaze B2 bucket for playable shares
 
-New shares store their files in R2 and still use the KV namespace above for the
-rate limit. Do this once, in the Cloudflare dashboard:
+New shares store their files in a private Backblaze B2 bucket (10 GB free, no
+card needed) and still use the KV namespace above for the rate limit. Visitors
+never talk to B2: the server reaches it through B2's S3-compatible API with a
+secret key, and everything goes through the `/api/shares/*` routes. Do this
+once:
 
-1. R2 -> Create bucket, name it `zketch-shares`.
-2. Workers & Pages -> zketch -> Settings -> Bindings -> Add -> R2 bucket.
-   - Variable name: `ZKETCH_SHARE_FILES`
-   - R2 bucket: `zketch-shares`
-   - Add it for both Production and Preview.
-3. Redeploy so the binding takes effect.
+1. Create a free Backblaze account at backblaze.com (B2 Cloud Storage, no card).
+2. Buckets -> Create a Bucket. Name it e.g. `zketch-shares`, set Files in
+   Bucket to **Private**, leave the rest as is.
+3. Note the bucket's **S3 Endpoint** shown on the bucket card, e.g.
+   `s3.us-west-004.backblazeb2.com`.
+4. Application Keys -> Add a New Application Key. Allow access to that bucket
+   only, type of access **Read and Write**. Copy the `keyID` and the
+   `applicationKey` (the application key is shown only once).
+5. Cloudflare dashboard -> Workers & Pages -> zketch -> Settings -> Variables
+   and Secrets. Add, for Production (and Preview if you use it):
+   - `ZKETCH_B2_ENDPOINT` (plain text): the S3 endpoint from step 3
+   - `ZKETCH_B2_BUCKET` (plain text): the bucket name from step 2
+   - `ZKETCH_B2_KEY_ID` (Secret): the `keyID` from step 4
+   - `ZKETCH_B2_APP_KEY` (Secret): the `applicationKey` from step 4
+6. Redeploy so the variables take effect.
 
-`wrangler.toml` is gitignored and only used for local development; production
-bindings come from the Pages dashboard. For local dev add to your own
+When all four variables are set the server uses B2. Otherwise it falls back to
+an R2 binding named `ZKETCH_SHARE_FILES`, which is what local development uses
+(wrangler emulates R2 on disk, no Cloudflare account needed). `wrangler.toml` is
+gitignored and only used for local development; for local dev add to your own
 `wrangler.toml`:
 
 ```toml
@@ -108,6 +122,16 @@ binding = "ZKETCH_SHARE_FILES"
 bucket_name = "zketch-shares"
 ```
 
-Without the binding, `POST /api/shares` returns 500 "Storage not available".
-Objects are `shares/<id>/drawing.zketch`, `picture.png` and `preview.jpg`;
-nothing expires, so owners remove a share with "Unshare" in the export dialog.
+With neither B2 nor the binding, `POST /api/shares` returns 500 "Storage not
+available". Objects are `shares/<id>/drawing.zketch` (gzipped), `picture.png`
+and `preview.jpg`; nothing expires, so owners remove a share with "Unshare" in
+the export dialog.
+
+**Edge cache.** B2's free tier caps download and info calls at about 2,500 a
+day, so the server keeps share files and the page's share details in the
+Cloudflare edge cache for a day (a missing share for a minute). Repeat views
+and link-preview bots are served from the cache instead of B2. Unsharing
+deletes the objects from B2 and clears the cache in the Cloudflare location
+that handled the request; other locations may keep serving a cached copy for
+up to a day (the `max-age` is 1 day), after which the link stops working
+everywhere.

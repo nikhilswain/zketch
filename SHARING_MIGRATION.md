@@ -69,18 +69,22 @@ GET /api/share/{shareId}
 - 🔄 Monitor usage and performance
 - 📅 Future: Gradual sunset of URL-based system (12+ months)
 
-## Playable sharing (R2)
+## Playable sharing (Backblaze B2)
 
 Newer shares are playable: the page replays how the drawing was made, and the
 viewer can download a picture or a video, or (if the owner allowed it) continue
 the drawing in their own vault.
 
-- New shares go to `POST /api/shares` and are stored in Cloudflare R2 (bucket
-  `zketch-shares`, binding `ZKETCH_SHARE_FILES`), with no expiry. The KV
-  namespace `ZKETCH_SHARES` is still needed for the rate limit (20 shares per IP
-  per hour).
+- New shares go to `POST /api/shares` and are stored in a private Backblaze B2
+  bucket (reached by the server through the S3 API, variables
+  `ZKETCH_B2_ENDPOINT`, `ZKETCH_B2_BUCKET`, `ZKETCH_B2_KEY_ID`,
+  `ZKETCH_B2_APP_KEY`), with no expiry. Local development uses the R2 emulation
+  binding `ZKETCH_SHARE_FILES` instead. The KV namespace `ZKETCH_SHARES` is
+  still needed for the rate limit (20 shares per IP per hour).
+- Files and share details are kept in the Cloudflare edge cache for a day, so
+  after an unshare a link can keep working in other locations for up to a day.
 - The `/api/share/*` routes and KV shares above keep working untouched. A
-  `/share/<id>` that is not in R2 falls back to the old viewer.
+  `/share/<id>` that is not in the bucket falls back to the old viewer.
 - The owner can unshare from the export dialog; the delete key is kept in that
   browser's localStorage (`zketch-shares-v1`).
 - Setup steps are in `CLOUDFLARE_KV_SETUP.md`; how it works is in

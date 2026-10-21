@@ -10,7 +10,7 @@
 
 **Zketch** is a browser-based drawing / sketching app (a "notes + doodle" tool).
 It is desktop-first, saves everything locally (IndexedDB), and can publish a
-playable share link (a replay of how it was drawn) stored in Cloudflare R2.
+playable share link (a replay of how it was drawn) stored in Backblaze B2.
 
 Core capabilities:
 
@@ -170,7 +170,11 @@ src/
 │   ├── ReplayRenderer.ts      # Frame-by-frame canvas renderer, shareFrame()
 │   ├── sharePayload.ts        # What leaves the browser: stripped .zketch, picture, preview
 │   ├── shareClient.ts         # POST/DELETE /api/shares, local registry zketch-shares-v1
-│   ├── shareServer.ts         # R2 + KV logic behind the API routes and the page head
+│   ├── shareServer.ts         # Bucket + KV logic behind the API routes and the page head
+│   ├── shareEnv.ts            # Runtime env -> ShareEnv (B2, else the R2 dev binding; edge cache)
+│   ├── b2Bucket.ts            # Private Backblaze B2 bucket over the S3 API (aws4fetch)
+│   ├── edgeCache.ts           # caches.default when running on Cloudflare, else null
+│   ├── shareText.ts           # gzip the payload, read it back (gzipped or plain)
 │   └── video.ts               # In-browser MP4/WebM of the replay (lazy chunk)
 │
 ├── utils/
@@ -856,8 +860,8 @@ Ctrl+S save · Ctrl+E export · Ctrl+N new · Ctrl+V vault · B/W/R colors ·
 | `/draw` | `pages/draw/index.astro` | `draw-pages/draw-page.tsx` → `CanvasView` |
 | `/draw/[id]` | `pages/draw/[id].astro` (`prerender=false`) | `draw-pages/draw-by-id.tsx` → `CanvasView` |
 | `/share` | `pages/share.astro` | `share-page.tsx` (legacy `?data=` links) |
-| `/share/[shareId]` | `pages/share/[shareId].astro` (`prerender=false`) | `share-player-page.tsx` (R2 shares), else `share-by-id-page.tsx` (old KV links) |
-| `/api/shares` | `pages/api/shares/index.ts` | POST → writes R2 (new shares) |
+| `/share/[shareId]` | `pages/share/[shareId].astro` (`prerender=false`) | `share-player-page.tsx` (bucket shares), else `share-by-id-page.tsx` (old KV links) |
+| `/api/shares` | `pages/api/shares/index.ts` | POST → writes the bucket (new shares) |
 | `/api/shares/[id]` | `pages/api/shares/[id].ts` | GET → drawing file; DELETE → unshare |
 | `/api/shares/[id]/[file]` | `pages/api/shares/[id]/[file].ts` | GET → `picture.png` or `preview.jpg` |
 | `/api/share/store` | `pages/api/share/store.ts` | POST → writes KV w/ 30-day TTL (old, untouched) |
@@ -933,35 +937,59 @@ guards 150 KB).
 
 ### 10.2 Playable sharing (`src/share/`)
 
-A share is a whole drawing plus two pictures, stored in R2 with no expiry. The
-page replays how it was drawn, in the browser, from the shared `.zketch` file.
+A share is a whole drawing plus two pictures, stored in a private Backblaze B2
+bucket with no expiry. The page replays how it was drawn, in the browser, from
+the shared `.zketch` file.
 
-**Storage.** Binding `ZKETCH_SHARE_FILES` (R2 bucket `zketch-shares`), objects
-`shares/<id>/drawing.zketch`, `picture.png`, `preview.jpg`. Ids are 12-char
-base62. The drawing object carries `customMetadata`: `version` ("1"), `name`,
+**Storage.** `shareEnvFrom` (`shareEnv.ts`) builds the `ShareEnv` for every
+route and the page. In production it is a private B2 bucket reached through
+the S3 API (`b2Bucket.ts`, SigV4 via `aws4fetch`, path-style
+`https://<endpoint>/<bucket>/<key>`), configured by `ZKETCH_B2_ENDPOINT`,
+`ZKETCH_B2_BUCKET`, `ZKETCH_B2_KEY_ID`, `ZKETCH_B2_APP_KEY`; visitors never talk
+to B2. Without those it uses the R2 binding `ZKETCH_SHARE_FILES` (local dev
+emulation). Objects `shares/<id>/drawing.zketch`, `picture.png`,
+`preview.jpg`. Ids are 12-char base62. The drawing object carries
+`customMetadata` (in B2 all of it travels as one header, `x-amz-meta-zk`,
+base64url JSON, so key case and non-ASCII names survive): `version` ("1"), `name`,
 `allowContinue` ("1"/"0"), `previewWidth/Height`, `createdAt`, and
 `deleteKeyHash` (SHA-256 hex of the delete key; the key itself, 32 random bytes
 base64url, is returned once and never stored). The KV namespace `ZKETCH_SHARES`
 is still bound and now holds the rate-limit counters (and the old shares).
-`wrangler.toml` is gitignored (local dev); production bindings live in the
-Cloudflare Pages dashboard (see `CLOUDFLARE_KV_SETUP.md`).
+`wrangler.toml` is gitignored (local dev); production bindings and variables
+live in the Cloudflare dashboard (see `CLOUDFLARE_KV_SETUP.md`).
+
+**Payload.** The client gzips the `.zketch` JSON (`CompressionStream`) and
+uploads it as `application/gzip`; the 10 MB cap applies to the compressed
+bytes. The server checks the gzip magic `1f 8b` (or the old plain
+`{"format":"zketch"` with `application/json`), stores it with the matching
+type and never decompresses. Readers go through `readShareText`
+(`shareText.ts`), which handles both.
+
+**Edge cache.** B2's free tier caps download/info calls (about 2,500 a day), so
+`getShareFile` and `shareMeta` go through `caches.default` (`edgeCache.ts`,
+null outside Cloudflare, so tests and `astro dev` skip it). Files are cached
+on first read for a day; `shareMeta` caches its result under
+`https://zketch-share-cache/meta/<id>` for a day (a missing share for 60 s).
+Cache writes go through `ctx.waitUntil`. `deleteShare` clears the four keys,
+but only in the Cloudflare location that handled it; elsewhere the 1-day
+max-age bounds how long an unshared link keeps working.
 
 **API** (`shareServer.ts`, thin routes in `pages/api/shares/`).
 - `POST /api/shares` takes multipart `drawing`, `picture`, `preview`,
   `previewWidth`, `previewHeight`, `name`, `allowContinue`. Order matters: the
   `content-length` guard (413) and the 20-per-IP-per-hour KV counter (429,
-  1 h TTL) run before the body is parsed. Then checks: drawing ≤ 10 MB and
-  starting `{"format":"zketch"`, picture a PNG ≤ 8 MB, preview a JPEG ≤ 400 KB,
+  1 h TTL) run before the body is parsed. Then checks: drawing ≤ 10 MB, either
+  gzip (`application/gzip`) or starting `{"format":"zketch"`, picture a PNG ≤ 8 MB, preview a JPEG ≤ 400 KB,
   name ≤ 120 chars. Returns `201 {id, url, deleteKey}`.
 - `GET /api/shares/:id` returns the drawing file, `GET /api/shares/:id/picture.png`
   and `preview.jpg` the images (`cache-control: public, max-age=86400`).
 - `DELETE /api/shares/:id` needs header `x-delete-key`; its hash must match
   (403 otherwise); deletes all three objects (204).
-- `shareMeta(id)` (an R2 `head`) feeds the page head.
+- `shareMeta(id)` (a bucket `head`, edge-cached) feeds the page head.
 
-**Page.** `/share/[shareId]` is server-rendered: it reads the R2 metadata and
+**Page.** `/share/[shareId]` is server-rendered: it reads the share metadata and
 sets title, `og:image` (`preview.jpg`, with its size) and `noindex`. If there is
-no R2 object it falls back to the old KV viewer, so old links keep working.
+no bucket object it falls back to the old KV viewer, so old links keep working.
 
 **What is shared** (`sharePayload.ts`). `stripForShare` drops hidden layers, the
 thumbnail and the local id (fresh id), then `packBackup` writes a normal
@@ -1160,7 +1188,7 @@ While animating, `canvasLocked` blocks all drawing/import.
   shapes).
 - `THIRD_PARTY_ASSETS.md` — sources and licences of bundled brush tips and
   grains (the share-image fonts carry their OFL files in `src/assets/og/`).
-- `SHARING_MIGRATION.md`, `CLOUDFLARE_KV_SETUP.md` — share systems (KV, then R2) + Cloudflare setup.
+- `SHARING_MIGRATION.md`, `CLOUDFLARE_KV_SETUP.md` — share systems (KV, then B2) + Cloudflare/Backblaze setup.
 - `docs/superpowers/specs|plans/` — design specs for autosave/renderVersion,
   touch/stylus InputManager, and the sidebar floating-panel refactor. All three
   are implemented.
@@ -1176,7 +1204,7 @@ stamp and RaV89 brushes, stylus pressure and stroke dynamics, pan/zoom,
 touch/stylus/palm rejection, shapes + selection/transform, diagrams (bound
 arrows, text, labels, hand-drawn looks), eraser modes, fixed-size pages,
 autosave + renderVersion auto-bump, local vault + thumbnails, PNG/JPG export,
-playable share links on Cloudflare R2 (replay, picture and video download, optional continue), old KV links, per-layer timelapse animation, the studio drawing
+playable share links on Backblaze B2 (replay, picture and video download, optional continue), old KV links, per-layer timelapse animation, the studio drawing
 screen (docks, layouts, Simple layout, Settings page), brush-drawn icons, the
 swoosh logo, SEO tags and generated share images, tiled rendering (pan/zoom
 never block on stroke rendering). Vitest render tests run with `npm test`.
