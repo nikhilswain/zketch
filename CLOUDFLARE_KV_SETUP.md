@@ -129,9 +129,15 @@ the export dialog.
 
 **Edge cache.** B2's free tier caps download and info calls at about 2,500 a
 day, so the server keeps share files and the page's share details in the
-Cloudflare edge cache for a day (a missing share for a minute). Repeat views
-and link-preview bots are served from the cache instead of B2. Unsharing
+Cloudflare edge cache for a day (a missing share or file for a minute). The
+cache is per Cloudflare location, so each location fetches from B2 once. Repeat
+views and link-preview bots are served from the cache instead of B2. Unsharing
 deletes the objects from B2 and clears the cache in the Cloudflare location
 that handled the request; other locations may keep serving a cached copy for
 up to a day (the `max-age` is 1 day), after which the link stops working
 everywhere.
+
+Recommended: add one free Cloudflare rate-limiting rule for `/api/shares/*`
+and `/share/*` (for example 60 requests per 10 seconds per IP, action block).
+Requests for random ids that do not exist still reach B2 once per location per
+minute, and the rule keeps a scanner from using up the daily allowance.

@@ -293,6 +293,15 @@ export async function getShareFile(
   if (hit) return new Response(hit.body, hit);
   const object = await env.bucket.get(keyFor(id, file));
   if (!object || !object.body) {
+    await cacheUpdate(env, (cache) =>
+      cache.put(
+        cacheKey,
+        new Response("Not found", {
+          status: 404,
+          headers: { "cache-control": `public, max-age=${CACHE_MISSING}` },
+        })
+      )
+    );
     return new Response("Not found", { status: 404 });
   }
   const response = new Response(object.body, {

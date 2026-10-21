@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   createShare,
   checkContentLength,
@@ -204,8 +204,18 @@ describe("shareServer", () => {
     expect(second.headers.get("cache-control")).toBe("public, max-age=86400");
     expect(second.headers.get("x-content-type-options")).toBe("nosniff");
     expect(calls.get).toBe(1);
+  });
+
+  it("a missing file is cached for a minute and not fetched again", async () => {
+    const { env, calls } = makeEnv();
+    const { cache, entries } = makeCache();
+    const cached = { ...env, cache };
     expect((await getShareFile("AAAAAAAAAAAA", "drawing", cached)).status).toBe(404);
-    expect([...entries.keys()].some((k) => k.includes("AAAAAAAAAAAA"))).toBe(false);
+    expect((await getShareFile("AAAAAAAAAAAA", "drawing", cached)).status).toBe(404);
+    expect(calls.get).toBe(1);
+    expect(
+      entries.get("https://zketch-share-cache/files/AAAAAAAAAAAA/drawing.zketch")?.headers.get("cache-control")
+    ).toBe("public, max-age=60");
   });
 
   it("meta is cached for a day and a missing share for a minute", async () => {
@@ -256,6 +266,7 @@ describe("shareServer", () => {
   });
 
   it("a failing cache never breaks reads", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
     const { env } = makeEnv();
     const broken: CacheLike = {
       match: async () => {
@@ -273,6 +284,8 @@ describe("shareServer", () => {
     expect((await shareMeta(id, cached))?.name).toBe("My cat");
     expect((await getShareFile(id, "picture.png", cached)).status).toBe(200);
     expect((await deleteShare(id, deleteKey, cached)).status).toBe(204);
+    expect(errors).toHaveBeenCalled();
+    errors.mockRestore();
   });
 
   it("accepts a gzipped drawing and serves it back as stored", async () => {

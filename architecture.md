@@ -969,10 +969,13 @@ type and never decompresses. Readers go through `readShareText`
 `getShareFile` and `shareMeta` go through `caches.default` (`edgeCache.ts`,
 null outside Cloudflare, so tests and `astro dev` skip it). Files are cached
 on first read for a day; `shareMeta` caches its result under
-`https://zketch-share-cache/meta/<id>` for a day (a missing share for 60 s).
-Cache writes go through `ctx.waitUntil`. `deleteShare` clears the four keys,
+`https://zketch-share-cache/meta/<id>` for a day (a missing share for 60 s);
+a missing file is cached as a 404 for 60 s too (errors are never cached). The
+cache is per Cloudflare location. Cache writes go through `ctx.waitUntil`. `deleteShare` clears the four keys,
 but only in the Cloudflare location that handled it; elsewhere the 1-day
-max-age bounds how long an unshared link keeps working.
+max-age bounds how long an unshared link keeps working. Setup recommends one
+free Cloudflare rate-limiting rule on `/api/shares/*` and `/share/*` (60
+requests per 10 s per IP) against scanners probing random ids.
 
 **API** (`shareServer.ts`, thin routes in `pages/api/shares/`).
 - `POST /api/shares` takes multipart `drawing`, `picture`, `preview`,
