@@ -38,6 +38,8 @@ type DrawState = {
   settled: HTMLCanvasElement;
   settledCtx: CanvasRenderingContext2D;
   count: number;
+  kept: HTMLCanvasElement | null;
+  keptCount: number;
 };
 
 type ImageState = {
@@ -126,6 +128,8 @@ export class ReplayRenderer {
   private scratchCtx: CanvasRenderingContext2D;
   private lastT = -Infinity;
   private stale = false;
+  private keepT: number | null = null;
+  private kept = false;
   private preparing: Promise<void> | null = null;
   private stopAssets: () => void;
   private urls: string[] = [];
@@ -156,7 +160,15 @@ export class ReplayRenderer {
       const settled = createCanvas(this.width, this.height);
       const settledCtx = context(settled);
       this.toWorld(settledCtx);
-      return { ...s, labels: labelsByContainer(s.elements), settled, settledCtx, count: 0 };
+      return {
+        ...s,
+        labels: labelsByContainer(s.elements),
+        settled,
+        settledCtx,
+        count: 0,
+        kept: null,
+        keptCount: 0,
+      };
     });
     this.scratch = createCanvas(this.width, this.height);
     this.scratchCtx = context(this.scratch);
@@ -170,8 +182,20 @@ export class ReplayRenderer {
     return this.preparing;
   }
 
+  keep(t: number): void {
+    if (this.keepT === t) return;
+    this.keepT = t;
+    this.kept = false;
+  }
+
   draw(t: number): { tip: Point | null } {
-    if (this.stale || t < this.lastT) this.reset();
+    if (this.stale) {
+      this.kept = false;
+      this.reset();
+    } else if (t < this.lastT) {
+      if (this.kept && this.keepT !== null && this.keepT <= t) this.restore();
+      else this.reset();
+    }
     this.lastT = t;
     const progress = progressAt(this.replay, t);
     const ctx = this.ctx;
@@ -228,6 +252,7 @@ export class ReplayRenderer {
       ctx.drawImage(this.scratch, 0, 0);
     }
     ctx.globalAlpha = 1;
+    if (!this.kept && this.keepT === t) this.save();
     return { tip };
   }
 
@@ -240,6 +265,10 @@ export class ReplayRenderer {
       if (layer.type === "draw") {
         layer.settled.width = 0;
         layer.settled.height = 0;
+        if (layer.kept) {
+          layer.kept.width = 0;
+          layer.kept.height = 0;
+        }
       }
     }
     this.layers = [];
@@ -342,6 +371,29 @@ export class ReplayRenderer {
       layer.settledCtx.clearRect(0, 0, this.width, this.height);
       this.toWorld(layer.settledCtx);
       layer.count = 0;
+    }
+  }
+
+  private save(): void {
+    for (const layer of this.layers) {
+      if (layer.type !== "draw") continue;
+      layer.kept ??= createCanvas(this.width, this.height);
+      const kctx = context(layer.kept);
+      kctx.clearRect(0, 0, this.width, this.height);
+      kctx.drawImage(layer.settled, 0, 0);
+      layer.keptCount = layer.count;
+    }
+    this.kept = true;
+  }
+
+  private restore(): void {
+    for (const layer of this.layers) {
+      if (layer.type !== "draw" || !layer.kept) continue;
+      layer.settledCtx.setTransform(1, 0, 0, 1, 0, 0);
+      layer.settledCtx.clearRect(0, 0, this.width, this.height);
+      layer.settledCtx.drawImage(layer.kept, 0, 0);
+      this.toWorld(layer.settledCtx);
+      layer.count = layer.keptCount;
     }
   }
 

@@ -84,6 +84,8 @@ const SharePlayer = forwardRef<SharePlayerHandle, SharePlayerProps>(({ drawing, 
     t: 0,
     total: 0,
     raf: 0,
+    scrubRaf: 0,
+    scrubT: 0,
     from: 0,
     t0: 0,
     played: false,
@@ -134,6 +136,8 @@ const SharePlayer = forwardRef<SharePlayerHandle, SharePlayerProps>(({ drawing, 
   const halt = () => {
     cancelAnimationFrame(st.raf);
     st.raf = 0;
+    cancelAnimationFrame(st.scrubRaf);
+    st.scrubRaf = 0;
   };
 
   const run = (from: number, kind: "play" | "tease") => {
@@ -177,7 +181,12 @@ const SharePlayer = forwardRef<SharePlayerHandle, SharePlayerProps>(({ drawing, 
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const k = rect.width > 0 ? (clientX - rect.left) / rect.width : 0;
-    seek(k * st.total);
+    st.scrubT = k * st.total;
+    if (st.scrubRaf) return;
+    st.scrubRaf = requestAnimationFrame(() => {
+      st.scrubRaf = 0;
+      seek(st.scrubT);
+    });
   };
 
   const cycleSpeed = () => {
@@ -224,6 +233,7 @@ const SharePlayer = forwardRef<SharePlayerHandle, SharePlayerProps>(({ drawing, 
     const renderer = rendererRef.current;
     if (!ready || !stage || !renderer || st.total <= 0) return;
     const from = teaseStart(renderer.replay);
+    renderer.keep(from);
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const observer = new IntersectionObserver(
       ([entry]) => {
