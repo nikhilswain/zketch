@@ -24,6 +24,7 @@ interface TopLeftBlockProps {
   onBack: () => void;
   onImport: () => void;
   onExport: () => void;
+  onSaveFile: () => void;
   onOpenSettings: () => void;
   onPageSize?: () => void;
 }
@@ -53,7 +54,7 @@ const Tick: React.FC<{ on: boolean }> = ({ on }) => (
 );
 
 const TopLeftBlock: React.FC<TopLeftBlockProps> = observer(
-  ({ drawingName, onNameChange, onNameCommit, saveStatus, onBack, onImport, onExport, onOpenSettings, onPageSize }) => {
+  ({ drawingName, onNameChange, onNameCommit, saveStatus, onBack, onImport, onExport, onSaveFile, onOpenSettings, onPageSize }) => {
     const canvasStore = useCanvasStore();
     const settingsStore = useSettingsStore();
     const inputRef = useRef<HTMLInputElement>(null);
@@ -113,6 +114,7 @@ const TopLeftBlock: React.FC<TopLeftBlockProps> = observer(
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onImport}>Import image…</DropdownMenuItem>
             <DropdownMenuItem onClick={onExport}>Export…</DropdownMenuItem>
+            <DropdownMenuItem onClick={onSaveFile}>Save as .zketch file</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>Background</DropdownMenuSubTrigger>

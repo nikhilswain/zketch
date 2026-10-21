@@ -70,6 +70,10 @@ export class BlobStorageService {
     return id;
   }
 
+  static async putBlobs(blobs: IStoredBlob[]): Promise<void> {
+    await this.db.blobs.bulkPut(blobs);
+  }
+
   /**
    * Retrieve a blob by ID
    */

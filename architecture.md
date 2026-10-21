@@ -157,6 +157,8 @@ src/
 ├── services/         # Storage + IO
 │   ├── DexieService.ts        # "DrawingVault" DB (drawings table)
 │   ├── BlobStorageService.ts  # "ImageBlobs" DB (rasters + thumbnails)
+│   ├── BackupService.ts       # .zketch file format: pack, parse, import plan (pure)
+│   ├── VaultBackup.ts         # .zketch download/import against the DBs, persist()
 │   ├── ExportService.ts       # PNG/JPG renderers (SVG method retained, UI hidden)
 │   ├── ThumbnailService.ts    # Vault/layer thumbnail generator
 │   ├── ImportService.ts       # File / URL / clipboard → blob
@@ -639,6 +641,16 @@ Persistence layers:
 - **Drawings metadata + frozen layers** → Dexie DB `DrawingVault` (`DexieService`).
 - **Image blobs + thumbnails** → Dexie DB `ImageBlobs` (`BlobStorageService`,
   IDs prefixed `blob_` / `thumb_`; URLs cached + revocable).
+- **Backup files** (`.zketch`): JSON `{format:"zketch", version:1, exportedAt,
+  drawings, blobs}`; dates as ISO strings, blobs (image layers and `thumb_`
+  thumbnails) as base64. One drawing ("Save as file" on a vault card, "Save as
+  .zketch file" in the drawing menu, which saves first) or all ("Back up all
+  drawings" in the vault header menu). Import from that menu, the empty vault,
+  or by dropping files on the vault. `planImport` skips a drawing whose id and
+  `updatedAt` already match, imports a changed one as "Name (copy)" with a new
+  id, and gives any blob whose id already exists a new id so two drawings never
+  share a blob (deleting one would delete the other's images). After the first
+  save or an import the app calls `navigator.storage.persist()` once.
 
 ---
 

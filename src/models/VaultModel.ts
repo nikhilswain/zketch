@@ -2,6 +2,7 @@ import { types, type Instance, type SnapshotIn } from "mobx-state-tree";
 import type { ElementLook } from "./ShapeLayerModel";
 import { DexieService } from "@/services/DexieService";
 import { BlobStorageService } from "@/services/BlobStorageService";
+import { keepStorage } from "@/services/VaultBackup";
 import { Stroke, PageModel } from "./CanvasModel";
 import type { Page } from "@/utils/page";
 
@@ -336,6 +337,7 @@ export const VaultModel = types
 
       self.addDrawingToList(drawingData);
       await self.persistDrawing(drawingData.id);
+      keepStorage();
       await self.updateStorageInfo();
       return self.drawings.find((d) => d.id === drawingData.id);
     },

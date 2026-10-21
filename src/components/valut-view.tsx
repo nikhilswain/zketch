@@ -1,7 +1,7 @@
 import { isStrokeElement } from "@/engine/types";
 import ZketchMark from "@/components/ZketchMark";
 import type React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { observer } from "mobx-react-lite";
 import { useSettingsStore, useVaultStore } from "../hooks/useStores";
 import {
@@ -14,6 +14,7 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
 import {
   CloseIcon,
+  DownloadIcon,
   LayoutGridIcon,
   MasonryIcon,
   ListIcon,
@@ -23,9 +24,12 @@ import {
   SearchIcon,
   SettingsIcon,
   TrashIcon,
+  UploadIcon,
 } from "@/components/icons";
 import { DexieService } from "@/services/DexieService";
 import { BlobStorageService } from "@/services/BlobStorageService";
+import { exportDrawings, importBackupFile, keepStorage } from "@/services/VaultBackup";
+import { BACKUP_EXTENSION } from "@/services/BackupService";
 import type { ISavedDrawing } from "@/models/VaultModel";
 import SettingsPage from "./studio/SettingsPage";
 import { toast } from "sonner";
@@ -145,6 +149,45 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
   const [newName, setNewName] = useState("");
   const [pendingDelete, setPendingDelete] = useState<ISavedDrawing | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [dropping, setDropping] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const dragDepth = useRef(0);
+
+  const importFiles = async (files: File[]) => {
+    let added = 0;
+    let skipped = 0;
+    for (const f of files) {
+      try {
+        const r = await importBackupFile(f);
+        added += r.added.length;
+        skipped += r.skipped;
+      } catch (e) {
+        toast.error(`Couldn't import “${f.name}”`, { description: e instanceof Error ? e.message : undefined });
+      }
+    }
+    if (added > 0) {
+      await vaultStore.loadFromDB();
+      await vaultStore.updateStorageInfo();
+      keepStorage();
+      toast.success(`Imported ${plural(added, "drawing")}`, {
+        description: skipped > 0 ? `${plural(skipped, "drawing")} already here, left as is` : undefined,
+      });
+    } else if (skipped > 0) {
+      toast(`${skipped === 1 ? "That drawing is" : "Those drawings are"} already here`);
+    }
+  };
+
+  const saveFile = async (ids?: string[]) => {
+    try {
+      const n = await exportDrawings(ids);
+      if (!ids && n > 0) toast.success(`Backed up ${plural(n, "drawing")}`, { description: "Keep the file somewhere safe. Import it here to restore." });
+    } catch (e) {
+      console.error("Backup failed:", e);
+      toast.error("Couldn't save the file");
+    }
+  };
+
+  const hasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes("Files");
 
   const thumbBox = (drawing: ISavedDrawing, natural: boolean) => {
     const checker = drawing.background === "transparent";
@@ -299,6 +342,10 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
           <PencilIcon className="h-4 w-4" />
           Rename
         </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => saveFile([drawing.id])}>
+          <DownloadIcon className="h-4 w-4" />
+          Save as file
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => setPendingDelete(drawing)} className="text-(--zk-danger) focus:text-(--zk-danger)">
           <TrashIcon className="h-4 w-4" />
@@ -313,13 +360,73 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
   };
 
   return (
-    <div className="min-h-screen bg-zk-surface font-ui text-zk-text">
+    <div
+      className="relative min-h-screen bg-zk-surface font-ui text-zk-text"
+      onDragEnter={(e) => {
+        if (!hasFiles(e)) return;
+        dragDepth.current++;
+        setDropping(true);
+      }}
+      onDragOver={(e) => {
+        if (hasFiles(e)) e.preventDefault();
+      }}
+      onDragLeave={(e) => {
+        if (!hasFiles(e)) return;
+        dragDepth.current = Math.max(0, dragDepth.current - 1);
+        if (dragDepth.current === 0) setDropping(false);
+      }}
+      onDrop={(e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        dragDepth.current = 0;
+        setDropping(false);
+        importFiles(Array.from(e.dataTransfer.files));
+      }}
+    >
+      <input
+        ref={fileInput}
+        type="file"
+        accept={`${BACKUP_EXTENSION},application/json`}
+        multiple
+        hidden
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? []);
+          e.target.value = "";
+          if (files.length) importFiles(files);
+        }}
+      />
+      {dropping && (
+        <div className="pointer-events-none fixed inset-3 z-50 flex items-center justify-center rounded-[10px] border-2 border-dashed border-zk-accent bg-zk-surface/85 backdrop-blur-sm">
+          <p className="font-display text-[24px] font-semibold">Drop a {BACKUP_EXTENSION} file to import it</p>
+        </div>
+      )}
       <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-zk-hairline bg-zk-surface/95 px-6 backdrop-blur sm:px-10">
         <div className="zk-logo-hover flex items-center gap-2.5">
           <ZketchMark size={32} />
           <span className="font-display text-[20px] font-semibold">Zketch</span>
         </div>
         <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                aria-label="Backup and import"
+                title="Backup and import"
+                className="flex h-9 w-9 items-center justify-center rounded-[4px] text-zk-text-2 hover:bg-zk-raised hover:text-zk-text data-[state=open]:bg-zk-raised"
+              >
+                <DownloadIcon className="h-[18px] w-[18px]" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
+              <DropdownMenuItem disabled={vaultStore.isEmpty} onClick={() => saveFile()}>
+                <DownloadIcon className="h-4 w-4" />
+                Back up all drawings
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => fileInput.current?.click()}>
+                <UploadIcon className="h-4 w-4" />
+                Import {BACKUP_EXTENSION} file…
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <button
             onClick={() => setShowSettings(true)}
             aria-label="Settings"
@@ -437,6 +544,12 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
             >
               <PlusIcon className="h-4 w-4" />
               Start drawing
+            </button>
+            <button
+              onClick={() => fileInput.current?.click()}
+              className="mt-3 text-[13px] text-zk-text-2 underline-offset-4 hover:underline"
+            >
+              or import a {BACKUP_EXTENSION} file
             </button>
           </div>
         ) : drawings.length === 0 ? (

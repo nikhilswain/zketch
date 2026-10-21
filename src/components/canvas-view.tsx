@@ -15,6 +15,7 @@ import ImportDialog from "./import-dialog";
 import { ExportService } from "@/services/ExportService";
 import { ThumbnailService } from "@/services/ThumbnailService";
 import { BlobStorageService } from "@/services/BlobStorageService";
+import { exportDrawings } from "@/services/VaultBackup";
 import { serializeLayers } from "@/utils/serializeLayers";
 import { Button } from "./ui/button";
 import { LockIcon } from "@/components/icons";
@@ -282,6 +283,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             canvasStore.page ? { ...canvasStore.page } : null,
           );
           if (newDrawing) {
+            savedIdRef.current = newDrawing.id;
             setCurrentDrawingId(newDrawing.id);
             // Update the URL so refresh resumes editing this drawing instead of opening a blank canvas.
             if (
@@ -326,6 +328,25 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         }, 2000);
       } else {
         setSaveStatus("idle");
+      }
+    };
+
+    const handleSaveFile = async () => {
+      if (autosaveTimerRef.current !== null) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+      const saved = await performSave();
+      const id = savedIdRef.current;
+      if (!saved || !id) {
+        toast("Draw something first, then save it as a file");
+        return;
+      }
+      try {
+        await exportDrawings([id]);
+      } catch (e) {
+        console.error("Save as file failed:", e);
+        toast.error("Couldn't save the file");
       }
     };
 
@@ -529,6 +550,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               onBack={onBackToVault}
               onImport={() => setShowImportDialog(true)}
               onExport={handleShowExportDialog}
+              onSaveFile={handleSaveFile}
               onOpenSettings={() => setShowSettings(true)}
               onPageSize={() => setShowPageSize(true)}
             />
