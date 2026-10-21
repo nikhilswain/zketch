@@ -68,3 +68,20 @@ GET /api/share/{shareId}
 - ✅ Old links continue working with deprecation notice
 - 🔄 Monitor usage and performance
 - 📅 Future: Gradual sunset of URL-based system (12+ months)
+
+## Playable sharing (R2)
+
+Newer shares are playable: the page replays how the drawing was made, and the
+viewer can download a picture or a video, or (if the owner allowed it) continue
+the drawing in their own vault.
+
+- New shares go to `POST /api/shares` and are stored in Cloudflare R2 (bucket
+  `zketch-shares`, binding `ZKETCH_SHARE_FILES`), with no expiry. The KV
+  namespace `ZKETCH_SHARES` is still needed for the rate limit (20 shares per IP
+  per hour).
+- The `/api/share/*` routes and KV shares above keep working untouched. A
+  `/share/<id>` that is not in R2 falls back to the old viewer.
+- The owner can unshare from the export dialog; the delete key is kept in that
+  browser's localStorage (`zketch-shares-v1`).
+- Setup steps are in `CLOUDFLARE_KV_SETUP.md`; how it works is in
+  `architecture.md` section 10.2.

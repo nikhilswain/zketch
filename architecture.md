@@ -10,7 +10,7 @@
 
 **Zketch** is a browser-based drawing / sketching app (a "notes + doodle" tool).
 It is desktop-first, saves everything locally (IndexedDB), and can publish a
-raster snapshot to a short share link via Cloudflare KV.
+playable share link (a replay of how it was drawn) stored in Cloudflare R2.
 
 Core capabilities:
 
@@ -36,7 +36,7 @@ Core capabilities:
 - Selection / move / resize / rotate (single + multi-select, marquee, anchor bbox).
 - Undo / redo, eraser (Whole / Pixels / Smart modes).
 - Local vault (Dexie/IndexedDB), PNG/JPG export (SVG method kept but hidden),
-  image import, share links.
+  image import, playable share links.
 - Per-layer **timelapse animation playback** (replays stroke timing with gap
   compression).
 
@@ -142,7 +142,8 @@ src/
 │   ├── drawing-canvas.tsx     # Canvas host: mounts engine, wires InputManager
 │   ├── layers-panel.tsx       # Layer list + thumbnails (wrapped by studio LayersStudioPanel)
 │   ├── export-dialog.tsx      # Export + share dialog (preview pane + options column)
-│   ├── share/ShareViewer.tsx  # Shared viewer for /share and /share/[id] (pages only load data)
+│   ├── share/ShareViewer.tsx  # Old raster viewer for /share and KV /share/[id] (pages only load data)
+│   ├── share/SharePlayer.tsx  # Playable share stage: tap to watch, drag to scrub, speed tag
 │   ├── import-dialog.tsx      # Image import (file/URL/drag)
 │   ├── NewDrawingDialog.tsx, PageSizeDialog.tsx, PageSizeForm.tsx # Page presets
 │   ├── TextEditorOverlay.tsx  # In-place text/label editor
@@ -162,7 +163,15 @@ src/
 │   ├── ExportService.ts       # PNG/JPG renderers (SVG method retained, UI hidden)
 │   ├── ThumbnailService.ts    # Vault/layer thumbnail generator
 │   ├── ImportService.ts       # File / URL / clipboard → blob
-│   └── ShareService.ts        # Client for /api/share/*
+│   └── ShareService.ts        # Client for the old /api/share/* (KV)
+│
+├── share/            # Playable sharing (see §10.2)
+│   ├── replay.ts              # Whole-drawing timeline (pure): buildReplay, progressAt, speed modes
+│   ├── ReplayRenderer.ts      # Frame-by-frame canvas renderer, shareFrame()
+│   ├── sharePayload.ts        # What leaves the browser: stripped .zketch, picture, preview
+│   ├── shareClient.ts         # POST/DELETE /api/shares, local registry zketch-shares-v1
+│   ├── shareServer.ts         # R2 + KV logic behind the API routes and the page head
+│   └── video.ts               # In-browser MP4/WebM of the replay (lazy chunk)
 │
 ├── utils/
 │   ├── StrokeOptimizer.ts     # RDP simplification before save
@@ -807,8 +816,9 @@ Persistence layers:
 - **`ImportService`** — file / URL / clipboard / dataURL → validated + processed
   blob via `ImageProcessingUtils` (`maxWidth/Height 4096`, 10MB compress
   threshold, SVG sanitization).
-- **`ShareService`** — `storeSharedDrawing` (POST `/api/share/store`) and
-  `retrieveSharedDrawing` (GET `/api/share/:id`), plus size checks (20MB).
+- **`ShareService`** — the old raster share client: `storeSharedDrawing` (POST
+  `/api/share/store`) and `retrieveSharedDrawing` (GET `/api/share/:id`), plus
+  size checks (20MB). New shares use `share/shareClient.ts` instead (§10.2).
 - **`DexieService` / `BlobStorageService`** — storage (see §6).
 
 ---
@@ -846,9 +856,12 @@ Ctrl+S save · Ctrl+E export · Ctrl+N new · Ctrl+V vault · B/W/R colors ·
 | `/draw` | `pages/draw/index.astro` | `draw-pages/draw-page.tsx` → `CanvasView` |
 | `/draw/[id]` | `pages/draw/[id].astro` (`prerender=false`) | `draw-pages/draw-by-id.tsx` → `CanvasView` |
 | `/share` | `pages/share.astro` | `share-page.tsx` (legacy `?data=` links) |
-| `/share/[shareId]` | `pages/share/[shareId].astro` | `share-by-id-page.tsx` (KV links) |
-| `/api/share/store` | `pages/api/share/store.ts` | POST → writes KV w/ 30-day TTL |
-| `/api/share/[shareId]` | `pages/api/share/[shareId].ts` | GET → reads KV |
+| `/share/[shareId]` | `pages/share/[shareId].astro` (`prerender=false`) | `share-player-page.tsx` (R2 shares), else `share-by-id-page.tsx` (old KV links) |
+| `/api/shares` | `pages/api/shares/index.ts` | POST → writes R2 (new shares) |
+| `/api/shares/[id]` | `pages/api/shares/[id].ts` | GET → drawing file; DELETE → unshare |
+| `/api/shares/[id]/[file]` | `pages/api/shares/[id]/[file].ts` | GET → `picture.png` or `preview.jpg` |
+| `/api/share/store` | `pages/api/share/store.ts` | POST → writes KV w/ 30-day TTL (old, untouched) |
+| `/api/share/[shareId]` | `pages/api/share/[shareId].ts` | GET → reads KV (old, untouched) |
 
 `Layout.astro` wires global CSS, viewport (`user-scalable=no` unless the
 `zoomable` prop is set, which the landing and 404 pages do), favicons, fonts
@@ -917,6 +930,100 @@ guards 150 KB).
   doodles with no cursors or boil. No sound anywhere, by design.
 - `landing.css` overrides the global `canvas { touch-action: none }` inside
   `@layer base` so phones can scroll over doodles; only the pad captures touch.
+
+### 10.2 Playable sharing (`src/share/`)
+
+A share is a whole drawing plus two pictures, stored in R2 with no expiry. The
+page replays how it was drawn, in the browser, from the shared `.zketch` file.
+
+**Storage.** Binding `ZKETCH_SHARE_FILES` (R2 bucket `zketch-shares`), objects
+`shares/<id>/drawing.zketch`, `picture.png`, `preview.jpg`. Ids are 12-char
+base62. The drawing object carries `customMetadata`: `version` ("1"), `name`,
+`allowContinue` ("1"/"0"), `previewWidth/Height`, `createdAt`, and
+`deleteKeyHash` (SHA-256 hex of the delete key; the key itself, 32 random bytes
+base64url, is returned once and never stored). The KV namespace `ZKETCH_SHARES`
+is still bound and now holds the rate-limit counters (and the old shares).
+`wrangler.toml` is gitignored (local dev); production bindings live in the
+Cloudflare Pages dashboard (see `CLOUDFLARE_KV_SETUP.md`).
+
+**API** (`shareServer.ts`, thin routes in `pages/api/shares/`).
+- `POST /api/shares` takes multipart `drawing`, `picture`, `preview`,
+  `previewWidth`, `previewHeight`, `name`, `allowContinue`. Order matters: the
+  `content-length` guard (413) and the 20-per-IP-per-hour KV counter (429,
+  1 h TTL) run before the body is parsed. Then checks: drawing ≤ 10 MB and
+  starting `{"format":"zketch"`, picture a PNG ≤ 8 MB, preview a JPEG ≤ 400 KB,
+  name ≤ 120 chars. Returns `201 {id, url, deleteKey}`.
+- `GET /api/shares/:id` returns the drawing file, `GET /api/shares/:id/picture.png`
+  and `preview.jpg` the images (`cache-control: public, max-age=86400`).
+- `DELETE /api/shares/:id` needs header `x-delete-key`; its hash must match
+  (403 otherwise); deletes all three objects (204).
+- `shareMeta(id)` (an R2 `head`) feeds the page head.
+
+**Page.** `/share/[shareId]` is server-rendered: it reads the R2 metadata and
+sets title, `og:image` (`preview.jpg`, with its size) and `noindex`. If there is
+no R2 object it falls back to the old KV viewer, so old links keep working.
+
+**What is shared** (`sharePayload.ts`). `stripForShare` drops hidden layers, the
+thumbnail and the local id (fresh id), then `packBackup` writes a normal
+`.zketch` with image blobs. Picture: PNG, long side ≤ 1600 px, rendered with
+`ExportService.renderPageToCanvas` over `shareFrame` (the page, or the content
+bounds plus padding on an infinite canvas). Preview: JPEG of the picture,
+long side ≤ 1200 px, lowered in quality then size until ≤ 300 KB; drawing only,
+no letterbox or branding. Payload cap 10 MB (`MAX_SHARE_BYTES`).
+
+**Timestamps.** Strokes already carry `startTime`/`duration`. Shapes, arrows and
+text now get `createdAt` (ms, set on creation in the models, kept by
+`serializeLayers` and `cloneElements`) so they can be placed on the timeline.
+Old drawings without it still play.
+
+**Replay timeline** (`replay.ts`, pure). `buildReplay(layers, maxGap = 500)`
+visits every visible draw layer and gives each element `{start, end}`: strokes
+use `startTime` (or `timestamp`) and `duration` (500 ms default); other
+elements use `createdAt` and sketch in over 300 ms; an element with no time
+follows the previous one in its layer; a label plays with its container.
+Items are sorted globally, then any gap longer than 500 ms is cut to 500 ms.
+`progressAt(replay, t)` gives each item 0..1; `partialStroke` slices points.
+Speed: `auto = max(1, total / 15000)` (about 15 s for long drawings), `real` =
+1×, `fast` = 2× auto; the tag cycles `auto → 1× → 2× auto → auto`
+(`nextSpeedMode`, `speedFor`).
+
+**Renderer** (`ReplayRenderer.ts`). `new ReplayRenderer(canvas, drawing, scale,
+blobs?)`; `draw(t)` paints through the shared engine renderers. Each draw layer
+keeps a "settled" canvas of finished elements; playing forward only adds new
+ones, going backward (scrub) rebuilds it. Only in-progress elements are drawn
+per frame, so eraser strokes stay isolated per layer. It returns the pen tip
+for the pencil cursor. Image layers use the `blobs` map (from the `.zketch`)
+instead of IndexedDB. `ready()` waits for brush assets; `dispose()` frees
+canvases and object URLs.
+
+**Player** (`components/share/SharePlayer.tsx`, `share-player-page.tsx`). The
+stage first shows `picture.png` as an `<img>` so the page paints at once, while
+the drawing file loads. Once ready: a teaser replays the last few elements
+every 5 s until the viewer interacts (skipped off-screen, in a hidden tab or
+with reduced motion); tap or Space/Enter plays from the start; dragging more
+than 4 px scrubs (pointer-captured, pauses playback; arrow keys step); a mono
+tag shows the clock and the speed mode, clickable to cycle. Below it: Picture
+(downloads `picture.png`), Video, and "Continue in zketch".
+
+**Continue.** Off by default ("Let people continue this drawing" in the export
+dialog, stored as `allowContinue`). When on, the button feeds the shared file to
+`importAsNewDrawing` (the vault import path: new drawing id, new blob ids) and
+opens `/draw/<id>`. On phones it says to open the link on a computer.
+
+**Video** (`video.ts`, loaded with `import()` so it costs nothing until used).
+Renders the replay frame by frame at 30 fps, long side ≤ 1080 px, last frame
+held 1 s, at the speed shown on the tag. Encodes MP4 with `mediabunny` (pinned
+1.61.3) when an AVC codec is available; otherwise, or if encoding fails, it
+records WebM from a canvas stream. Progress is reported and an `AbortSignal`
+cancels it.
+
+**Creating and removing** (`shareClient.ts`, export dialog). `createShareLink`
+builds the file and pictures, POSTs them, and saves `{id, url, deleteKey,
+drawingId, createdAt, allowContinue}` in localStorage `zketch-shares-v1`
+(`listShares`, `rememberShare`, `forgetShare`). The dialog lists the links of
+the open drawing and `unshareLink` DELETEs with the stored key (a 404 counts as
+already gone). A share cannot be unshared from another browser: the key lives
+only there.
 
 ---
 
@@ -1033,7 +1140,8 @@ While animating, `canvasLocked` blocks all drawing/import.
 | Persistence format change | `VaultModel` interfaces, `CanvasModel.loadLayers` migration, `canvas-view.performSave`, `DexieService` version bump |
 | Export format/parity | `ExportService`, `ThumbnailService`, `export-dialog.tsx` |
 | Keyboard shortcut | `utils/keyBindings.ts` + `hooks/useKeyboardShortcuts.ts` |
-| Share/API | `services/ShareService.ts`, `pages/api/share/*`, `export-dialog.tsx` |
+| Share/API | `share/shareServer.ts`, `pages/api/shares/*`, `share/shareClient.ts`, `export-dialog.tsx` (old KV: `services/ShareService.ts`, `pages/api/share/*`) |
+| Replay timeline / player / video | `share/replay.ts`, `share/ReplayRenderer.ts`, `components/share/SharePlayer.tsx`, `share/video.ts` |
 | Add or change a page preset | `PAGE_PRESETS` in `utils/page.ts` (and the tile spans in `NewDrawingDialog` `TILES`) |
 | Add or change an icon | `icons/defs/*.mjs` (+ `icons/app.json` if the app uses it), then `npm run icons` |
 | New studio panel | `components/studio/panels/` + `PanelId` and preset placement in `utils/dockLayout.ts` + `panels/index.ts` |
@@ -1052,7 +1160,7 @@ While animating, `canvasLocked` blocks all drawing/import.
   shapes).
 - `THIRD_PARTY_ASSETS.md` — sources and licences of bundled brush tips and
   grains (the share-image fonts carry their OFL files in `src/assets/og/`).
-- `SHARING_MIGRATION.md`, `CLOUDFLARE_KV_SETUP.md` — share system + KV setup.
+- `SHARING_MIGRATION.md`, `CLOUDFLARE_KV_SETUP.md` — share systems (KV, then R2) + Cloudflare setup.
 - `docs/superpowers/specs|plans/` — design specs for autosave/renderVersion,
   touch/stylus InputManager, and the sidebar floating-panel refactor. All three
   are implemented.
@@ -1068,7 +1176,7 @@ stamp and RaV89 brushes, stylus pressure and stroke dynamics, pan/zoom,
 touch/stylus/palm rejection, shapes + selection/transform, diagrams (bound
 arrows, text, labels, hand-drawn looks), eraser modes, fixed-size pages,
 autosave + renderVersion auto-bump, local vault + thumbnails, PNG/JPG export,
-share via Cloudflare KV, per-layer timelapse animation, the studio drawing
+playable share links on Cloudflare R2 (replay, picture and video download, optional continue), old KV links, per-layer timelapse animation, the studio drawing
 screen (docks, layouts, Simple layout, Settings page), brush-drawn icons, the
 swoosh logo, SEO tags and generated share images, tiled rendering (pan/zoom
 never block on stroke rendering). Vitest render tests run with `npm test`.
@@ -1092,4 +1200,4 @@ never block on stroke rendering). Vitest render tests run with `npm test`.
 
 ---
 
-*Last updated 2026-10-19.*
+*Last updated 2026-10-22.*

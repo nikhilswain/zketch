@@ -85,3 +85,29 @@ The new system uses:
 - KV not available: Graceful fallback with error message
 - Share not found: Clear explanation with retry option
 - Network issues: Automatic retry suggestions
+
+## R2 bucket for playable shares
+
+New shares store their files in R2 and still use the KV namespace above for the
+rate limit. Do this once, in the Cloudflare dashboard:
+
+1. R2 -> Create bucket, name it `zketch-shares`.
+2. Workers & Pages -> zketch -> Settings -> Bindings -> Add -> R2 bucket.
+   - Variable name: `ZKETCH_SHARE_FILES`
+   - R2 bucket: `zketch-shares`
+   - Add it for both Production and Preview.
+3. Redeploy so the binding takes effect.
+
+`wrangler.toml` is gitignored and only used for local development; production
+bindings come from the Pages dashboard. For local dev add to your own
+`wrangler.toml`:
+
+```toml
+[[r2_buckets]]
+binding = "ZKETCH_SHARE_FILES"
+bucket_name = "zketch-shares"
+```
+
+Without the binding, `POST /api/shares` returns 500 "Storage not available".
+Objects are `shares/<id>/drawing.zketch`, `picture.png` and `preview.jpg`;
+nothing expires, so owners remove a share with "Unshare" in the export dialog.
