@@ -115,4 +115,10 @@ describe("b2Bucket", () => {
     await expect(bucket.get("shares/abc/picture.png")).rejects.toThrow();
     await expect(bucket.delete(["shares/abc/picture.png"])).rejects.toThrow();
   });
+
+  it("rejects an endpoint without a region", () => {
+    expect(() => b2Bucket({ ...CFG, endpoint: "example.com" })).toThrow(
+      "Backblaze endpoint should look like s3.<region>.backblazeb2.com"
+    );
+  });
 });

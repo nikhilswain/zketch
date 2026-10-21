@@ -35,7 +35,10 @@ async function fail(method: string, key: string, response: Response): Promise<ne
 
 export function b2Bucket(cfg: B2Config, fetchFn: typeof fetch = fetch): R2Like {
   const host = cfg.endpoint.replace(/^https?:\/\//, "").replace(/\/+$/, "");
-  const region = host.match(/^s3\.([^.]+)\./)?.[1] ?? "";
+  const region = host.match(/^s3\.([^.]+)\./)?.[1];
+  if (!region) {
+    throw new Error("Backblaze endpoint should look like s3.<region>.backblazeb2.com");
+  }
   const client = new AwsClient({
     accessKeyId: cfg.keyId,
     secretAccessKey: cfg.appKey,
@@ -60,8 +63,8 @@ export function b2Bucket(cfg: B2Config, fetchFn: typeof fetch = fetch): R2Like {
       const type = options?.httpMetadata?.contentType;
       if (type) headers["content-type"] = type;
       if (options?.customMetadata) headers[META_HEADER] = encodeMeta(options.customMetadata);
-      const bytes = await new Response(body).arrayBuffer();
-      const response = await send("PUT", key, { headers, body: bytes });
+      const payload = body instanceof ReadableStream ? await new Response(body).arrayBuffer() : body;
+      const response = await send("PUT", key, { headers, body: payload });
       if (!response.ok) await fail("PUT", key, response);
       await response.body?.cancel();
     },
