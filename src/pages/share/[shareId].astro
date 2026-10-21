@@ -11,7 +11,12 @@ const shareId = Astro.params.shareId ?? '';
 const runtimeEnv = (Astro.locals as any)?.runtime?.env;
 const meta =
   runtimeEnv?.ZKETCH_SHARE_FILES && runtimeEnv?.ZKETCH_SHARES
-    ? await shareMeta(shareId, { bucket: runtimeEnv.ZKETCH_SHARE_FILES, kv: runtimeEnv.ZKETCH_SHARES } as ShareEnv).catch(() => null)
+    ? await shareMeta(shareId, { bucket: runtimeEnv.ZKETCH_SHARE_FILES, kv: runtimeEnv.ZKETCH_SHARES } as ShareEnv).catch(
+        (err) => {
+          console.error('Failed to read share:', err);
+          return null;
+        },
+      )
     : null;
 ---
 
