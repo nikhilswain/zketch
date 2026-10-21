@@ -1,3 +1,5 @@
+import type { CacheLike } from "./edgeCache";
+
 export interface R2ObjectLike {
   body?: BodyInit | null;
   httpMetadata?: { contentType?: string };
@@ -30,6 +32,8 @@ export interface KVLike {
 export interface ShareEnv {
   bucket: R2Like;
   kv: KVLike;
+  cache?: CacheLike | null;
+  waitUntil?: (task: Promise<unknown>) => void;
 }
 
 export interface ShareMeta {
@@ -51,6 +55,9 @@ const MAX_NAME = 120;
 const RATE_LIMIT = 20;
 const ID_PATTERN = /^[A-Za-z0-9]{12}$/;
 const DRAWING_PREFIX = '{"format":"zketch"';
+const CACHE_ORIGIN = "https://zketch-share-cache";
+const CACHE_DAY = 86400;
+const CACHE_MISSING = 60;
 const BASE62 =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -69,6 +76,37 @@ function json(body: unknown, status: number): Response {
 
 function keyFor(id: string, file: ShareFile): string {
   return `shares/${id}/${FILES[file].name}`;
+}
+
+function fileCacheKey(id: string, file: ShareFile): string {
+  return `${CACHE_ORIGIN}/files/${id}/${FILES[file].name}`;
+}
+
+function metaCacheKey(id: string): string {
+  return `${CACHE_ORIGIN}/meta/${id}`;
+}
+
+async function cacheMatch(env: ShareEnv, key: string): Promise<Response | null> {
+  if (!env.cache) return null;
+  try {
+    return (await env.cache.match(key)) ?? null;
+  } catch (err) {
+    console.error("Share cache read failed:", err);
+    return null;
+  }
+}
+
+async function cacheUpdate(
+  env: ShareEnv,
+  work: (cache: CacheLike) => Promise<unknown>
+): Promise<void> {
+  const cache = env.cache;
+  if (!cache) return;
+  const task = Promise.resolve()
+    .then(() => work(cache))
+    .catch((err) => console.error("Share cache update failed:", err));
+  if (env.waitUntil) env.waitUntil(task);
+  else await task;
 }
 
 function generateId(): string {
@@ -202,17 +240,34 @@ export async function shareMeta(
   env: ShareEnv
 ): Promise<ShareMeta | null> {
   if (!ID_PATTERN.test(id)) return null;
+  const cacheKey = metaCacheKey(id);
+  const hit = await cacheMatch(env, cacheKey);
+  const cached = hit ? await hit.json().catch(() => undefined) : undefined;
+  if (cached !== undefined) return cached as ShareMeta | null;
   const object = await env.bucket.head(keyFor(id, "drawing"));
-  const meta = object?.customMetadata;
-  if (!meta) return null;
-  return {
-    id,
-    name: meta.name || "Untitled drawing",
-    createdAt: Number(meta.createdAt) || 0,
-    allowContinue: meta.allowContinue === "1",
-    previewWidth: Number(meta.previewWidth) || 0,
-    previewHeight: Number(meta.previewHeight) || 0,
-  };
+  const stored = object?.customMetadata;
+  const meta: ShareMeta | null = stored
+    ? {
+        id,
+        name: stored.name || "Untitled drawing",
+        createdAt: Number(stored.createdAt) || 0,
+        allowContinue: stored.allowContinue === "1",
+        previewWidth: Number(stored.previewWidth) || 0,
+        previewHeight: Number(stored.previewHeight) || 0,
+      }
+    : null;
+  await cacheUpdate(env, (cache) =>
+    cache.put(
+      cacheKey,
+      new Response(JSON.stringify(meta), {
+        headers: {
+          "content-type": "application/json",
+          "cache-control": `public, max-age=${meta ? CACHE_DAY : CACHE_MISSING}`,
+        },
+      })
+    )
+  );
+  return meta;
 }
 
 export async function getShareFile(
@@ -223,18 +278,26 @@ export async function getShareFile(
   if (!ID_PATTERN.test(id) || !FILES[file]) {
     return new Response("Not found", { status: 404 });
   }
+  const cacheKey = fileCacheKey(id, file);
+  const hit = await cacheMatch(env, cacheKey);
+  if (hit) return new Response(hit.body, hit);
   const object = await env.bucket.get(keyFor(id, file));
   if (!object || !object.body) {
     return new Response("Not found", { status: 404 });
   }
-  return new Response(object.body, {
+  const response = new Response(object.body, {
     status: 200,
     headers: {
       "content-type": object.httpMetadata?.contentType ?? FILES[file].type,
-      "cache-control": "public, max-age=86400",
+      "cache-control": `public, max-age=${CACHE_DAY}`,
       "x-content-type-options": "nosniff",
     },
   });
+  if (env.cache) {
+    const copy = response.clone();
+    await cacheUpdate(env, (cache) => cache.put(cacheKey, copy));
+  }
+  return response;
 }
 
 export async function deleteShare(
@@ -254,5 +317,13 @@ export async function deleteShare(
     keyFor(id, "picture.png"),
     keyFor(id, "preview.jpg"),
   ]);
+  await cacheUpdate(env, (cache) =>
+    Promise.all([
+      cache.delete(fileCacheKey(id, "drawing")),
+      cache.delete(fileCacheKey(id, "picture.png")),
+      cache.delete(fileCacheKey(id, "preview.jpg")),
+      cache.delete(metaCacheKey(id)),
+    ])
+  );
   return new Response(null, { status: 204 });
 }

@@ -7,7 +7,8 @@ import {
 import { shareEnvFrom } from "../../../share/shareEnv";
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const shareEnv = shareEnvFrom((locals as any)?.runtime?.env);
+  const runtime = (locals as any)?.runtime;
+  const shareEnv = shareEnvFrom(runtime?.env, runtime?.ctx);
   if (!shareEnv) {
     return new Response(JSON.stringify({ error: "Storage not available" }), {
       status: 500,

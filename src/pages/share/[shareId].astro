@@ -9,7 +9,8 @@ import { shareEnvFrom } from '@/share/shareEnv';
 export const prerender = false;
 
 const shareId = Astro.params.shareId ?? '';
-const shareEnv = shareEnvFrom((Astro.locals as any)?.runtime?.env);
+const runtime = (Astro.locals as any)?.runtime;
+const shareEnv = shareEnvFrom(runtime?.env, runtime?.ctx);
 const meta = shareEnv
   ? await shareMeta(shareId, shareEnv).catch((err) => {
       console.error('Failed to read share:', err);

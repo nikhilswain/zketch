@@ -10,6 +10,7 @@ import {
   type KVLike,
   type ShareEnv,
 } from "../src/share/shareServer";
+import type { CacheLike } from "../src/share/edgeCache";
 
 function makeEnv() {
   const objects = new Map<
@@ -17,6 +18,7 @@ function makeEnv() {
     { data: Blob; httpMetadata?: any; customMetadata?: Record<string, string> }
   >();
   const kvStore = new Map<string, string>();
+  const calls = { get: 0, head: 0 };
   const bucket: R2Like = {
     async put(key, body, opts) {
       objects.set(key, {
@@ -26,6 +28,7 @@ function makeEnv() {
       });
     },
     async get(key) {
+      calls.get++;
       const o = objects.get(key);
       if (!o) return null;
       return {
@@ -35,6 +38,7 @@ function makeEnv() {
       };
     },
     async head(key) {
+      calls.head++;
       const o = objects.get(key);
       if (!o) return null;
       return { httpMetadata: o.httpMetadata, customMetadata: o.customMetadata };
@@ -52,7 +56,23 @@ function makeEnv() {
     },
   };
   const env: ShareEnv = { bucket, kv };
-  return { env, objects };
+  return { env, objects, calls };
+}
+
+function makeCache() {
+  const entries = new Map<string, Response>();
+  const cache: CacheLike = {
+    async match(key) {
+      return entries.get(key)?.clone();
+    },
+    async put(key, response) {
+      entries.set(key, new Response(await response.arrayBuffer(), response));
+    },
+    async delete(key) {
+      return entries.delete(key);
+    },
+  };
+  return { cache, entries };
 }
 
 const DRAWING = '{"format":"zketch","version":1,"layers":[]}';
@@ -165,5 +185,90 @@ describe("shareServer", () => {
   it("bad ids are 404", async () => {
     const { env } = makeEnv();
     expect((await getShareFile("../x", "drawing", env)).status).toBe(404);
+  });
+
+  it("file reads come from the edge cache after the first one", async () => {
+    const { env, calls } = makeEnv();
+    const { cache, entries } = makeCache();
+    const cached = { ...env, cache };
+    const { id } = await (await createShare(form(), cached, "https://z.test")).json();
+    const first = await getShareFile(id, "picture.png", cached);
+    expect(new Uint8Array(await first.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
+    const second = await getShareFile(id, "picture.png", cached);
+    expect(second.status).toBe(200);
+    expect(new Uint8Array(await second.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
+    expect(second.headers.get("content-type")).toBe("image/png");
+    expect(second.headers.get("cache-control")).toBe("public, max-age=86400");
+    expect(second.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(calls.get).toBe(1);
+    expect((await getShareFile("AAAAAAAAAAAA", "drawing", cached)).status).toBe(404);
+    expect([...entries.keys()].some((k) => k.includes("AAAAAAAAAAAA"))).toBe(false);
+  });
+
+  it("meta is cached for a day and a missing share for a minute", async () => {
+    const { env, calls } = makeEnv();
+    const { cache, entries } = makeCache();
+    const cached = { ...env, cache };
+    const { id } = await (await createShare(form(), cached, "https://z.test")).json();
+    const meta = await shareMeta(id, cached);
+    expect(await shareMeta(id, cached)).toEqual(meta);
+    expect(calls.head).toBe(1);
+    expect(entries.get(`https://zketch-share-cache/meta/${id}`)?.headers.get("cache-control")).toBe(
+      "public, max-age=86400"
+    );
+    expect(await shareMeta("BBBBBBBBBBBB", cached)).toBeNull();
+    expect(await shareMeta("BBBBBBBBBBBB", cached)).toBeNull();
+    expect(calls.head).toBe(2);
+    expect(entries.get("https://zketch-share-cache/meta/BBBBBBBBBBBB")?.headers.get("cache-control")).toBe(
+      "public, max-age=60"
+    );
+  });
+
+  it("unshare purges the cached files and meta", async () => {
+    const { env } = makeEnv();
+    const { cache, entries } = makeCache();
+    const cached = { ...env, cache };
+    const { id, deleteKey } = await (await createShare(form(), cached, "https://z.test")).json();
+    await shareMeta(id, cached);
+    for (const file of ["drawing", "picture.png", "preview.jpg"] as const) {
+      await getShareFile(id, file, cached);
+    }
+    expect(entries.size).toBe(4);
+    expect((await deleteShare(id, deleteKey, cached)).status).toBe(204);
+    expect(entries.size).toBe(0);
+    expect(await shareMeta(id, cached)).toBeNull();
+  });
+
+  it("background cache writes go through waitUntil", async () => {
+    const { env } = makeEnv();
+    const { cache, entries } = makeCache();
+    const tasks: Promise<unknown>[] = [];
+    const cached = { ...env, cache, waitUntil: (task: Promise<unknown>) => void tasks.push(task) };
+    const { id } = await (await createShare(form(), cached, "https://z.test")).json();
+    const res = await getShareFile(id, "preview.jpg", cached);
+    expect(res.status).toBe(200);
+    expect(tasks).toHaveLength(1);
+    await Promise.all(tasks);
+    expect(entries.size).toBe(1);
+  });
+
+  it("a failing cache never breaks reads", async () => {
+    const { env } = makeEnv();
+    const broken: CacheLike = {
+      match: async () => {
+        throw new Error("cache down");
+      },
+      put: async () => {
+        throw new Error("cache down");
+      },
+      delete: async () => {
+        throw new Error("cache down");
+      },
+    };
+    const cached = { ...env, cache: broken };
+    const { id, deleteKey } = await (await createShare(form(), cached, "https://z.test")).json();
+    expect((await shareMeta(id, cached))?.name).toBe("My cat");
+    expect((await getShareFile(id, "picture.png", cached)).status).toBe(200);
+    expect((await deleteShare(id, deleteKey, cached)).status).toBe(204);
   });
 });
