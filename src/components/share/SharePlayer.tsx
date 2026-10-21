@@ -298,6 +298,7 @@ const SharePlayer = forwardRef<SharePlayerHandle, SharePlayerProps>(({ drawing, 
   return (
     <div
       ref={stageRef}
+      data-share-stage
       className={`relative overflow-hidden rounded-[4px] bg-white shadow-(--zk-shadow-share) select-none ${ready && watchable ? "cursor-pointer" : ""}`}
       style={{ ...stageSize(frame.width, frame.height), touchAction: "pan-y" }}
       onPointerDown={onPointerDown}

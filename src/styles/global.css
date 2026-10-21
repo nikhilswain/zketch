@@ -224,6 +224,10 @@
     -webkit-user-select: none !important;
     user-select: none !important;
   }
+
+  [data-share-stage] canvas {
+    touch-action: pan-y pinch-zoom !important;
+  }
 }
 
 @keyframes zk-swoosh {
