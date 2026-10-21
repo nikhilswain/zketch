@@ -331,11 +331,8 @@ export async function deleteShare(
   if (!key || !stored || (await sha256hex(key)) !== stored) {
     return new Response("Forbidden", { status: 403 });
   }
-  await env.bucket.delete([
-    keyFor(id, "drawing"),
-    keyFor(id, "picture.png"),
-    keyFor(id, "preview.jpg"),
-  ]);
+  await env.bucket.delete([keyFor(id, "picture.png"), keyFor(id, "preview.jpg")]);
+  await env.bucket.delete([keyFor(id, "drawing")]);
   await cacheUpdate(env, (cache) =>
     Promise.all([
       cache.delete(fileCacheKey(id, "drawing")),
