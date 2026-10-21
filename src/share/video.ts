@@ -83,6 +83,7 @@ async function encodeMp4(stage: Stage, codec: string, opts: ReplayVideoOptions):
       if (signal.aborted) throw aborted(signal);
       if (i <= steps) paint(stage, Math.min(stage.total, i * step));
       await video.add(i / FPS, 1 / FPS);
+      if (signal.aborted) throw aborted(signal);
       onProgress((i + 1) / count);
       if (i % YIELD_EVERY === 0) await tick();
     }

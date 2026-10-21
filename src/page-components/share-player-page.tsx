@@ -77,7 +77,9 @@ const SharePlayerPage: React.FC<SharePlayerPageProps> = ({ meta }) => {
         drawing: loaded.drawing,
         blobs: loaded.blobs,
         speed: playerRef.current?.getSpeed() ?? 1,
-        onProgress: (p) => setVideoProgress(p),
+        onProgress: (p) => {
+          if (!controller.signal.aborted) setVideoProgress(p);
+        },
         signal: controller.signal,
       });
       if (!controller.signal.aborted) saveBlob(blob, `${fileBase(meta.name)}.${ext}`);
