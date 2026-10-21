@@ -78,6 +78,7 @@ describe("share payload", () => {
     expect(ids).toContain("blob_kept");
     expect(ids).not.toContain("blob_hidden");
     expect(ids.some((id) => id.startsWith("thumb_"))).toBe(false);
+    expect(file.blobs.every((b) => !b.originalName)).toBe(true);
     expect(JSON.stringify(file).startsWith('{"format":"zketch"')).toBe(true);
   });
 });

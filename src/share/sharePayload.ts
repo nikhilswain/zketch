@@ -30,13 +30,57 @@ export function buildShareFile(
   getBlob: (id: string) => Promise<IStoredBlob | undefined>,
   newId: string,
 ): Promise<BackupFile> {
-  return packBackup([stripForShare(drawing, newId)], getBlob);
+  return packBackup([stripForShare(drawing, newId)], async (id) => {
+    const stored = await getBlob(id);
+    return stored ? cleanImage(stored) : undefined;
+  });
 }
 
 function toBlob(canvas: HTMLCanvasElement, type: string, quality?: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Could not encode image"))), type, quality);
   });
+}
+
+function loadImageElement(blob: Blob): Promise<HTMLImageElement> {
+  const url = URL.createObjectURL(blob);
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Could not decode image"));
+    img.src = url;
+  }).finally(() => URL.revokeObjectURL(url));
+}
+
+async function decodeImage(blob: Blob): Promise<{ source: CanvasImageSource; width: number; height: number; close(): void }> {
+  try {
+    const bitmap = await createImageBitmap(blob, { imageOrientation: "from-image" });
+    return { source: bitmap, width: bitmap.width, height: bitmap.height, close: () => bitmap.close() };
+  } catch {
+    const img = await loadImageElement(blob);
+    return { source: img, width: img.naturalWidth, height: img.naturalHeight, close: () => {} };
+  }
+}
+
+async function cleanImage(stored: IStoredBlob): Promise<IStoredBlob> {
+  const clean = { ...stored, originalName: "" };
+  if (typeof createImageBitmap !== "function" || typeof document === "undefined") return clean;
+  const mimeType = stored.mimeType === "image/jpeg" ? "image/jpeg" : "image/png";
+  const image = await decodeImage(stored.blob);
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, image.width || stored.width);
+    canvas.height = Math.max(1, image.height || stored.height);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Could not get canvas context");
+    ctx.drawImage(image.source, 0, 0, canvas.width, canvas.height);
+    const blob = await toBlob(canvas, mimeType, mimeType === "image/jpeg" ? 0.92 : undefined);
+    canvas.width = 0;
+    canvas.height = 0;
+    return { ...clean, blob, mimeType, size: blob.size };
+  } finally {
+    image.close();
+  }
 }
 
 function exportLayers(drawing: ISavedDrawingData): IExportLayer[] {
