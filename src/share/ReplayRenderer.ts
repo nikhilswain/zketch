@@ -128,11 +128,14 @@ export class ReplayRenderer {
   private stale = false;
   private preparing: Promise<void> | null = null;
   private stopAssets: () => void;
+  private urls: string[] = [];
+  private disposed = false;
 
   constructor(
     canvas: HTMLCanvasElement,
     private readonly drawing: ISavedDrawingData,
     scale: number,
+    private readonly blobs?: Map<string, Blob>,
   ) {
     this.frame = shareFrame(drawing);
     this.width = Math.max(1, Math.round(this.frame.width * scale));
@@ -229,7 +232,10 @@ export class ReplayRenderer {
   }
 
   dispose(): void {
+    this.disposed = true;
     this.stopAssets();
+    for (const url of this.urls) URL.revokeObjectURL(url);
+    this.urls = [];
     for (const layer of this.layers) {
       if (layer.type === "draw") {
         layer.settled.width = 0;
@@ -243,15 +249,34 @@ export class ReplayRenderer {
 
   private async prepare(): Promise<void> {
     installBrushAssetLoader();
-    await ExportService.preloadImages(this.exportLayers());
+    await ExportService.preloadImages(
+      this.exportLayers().filter((l) => !(l.imageData && this.blobs?.has(l.imageData.blobId))),
+    );
     await Promise.all(
       this.layers.map(async (layer) => {
-        if (layer.type === "image") layer.img = await ExportService.loadImage(layer.image.blobId);
+        if (layer.type === "image") layer.img = await this.loadImage(layer.image.blobId);
       }),
     );
     this.probeBrushes();
     if (brushAssetsPending() > 0) await this.assetsSettled();
     this.stale = true;
+  }
+
+  private loadImage(blobId: string): Promise<HTMLImageElement | null> {
+    const blob = this.blobs?.get(blobId);
+    if (!blob) return ExportService.loadImage(blobId);
+    const url = URL.createObjectURL(blob);
+    if (this.disposed) {
+      URL.revokeObjectURL(url);
+      return Promise.resolve(null);
+    }
+    this.urls.push(url);
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
   }
 
   private exportLayers(): IExportLayer[] {
