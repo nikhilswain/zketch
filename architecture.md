@@ -954,7 +954,9 @@ base64url JSON, so key case and non-ASCII names survive): `version` ("1"), `name
 `allowContinue` ("1"/"0"), `previewWidth/Height`, `createdAt`, and
 `deleteKeyHash` (SHA-256 hex of the delete key; the key itself, 32 random bytes
 base64url, is returned once and never stored). The KV namespace `ZKETCH_SHARES`
-is still bound and now holds the rate-limit counters (and the old shares).
+is still bound and now holds the rate-limit counters, the per-link "can
+continue" overrides (`share-continue:<id>`, `"1"`/`"0"`, no TTL) and the old
+shares. The bucket objects are never rewritten after upload.
 `wrangler.toml` is gitignored (local dev); production bindings and variables
 live in the Cloudflare dashboard (see `CLOUDFLARE_KV_SETUP.md`).
 
@@ -969,7 +971,8 @@ type and never decompresses. Readers go through `readShareText`
 `getShareFile` and `shareMeta` go through `caches.default` (`edgeCache.ts`,
 null outside Cloudflare, so tests and `astro dev` skip it). Files are cached
 on first read for a day; `shareMeta` caches its result under
-`https://zketch-share-cache/meta/<id>` for a day (a missing share for 60 s);
+`https://zketch-share-cache/meta/<id>` for 60 s, found or missing (short so a
+changed "can continue" reaches every location within a minute);
 a missing file is cached as a 404 for 60 s too (errors are never cached). The
 cache is per Cloudflare location. Cache writes go through `ctx.waitUntil`. `deleteShare` clears the four keys,
 but only in the Cloudflare location that handled it; elsewhere the 1-day
@@ -987,8 +990,17 @@ requests per 10 s per IP) against scanners probing random ids.
 - `GET /api/shares/:id` returns the drawing file, `GET /api/shares/:id/picture.png`
   and `preview.jpg` the images (`cache-control: public, max-age=86400`).
 - `DELETE /api/shares/:id` needs header `x-delete-key`; its hash must match
-  (403 otherwise); deletes all three objects (204).
-- `shareMeta(id)` (a bucket `head`, edge-cached) feeds the page head.
+  (403 otherwise); deletes all three objects (204) and, best-effort, the KV
+  override.
+- `PATCH /api/shares/:id` (`updateShare`) needs the same `x-delete-key` and a
+  JSON body `{allowContinue: boolean}` (`content-length` must be 1..1024, else
+  400/413). 404 for an unknown id, 403 for a wrong key, 400 for a bad body.
+  Writes `share-continue:<id>` to KV, purges this location's meta cache key and
+  returns `200 {allowContinue}`; other locations pick it up when their 60 s
+  meta cache expires.
+- `shareMeta(id)` (a bucket `head`, edge-cached) feeds the page head. It applies
+  the KV override when one exists; a KV read failure is logged and the stored
+  `allowContinue` is used.
 
 **Page.** `/share/[shareId]` is server-rendered: it reads the share metadata and
 sets title, `og:image` (`preview.jpg`, with its size) and `noindex`. If there is
@@ -1052,11 +1064,28 @@ cancels it.
 
 **Creating and removing** (`shareClient.ts`, export dialog). `createShareLink`
 builds the file and pictures, POSTs them, and saves `{id, url, deleteKey,
-drawingId, createdAt, allowContinue}` in localStorage `zketch-shares-v1`
-(`listShares`, `rememberShare`, `forgetShare`). The dialog lists the links of
-the open drawing and `unshareLink` DELETEs with the stored key (a 404 counts as
-already gone). A share cannot be unshared from another browser: the key lives
-only there.
+drawingId, createdAt, allowContinue, contentHash, name}` in localStorage
+`zketch-shares-v1` (`listShares`, `listAllShares`, `rememberShare`,
+`forgetShare`; older entries have no `name`). The dialog lists the links of the
+open drawing, links to "Manage all links" (`/vault?tab=shared`), and
+`unshareLink` DELETEs with the stored key (a 404 counts as already gone). A
+share cannot be managed from another browser: the key lives only there.
+`setShareContinue` PATCHes and updates the stored `allowContinue` (so
+`findReusable` matches on the new value); a 404 forgets the link and throws
+`"gone"`. `unshareLinks` unshares a list, four at a time, and returns
+`{removed, failed}`.
+
+**Shared tab** (`components/share/SharedLinks.tsx`, in the vault). The vault
+heading has two tabs, Your drawings and Shared (last one kept in localStorage
+`zketch-vault-tab`; `?tab=shared` selects it on load and is then dropped from
+the URL). The Shared tab lists `listAllShares()` newest first: preview
+(`/api/shares/<id>/preview.jpg`, a plain block if it fails), name (stored
+name, else the vault drawing's, else "Shared drawing"), "Shared <date>", a
+Can continue switch (optimistic, reverted on failure; a gone link drops out),
+Copy link, Open, Open drawing (when the drawing is still in the vault) and
+Unshare. Rows have checkboxes with Select all and "Unshare selected (N)"; both
+unshare paths confirm in a dialog. The tab says changes reach everyone within
+a minute, matching the meta cache.
 
 ---
 
