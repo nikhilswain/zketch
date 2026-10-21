@@ -11,13 +11,15 @@ import {
   ShareIcon,
 } from "@/components/icons";
 import { toast } from "sonner";
-import { useSettingsStore } from "../hooks/useStores";
+import { useCanvasStore, useSettingsStore } from "../hooks/useStores";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
 import StrokeTrack from "./studio/StrokeTrack";
 import type { ExportFormat } from "@/models/SettingsModel";
 import type { IStroke, BackgroundType } from "@/models/CanvasModel";
 import { ExportService, type IExportLayer } from "@/services/ExportService";
-import { ShareService } from "@/services/ShareService";
+import { createShareLink, listShares, unshareLink, type SharedLink } from "@/share/shareClient";
+import { serializeLayers } from "@/utils/serializeLayers";
+import type { ISavedDrawingData } from "@/models/VaultModel";
 import { effectiveExportScale, exportScaleCap, type Page } from "@/utils/page";
 
 interface ExportDialogProps {
@@ -32,6 +34,7 @@ interface ExportDialogProps {
   layers?: IExportLayer[];
   page?: Page | null;
   focusedLayerName?: string | null;
+  drawingId?: string | null;
 }
 
 const EXPORT_W = 1920;
@@ -49,8 +52,9 @@ const SectionLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 );
 
 const ExportDialog: React.FC<ExportDialogProps> = observer(
-  ({ isOpen, onClose, onExport, strokes, background, drawingName, layerCount = 1, onFlattenLayers, layers, page = null, focusedLayerName = null }) => {
+  ({ isOpen, onClose, onExport, strokes, background, drawingName, layerCount = 1, onFlattenLayers, layers, page = null, focusedLayerName = null, drawingId = null }) => {
     const settingsStore = useSettingsStore();
+    const canvasStore = useCanvasStore();
     const { scale, quality, transparentBackground } = settingsStore.exportSettings;
     const format: "png" | "jpg" = settingsStore.exportSettings.format === "jpg" ? "jpg" : "png";
     const canvasTransparent = background === "transparent";
@@ -61,6 +65,9 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
     const [sharing, setSharing] = useState(false);
     const [shareUrl, setShareUrl] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
+    const [allowContinue, setAllowContinue] = useState(false);
+    const [links, setLinks] = useState<SharedLink[]>([]);
+    const [removingId, setRemovingId] = useState<string | null>(null);
 
     const hasContent =
       strokes.length > 0 ||
@@ -72,8 +79,9 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
       if (isOpen) {
         setShareUrl(null);
         setCopied(false);
+        setLinks(listShares(drawingId));
       }
-    }, [isOpen]);
+    }, [isOpen, drawingId]);
 
     useEffect(() => {
       if (!isOpen || !hasContent) return;
@@ -129,47 +137,49 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
       if (sharing || !hasContent) return;
       setSharing(true);
       try {
-        const dataUrl = page
-          ? await ExportService.exportPage(
-              layers ?? [],
-              page,
-              Math.min(1, 1200 / Math.max(page.width, page.height)),
-              background,
-              "jpg",
-              { transparentBackground: false, quality: 0.8 },
-            )
-          : await ExportService.exportToJPG(
-              strokes,
-              background,
-              800,
-              600,
-              { ...settingsStore.exportSettings, scale: 1, quality: 0.8, transparentBackground: false },
-              layers,
-            );
-        const shareData = ShareService.createShareData(drawingName, dataUrl);
-        const sizeCheck = ShareService.checkSizeLimit(shareData);
-        if (!sizeCheck.valid) {
-          toast.error(sizeCheck.message || "Drawing is too large to share");
-          return;
-        }
-        const response = await ShareService.storeSharedDrawing(shareData);
-        if (!response.success || !response.shareUrl) {
-          throw new Error(response.error || "Failed to create share link");
-        }
-        setShareUrl(response.shareUrl);
-        await copy(response.shareUrl);
+        const now = new Date();
+        const drawing: ISavedDrawingData = {
+          id: drawingId ?? "",
+          name: drawingName,
+          layers: serializeLayers(canvasStore.layers) as ISavedDrawingData["layers"],
+          activeLayerId: canvasStore.activeLayerId,
+          thumbnail: "",
+          createdAt: now,
+          updatedAt: now,
+          background: canvasStore.background,
+          ...(canvasStore.page ? { page: { ...canvasStore.page } } : {}),
+        };
+        const link = await createShareLink({ drawing, allowContinue, drawingId });
+        setShareUrl(link.url);
+        setLinks(listShares(drawingId));
+        await copy(link.url);
       } catch (error) {
         console.error("Failed to share:", error);
         const message = error instanceof Error ? error.message : "";
-        if (message.includes("too large")) {
-          toast.error("Drawing is too large to share. Export it as a file instead.");
-        } else if (message.includes("not available")) {
-          toast.error("Sharing is temporarily unavailable. Please try again later.");
+        if (message === "too large") {
+          toast.error("This drawing is too big to share (over 10 MB). Save it as a file instead.");
+        } else if (message === "rate limited") {
+          toast.error("You've shared a lot this hour. Try again later.");
         } else {
           toast.error(message || "Failed to create share link. Please try again.");
         }
       } finally {
         setSharing(false);
+      }
+    };
+
+    const unshare = async (link: SharedLink) => {
+      if (removingId) return;
+      setRemovingId(link.id);
+      try {
+        await unshareLink(link);
+        setLinks(listShares(drawingId));
+        if (shareUrl === link.url) setShareUrl(null);
+      } catch (error) {
+        console.error("Failed to unshare:", error);
+        toast.error("Couldn't unshare that link. Please try again.");
+      } finally {
+        setRemovingId(null);
       }
     };
 
@@ -320,6 +330,20 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
 
               <div className="border-t border-zk-hairline pt-5">
                 <SectionLabel>Share link</SectionLabel>
+                <div className="mb-3 flex items-center justify-between gap-3 text-[13px] text-zk-text-2">
+                  <span>Let people continue this drawing</span>
+                  <button
+                    role="switch"
+                    aria-checked={allowContinue}
+                    aria-label="Let people continue this drawing"
+                    onClick={() => setAllowContinue(!allowContinue)}
+                    className={`relative h-[18px] w-8 shrink-0 rounded-[3px] transition-colors ${allowContinue ? "bg-zk-accent" : "bg-zk-hover"}`}
+                  >
+                    <span
+                      className={`absolute top-[2px] h-[14px] w-[14px] rounded-[2px] bg-(--zk-knob) shadow-(--zk-knob-shadow) transition-[left] duration-150 ${allowContinue ? "left-[16px]" : "left-[2px]"}`}
+                    />
+                  </button>
+                </div>
                 {shareUrl ? (
                   <div className="flex flex-col gap-2">
                     <div className="flex gap-1.5">
@@ -356,7 +380,13 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
                         </button>
                       )}
                     </div>
-                    <p className="text-[11px] text-zk-muted">{copied ? "Copied. " : ""}View-only, expires in 30 days.</p>
+                    <p className="text-[11px] text-zk-muted">{copied ? "Copied. " : ""}Anyone with the link can play this drawing.</p>
+                    <button
+                      onClick={() => setShareUrl(null)}
+                      className="self-start text-[12px] font-semibold text-zk-text-2 hover:text-zk-text"
+                    >
+                      Create another link
+                    </button>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">
@@ -366,11 +396,40 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
                       className="flex h-9 items-center justify-center gap-2 rounded-[4px] bg-zk-raised text-[13px] font-medium text-zk-text transition-colors hover:bg-zk-hover disabled:opacity-50"
                     >
                       {sharing ? <LoaderIcon className="h-4 w-4 animate-spin" /> : <LinkIcon className="h-4 w-4" />}
-                      {sharing ? "Creating link…" : "Create share link"}
+                      {sharing ? "Creating link…" : "Create link"}
                     </button>
-                    <p className="text-[11px] text-zk-muted">Anyone with the link can view the image for 30 days.</p>
+                    <p className="text-[11px] text-zk-muted">Anyone with the link can play this drawing.</p>
                   </div>
                 )}
+                {links.length > 0 && (
+                  <div className="mt-4 flex flex-col gap-1.5">
+                    {links.map((l) => (
+                      <div key={l.id} className="flex items-center gap-1.5 rounded-[4px] bg-zk-raised/50 px-2.5 py-1.5">
+                        <span className="min-w-0 flex-1 truncate text-[12px] text-zk-text-2" title={l.url}>
+                          {l.url.replace(/^https?:\/\//, "")}
+                          {l.allowContinue && <span className="text-zk-muted"> · can continue</span>}
+                        </span>
+                        <button
+                          onClick={() => copy(l.url)}
+                          aria-label="Copy link"
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[4px] text-zk-text hover:bg-zk-hover"
+                        >
+                          <CopyIcon className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => unshare(l)}
+                          disabled={removingId === l.id}
+                          className="shrink-0 px-1.5 text-[12px] font-semibold text-zk-text-2 hover:text-zk-text disabled:opacity-50"
+                        >
+                          {removingId === l.id ? "Removing…" : "Unshare"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-3 text-[11px] text-zk-muted">
+                  Links are remembered in this browser. Clearing site data means you can't unshare them.
+                </p>
               </div>
             </div>
 

@@ -600,6 +600,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           strokes={canvasStore.flattenedStrokes as any}
           background={canvasStore.background as BackgroundType}
           drawingName={drawingName}
+          drawingId={currentDrawingId}
           layerCount={canvasStore.layerCount}
           onFlattenLayers={() => canvasStore.flattenAllLayers()}
           layers={canvasStore.exportLayers as any}
