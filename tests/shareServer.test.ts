@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   createShare,
+  checkContentLength,
+  checkRateLimit,
   shareMeta,
   getShareFile,
   deleteShare,
@@ -73,7 +75,7 @@ function form(over: { drawing?: Blob } = {}) {
 describe("shareServer", () => {
   it("stores a valid share and returns a delete key", async () => {
     const { env, objects } = makeEnv();
-    const res = await createShare(form(), "1.1.1.1", env, "https://z.test");
+    const res = await createShare(form(), env, "https://z.test");
     expect(res.status).toBe(201);
     const body = await res.json();
     expect(body.id).toMatch(/^[A-Za-z0-9]{12}$/);
@@ -90,30 +92,43 @@ describe("shareServer", () => {
 
   it("rejects a non-zketch drawing", async () => {
     const { env } = makeEnv();
-    const res = await createShare(form({ drawing: new Blob(['{"hello":1}']) }), "1.1.1.1", env, "https://z.test");
+    const res = await createShare(form({ drawing: new Blob(['{"hello":1}']) }), env, "https://z.test");
     expect(res.status).toBe(400);
   });
 
   it("rejects oversized drawing", async () => {
     const { env } = makeEnv();
     const big = new Blob([DRAWING, new Uint8Array(10 * 1024 * 1024 + 1 - DRAWING.length)]);
-    const res = await createShare(form({ drawing: big }), "1.1.1.1", env, "https://z.test");
+    const res = await createShare(form({ drawing: big }), env, "https://z.test");
     expect(res.status).toBe(413);
   });
 
-  it("rate limits after 20 shares an hour", async () => {
+  it("rate limits after 20 shares an hour, before any body is read", async () => {
     const { env } = makeEnv();
     for (let i = 0; i < 20; i++) {
-      const r = await createShare(form(), "2.2.2.2", env, "https://z.test");
-      expect(r.status).toBe(201);
+      expect(await checkRateLimit("2.2.2.2", env)).toBeNull();
     }
-    const res = await createShare(form(), "2.2.2.2", env, "https://z.test");
-    expect(res.status).toBe(429);
+    const res = await checkRateLimit("2.2.2.2", env);
+    expect(res?.status).toBe(429);
+    expect(await checkRateLimit("3.3.3.3", env)).toBeNull();
+  });
+
+  it("content-length guard rejects missing, bad and oversized bodies", () => {
+    expect(checkContentLength(null)?.status).toBe(413);
+    expect(checkContentLength("abc")?.status).toBe(413);
+    expect(checkContentLength(String(30 * 1024 * 1024))?.status).toBe(413);
+    expect(checkContentLength("5000")).toBeNull();
+  });
+
+  it("stores a version in the metadata", async () => {
+    const { env, objects } = makeEnv();
+    const { id } = await (await createShare(form(), env, "https://z.test")).json();
+    expect(objects.get(`shares/${id}/drawing.zketch`)!.customMetadata!.version).toBe("1");
   });
 
   it("meta and files come back", async () => {
     const { env } = makeEnv();
-    const { id } = await (await createShare(form(), "1.1.1.1", env, "https://z.test")).json();
+    const { id } = await (await createShare(form(), env, "https://z.test")).json();
     const meta = await shareMeta(id, env);
     expect(meta?.name).toBe("My cat");
     expect(meta?.allowContinue).toBe(true);
@@ -125,7 +140,7 @@ describe("shareServer", () => {
 
   it("delete needs the right key", async () => {
     const { env, objects } = makeEnv();
-    const { id, deleteKey } = await (await createShare(form(), "1.1.1.1", env, "https://z.test")).json();
+    const { id, deleteKey } = await (await createShare(form(), env, "https://z.test")).json();
     expect((await deleteShare(id, "wrong", env)).status).toBe(403);
     expect(objects.size).toBe(3);
     expect((await deleteShare(id, deleteKey, env)).status).toBe(204);

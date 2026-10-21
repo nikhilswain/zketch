@@ -1,5 +1,10 @@
 import type { APIRoute } from "astro";
-import { createShare, type ShareEnv } from "../../../share/shareServer";
+import {
+  checkContentLength,
+  checkRateLimit,
+  createShare,
+  type ShareEnv,
+} from "../../../share/shareServer";
 
 export const POST: APIRoute = async ({ request, locals }) => {
   // @ts-ignore - Cloudflare runtime types
@@ -10,6 +15,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
       headers: { "content-type": "application/json" },
     });
   }
+  const shareEnv = {
+    bucket: env.ZKETCH_SHARE_FILES,
+    kv: env.ZKETCH_SHARES,
+  } as ShareEnv;
+  const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
+  const tooLarge = checkContentLength(request.headers.get("content-length"));
+  if (tooLarge) return tooLarge;
+  const limited = await checkRateLimit(ip, shareEnv);
+  if (limited) return limited;
   let form: FormData;
   try {
     form = await request.formData();
@@ -19,10 +33,5 @@ export const POST: APIRoute = async ({ request, locals }) => {
       headers: { "content-type": "application/json" },
     });
   }
-  const shareEnv = {
-    bucket: env.ZKETCH_SHARE_FILES,
-    kv: env.ZKETCH_SHARES,
-  } as ShareEnv;
-  const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
-  return createShare(form, ip, shareEnv, new URL(request.url).origin);
+  return createShare(form, shareEnv, new URL(request.url).origin);
 };

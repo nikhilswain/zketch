@@ -46,6 +46,7 @@ export type ShareFile = "drawing" | "picture.png" | "preview.jpg";
 const MAX_DRAWING = 10 * 1024 * 1024;
 const MAX_PICTURE = 8 * 1024 * 1024;
 const MAX_PREVIEW = 400 * 1024;
+const MAX_BODY = MAX_DRAWING + MAX_PICTURE + MAX_PREVIEW + 64 * 1024;
 const MAX_NAME = 120;
 const RATE_LIMIT = 20;
 const ID_PATTERN = /^[A-Za-z0-9]{12}$/;
@@ -102,19 +103,32 @@ function asFile(value: FormDataEntryValue | null): File | null {
   return value && typeof value !== "string" ? value : null;
 }
 
-export async function createShare(
-  form: FormData,
+export function checkContentLength(header: string | null): Response | null {
+  const length = header !== null && /^\d+$/.test(header) ? Number(header) : NaN;
+  if (!(length <= MAX_BODY)) {
+    return json({ error: "Share is too large" }, 413);
+  }
+  return null;
+}
+
+export async function checkRateLimit(
   ip: string,
-  env: ShareEnv,
-  origin: string
-): Promise<Response> {
+  env: ShareEnv
+): Promise<Response | null> {
   const rateKey = `rl:${ip}:${hourStamp(new Date())}`;
   const used = parseInt((await env.kv.get(rateKey)) ?? "0", 10) || 0;
   if (used >= RATE_LIMIT) {
     return json({ error: "Too many shares, try again later" }, 429);
   }
   await env.kv.put(rateKey, String(used + 1), { expirationTtl: 3600 });
+  return null;
+}
 
+export async function createShare(
+  form: FormData,
+  env: ShareEnv,
+  origin: string
+): Promise<Response> {
   const drawing = asFile(form.get("drawing"));
   const picture = asFile(form.get("picture"));
   const preview = asFile(form.get("preview"));
@@ -166,6 +180,7 @@ export async function createShare(
   await env.bucket.put(keyFor(id, "drawing"), drawing, {
     httpMetadata: { contentType: "application/json" },
     customMetadata: {
+      version: "1",
       name,
       allowContinue,
       previewWidth: String(previewWidth),
