@@ -16,4 +16,10 @@ describe("share text", () => {
   it("reads a plain payload as is", async () => {
     expect(await readShareText(new Response(TEXT))).toBe(TEXT);
   });
+
+  it("throws once the decompressed output passes the cap", async () => {
+    const gz = await gzipShareText("a".repeat(5000));
+    expect(await readShareText(new Response(gz), 5000)).toBe("a".repeat(5000));
+    await expect(readShareText(new Response(gz), 4999)).rejects.toThrow(/too large/);
+  });
 });
