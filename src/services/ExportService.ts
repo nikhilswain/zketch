@@ -59,7 +59,7 @@ export class ExportService {
   /**
    * Load an image from blob storage
    */
-  private static async loadImage(
+  static async loadImage(
     blobId: string,
   ): Promise<HTMLImageElement | null> {
     // Check cache first
@@ -88,7 +88,7 @@ export class ExportService {
   /**
    * Pre-load all images needed for export
    */
-  private static async preloadImages(layers: IExportLayer[]): Promise<void> {
+  static async preloadImages(layers: IExportLayer[]): Promise<void> {
     await ensureFonts(fontFamiliesIn(layers as any));
     const imagePromises: Promise<HTMLImageElement | null>[] = [];
 
@@ -598,7 +598,7 @@ export class ExportService {
     return d.join(" ");
   }
 
-  private static drawGrid(
+  static drawGrid(
     ctx: CanvasRenderingContext2D,
     width: number,
     height: number,
