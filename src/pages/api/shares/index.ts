@@ -3,22 +3,17 @@ import {
   checkContentLength,
   checkRateLimit,
   createShare,
-  type ShareEnv,
 } from "../../../share/shareServer";
+import { shareEnvFrom } from "../../../share/shareEnv";
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  // @ts-ignore - Cloudflare runtime types
-  const env = locals.runtime?.env;
-  if (!env?.ZKETCH_SHARE_FILES || !env?.ZKETCH_SHARES) {
+  const shareEnv = shareEnvFrom((locals as any)?.runtime?.env);
+  if (!shareEnv) {
     return new Response(JSON.stringify({ error: "Storage not available" }), {
       status: 500,
       headers: { "content-type": "application/json" },
     });
   }
-  const shareEnv = {
-    bucket: env.ZKETCH_SHARE_FILES,
-    kv: env.ZKETCH_SHARES,
-  } as ShareEnv;
   const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
   const tooLarge = checkContentLength(request.headers.get("content-length"));
   if (tooLarge) return tooLarge;

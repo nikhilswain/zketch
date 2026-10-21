@@ -3,21 +3,19 @@ import Layout from '@/layouts/Layout.astro';
 import ShareByIdPage from '@/page-components/share-by-id-page';
 import SharePlayerPage from '@/page-components/share-player-page';
 import { Toaster } from '@/components/ui/sonner';
-import { shareMeta, type ShareEnv } from '@/share/shareServer';
+import { shareMeta } from '@/share/shareServer';
+import { shareEnvFrom } from '@/share/shareEnv';
 
 export const prerender = false;
 
 const shareId = Astro.params.shareId ?? '';
-const runtimeEnv = (Astro.locals as any)?.runtime?.env;
-const meta =
-  runtimeEnv?.ZKETCH_SHARE_FILES && runtimeEnv?.ZKETCH_SHARES
-    ? await shareMeta(shareId, { bucket: runtimeEnv.ZKETCH_SHARE_FILES, kv: runtimeEnv.ZKETCH_SHARES } as ShareEnv).catch(
-        (err) => {
-          console.error('Failed to read share:', err);
-          return null;
-        },
-      )
-    : null;
+const shareEnv = shareEnvFrom((Astro.locals as any)?.runtime?.env);
+const meta = shareEnv
+  ? await shareMeta(shareId, shareEnv).catch((err) => {
+      console.error('Failed to read share:', err);
+      return null;
+    })
+  : null;
 ---
 
 {meta ? (
