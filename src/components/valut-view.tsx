@@ -495,7 +495,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
             <h1 className="font-display text-[40px] leading-none font-semibold">{tab === "shared" ? "Shared links" : "Your drawings"}</h1>
             <p className="mt-3 text-[13px] text-zk-muted">
               {tab === "shared"
-                ? "Links you've made in this browser. Changes to a link reach everyone within a minute."
+                ? "Links you've made in this browser. Changes to a link can take a minute or two to reach everyone."
                 : vaultStore.isLoading
                 ? "Loading…"
                 : `${count} drawing${count === 1 ? "" : "s"}${

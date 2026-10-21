@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { toast } from "sonner";
 import { useVaultStore } from "@/hooks/useStores";
@@ -41,12 +41,16 @@ const SharedLinks: React.FC<SharedLinksProps> = observer(({ onOpenDrawing }) => 
   const [links, setLinks] = useState<SharedLink[]>(() => listAllShares());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [switching, setSwitching] = useState<Set<string>>(new Set());
+  const switchingRef = useRef(switching);
+  switchingRef.current = switching;
   const [pendingUnshare, setPendingUnshare] = useState<SharedLink[] | null>(null);
   const [unsharing, setUnsharing] = useState(false);
   const [count, setCount] = useState(0);
 
   useEffect(() => {
-    const refresh = () => setLinks(listAllShares());
+    const refresh = () => {
+      if (switchingRef.current.size === 0) setLinks(listAllShares());
+    };
     window.addEventListener("focus", refresh);
     return () => window.removeEventListener("focus", refresh);
   }, []);
@@ -257,7 +261,7 @@ const SharedLinks: React.FC<SharedLinksProps> = observer(({ onOpenDrawing }) => 
             <button
               onClick={confirmUnshare}
               disabled={unsharing}
-              className="h-9 rounded-[4px] bg-(--zk-danger-bg) px-4 text-[13px] font-semibold text-(--zk-danger-text) hover:brightness-95 disabled:opacity-60"
+              className="h-9 rounded-[4px] bg-[#e5484d] px-4 text-[13px] font-semibold text-white hover:brightness-110 disabled:opacity-60"
             >
               {unsharing ? "Unsharing…" : "Unshare"}
             </button>
