@@ -972,7 +972,7 @@ type and never decompresses. Readers go through `readShareText`
 null outside Cloudflare, so tests and `astro dev` skip it). Files are cached
 on first read for a day; `shareMeta` caches its result under
 `https://zketch-share-cache/meta/<id>` for 60 s, found or missing (short so a
-changed "can continue" reaches every location within a minute);
+changed "can continue" reaches every location within a minute or two: 60 s meta cache plus KV edge caching);
 a missing file is cached as a 404 for 60 s too (errors are never cached). The
 cache is per Cloudflare location. Cache writes go through `ctx.waitUntil`. `deleteShare` clears the four keys,
 but only in the Cloudflare location that handled it; elsewhere the 1-day
