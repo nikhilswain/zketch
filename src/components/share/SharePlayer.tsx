@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import type React from "react";
 import type { ISavedDrawingData } from "@/models/VaultModel";
 import { ReplayRenderer, shareFrame } from "@/share/ReplayRenderer";
+import { onBrushAssetsChanged } from "@/engine/stamp/assets";
 import { autoSpeed, nextSpeedMode, speedFor, type Replay, type SpeedMode } from "@/share/replay";
 
 export interface SharePlayerHandle {
@@ -210,16 +211,28 @@ const SharePlayer = forwardRef<SharePlayerHandle, SharePlayerProps>(({ drawing, 
     st.t = st.total;
     setTotal(st.total);
     let live = true;
+    let prepared = false;
+    let repaint = 0;
     renderer
       .ready()
       .then(() => {
         if (!live) return;
+        prepared = true;
         renderer.draw(st.total);
         setReady(true);
       })
       .catch((err) => console.error("Failed to prepare the replay:", err));
+    const stopAssets = onBrushAssetsChanged(() => {
+      if (!prepared || repaint) return;
+      repaint = requestAnimationFrame(() => {
+        repaint = 0;
+        if (live && st.raf === 0 && st.scrubRaf === 0) renderer.draw(st.t);
+      });
+    });
     return () => {
       live = false;
+      stopAssets();
+      cancelAnimationFrame(repaint);
       halt();
       rendererRef.current = null;
       renderer.dispose();
