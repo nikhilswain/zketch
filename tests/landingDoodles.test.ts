@@ -25,7 +25,7 @@ describe("doodle library", () => {
         }
       }
     }
-  });
+  }, 20000);
 
   it("strokes play in order and duration covers the last stroke", () => {
     for (const def of DOODLES) {

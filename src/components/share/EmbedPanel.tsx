@@ -2,6 +2,7 @@ import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { CheckIcon, CopyIcon } from "@/components/icons";
 import {
   embedSize,
   embedUrl,
@@ -58,7 +59,14 @@ export const EmbedView: React.FC<EmbedViewProps> = ({ link, onBack, className = 
   const [aspect, setAspect] = useState<Aspect>({ width: 4, height: 3 });
   const [sized, setSized] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [settled, setSettled] = useState(false);
+  const [frameLoaded, setFrameLoaded] = useState(false);
   const copiedTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setSettled(true), 260);
+    return () => window.clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     setMode("tap");
@@ -104,6 +112,10 @@ export const EmbedView: React.FC<EmbedViewProps> = ({ link, onBack, className = 
   const ratio = size.width / size.height;
   const previewSrc = embedUrl({ origin: "", id: link.id, mode, loop });
 
+  useEffect(() => {
+    setFrameLoaded(false);
+  }, [previewSrc]);
+
   const copy = async () => {
     if (!sized) return;
     try {
@@ -123,13 +135,25 @@ export const EmbedView: React.FC<EmbedViewProps> = ({ link, onBack, className = 
     <div className={`flex min-h-0 min-w-0 flex-1 flex-col md:flex-row ${className}`}>
       <div className="flex h-[200px] shrink-0 items-center justify-center bg-(--zk-well) p-4 md:h-auto md:min-h-[520px] md:min-w-0 md:flex-1 md:p-8">
         <div className="flex h-full w-full items-center justify-center" style={{ containerType: "size" }}>
-          <iframe
-              key={previewSrc}
-              src={previewSrc}
-              title={`${link.name} — embed preview`}
-              className="block rounded-[8px] border-0"
-              style={{ aspectRatio: `${size.width} / ${size.height}`, width: `min(100cqw, calc(100cqh * ${ratio}))` }}
-          />
+          <div
+            className="relative"
+            style={{ aspectRatio: `${size.width} / ${size.height}`, width: `min(100cqw, calc(100cqh * ${ratio}))` }}
+          >
+            <img
+              src={`/api/shares/${link.id}/picture.png`}
+              alt=""
+              className={`absolute inset-0 h-full w-full rounded-[8px] bg-white object-contain transition-opacity duration-200 ${frameLoaded ? "opacity-0" : "opacity-100"}`}
+            />
+            {settled && sized && (
+              <iframe
+                key={previewSrc}
+                src={previewSrc}
+                title={`${link.name} — embed preview`}
+                onLoad={() => setFrameLoaded(true)}
+                className={`absolute inset-0 block h-full w-full rounded-[8px] border-0 transition-opacity duration-200 ${frameLoaded ? "opacity-100" : "opacity-0"}`}
+              />
+            )}
+          </div>
         </div>
       </div>
 
@@ -212,9 +236,10 @@ export const EmbedView: React.FC<EmbedViewProps> = ({ link, onBack, className = 
         <button
           onClick={copy}
           disabled={!sized}
-          className="mt-3 flex h-10 w-full shrink-0 items-center justify-center rounded-[4px] bg-zk-accent text-[14px] font-semibold text-zk-on-accent transition-[filter] hover:brightness-110 disabled:opacity-50 disabled:hover:brightness-100"
+          className="mt-3 flex h-10 w-full shrink-0 items-center justify-center gap-2 rounded-[4px] bg-zk-accent text-[14px] font-semibold text-zk-on-accent transition-[filter] hover:brightness-110 disabled:opacity-50 disabled:hover:brightness-100"
         >
-          {copied ? "Copied ✓" : "Copy code"}
+          {copied ? <CheckIcon className="h-4 w-4" /> : <CopyIcon className="h-4 w-4" />}
+          {copied ? "Copied" : "Copy code"}
         </button>
         <p className="mt-2.5 text-[12px] leading-snug text-zk-muted">
           Tip: in Notion, Medium and similar apps you can also just paste the share link.
