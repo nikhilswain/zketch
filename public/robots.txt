@@ -1,5 +1,7 @@
 User-agent: *
 Allow: /
+Allow: /api/shares/*/preview.jpg
+Allow: /api/shares/*/picture.png
 Disallow: /api/
 
 Sitemap: https://zketch.zerro.dev/sitemap-index.xml

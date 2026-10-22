@@ -1115,7 +1115,7 @@ html.lp-painting::view-transition-new(lp-roller) {
   margin: 0 0 16px;
   font-family: var(--hand);
   font-size: 24px;
-  font-weight: 700;
+  font-weight: 400;
   color: var(--accent-text);
 }
 
@@ -1186,6 +1186,11 @@ html[data-lp-theme="dark"] .lp-brush-tile img {
 
   .lp-compare {
     font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+
+  .lp-compare thead th {
+    font-size: 1rem;
   }
 
   .lp-compare th,

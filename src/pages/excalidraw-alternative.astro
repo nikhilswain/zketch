@@ -10,7 +10,7 @@ const rows: [feature: string, zketch: string, excalidraw: string][] = [
   ["Textured brushes", "36: pencil, watercolor, oil, charcoal and more", "One freehand pen"],
   ["Layers", "Yes", "No"],
   ["Replay how a drawing was made", "Yes, in the app and on share links", "No"],
-  ["Timelapse video download", "MP4 or WebM", "No"],
+  ["Timelapse video download", "MP4 or WebM, from a share link", "No"],
   ["Live collaboration", "Not yet", "Yes"],
   ["Shape libraries", "No", "Yes"],
   ["Export", "PNG, JPG", "PNG, SVG"],
@@ -26,7 +26,7 @@ const rows: [feature: string, zketch: string, excalidraw: string][] = [
       <h2 id="lp-compare-title">zketch and Excalidraw, side by side.</h2>
       <p>Both are good. They are just good at different things.</p>
     </div>
-    <div class="lp-compare-wrap">
+    <div class="lp-compare-wrap" role="region" aria-label="zketch and Excalidraw compared" tabindex="0">
       <table class="lp-compare">
         <caption>Compared October 2026. Excalidraw is a separate project, not affiliated with zketch.</caption>
         <thead>

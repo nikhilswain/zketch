@@ -35,7 +35,7 @@ export const TOPICS: Topic[] = [
     sections: [
       {
         heading: "sketch the second you land.",
-        body: "There is no sign-up, no download and no tour. Press start drawing and you have a blank page and a pencil. Every stroke is saved as you go, so closing the tab loses nothing.",
+        body: "There is no sign-up, no download and no tour. Press start drawing and you have a blank page and a pen. Every stroke is saved as you go, so closing the tab loses nothing.",
         art: "coffee",
       },
       {
@@ -45,7 +45,7 @@ export const TOPICS: Topic[] = [
       },
       {
         heading: "doodle in layers.",
-        body: "Rough sketch on one layer, clean lines on the next, colour underneath. Hide, lock and reorder layers, or focus on one while the rest fades back.",
+        body: "Rough sketch on one layer, clean lines on the next, colour underneath. Hide, lock and reorder layers, or focus on one and hide the rest for a moment.",
         art: "paper-stack",
       },
       {
@@ -96,7 +96,7 @@ export const TOPICS: Topic[] = [
       },
       {
         heading: "write on anything.",
-        body: "Type text anywhere on the page, or straight inside a shape to label it. Then mix in freehand doodles, highlighter and notes on the same page, because real diagrams are never only boxes.",
+        body: "Type text anywhere on the page, or straight inside a shape to label it. Then mix in freehand doodles, highlighter and text on the same page, because real diagrams are never only boxes.",
         art: "rocket",
       },
       {
@@ -226,11 +226,11 @@ export const TOPICS: Topic[] = [
       "zketch remembers every stroke, so your drawing replays itself. Share a link people can scrub, embed it on your site, or download the timelapse as a video.",
     tape: "replay · share · save as video",
     h1: "A drawing timelapse, without a screen recorder.",
-    sub: "zketch remembers every stroke you draw. Press play and watch the drawing come back, share a link that replays it, or save the timelapse as a video.",
+    sub: "zketch remembers every stroke you draw. Press play and watch the drawing come back, or share a link that replays it and save the timelapse as a video.",
     sections: [
       {
         heading: "every stroke, in order.",
-        body: "Strokes are saved with their timing, so a drawing can replay itself layer by layer. Long pauses are squeezed out, and you can scrub to any moment or speed it up to 32 times.",
+        body: "Strokes are saved with their timing, so a drawing can replay itself stroke by stroke. Long pauses are squeezed out, and you can scrub to any moment or speed it up to 32 times.",
         art: "film-replay",
       },
       {
@@ -240,14 +240,14 @@ export const TOPICS: Topic[] = [
       },
       {
         heading: "save it as a video, or embed it.",
-        body: "Download the timelapse as an MP4 (or WebM in browsers that cannot make MP4), made right in your browser. Or embed the replay on your own site with a copy-paste code, and it works with oEmbed too.",
+        body: "From a share link, download the timelapse as an MP4 (or WebM in browsers that cannot make MP4), made right in your browser. Or embed the replay on your own site with a copy-paste code, and it works with oEmbed too.",
         art: "rocket",
       },
     ],
     questions: [
       {
         q: "Do I need to record my screen?",
-        a: "No. zketch records the strokes themselves, so the timelapse is crisp at any size and never shows your cursor or other windows.",
+        a: "No. zketch records the strokes themselves, so the replay is crisp at any size and never shows your cursor or other windows.",
       },
       {
         q: "Can I replay an old drawing?",
