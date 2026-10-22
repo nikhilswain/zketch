@@ -25,6 +25,7 @@ const BAR_H = 7;
 const NOW_H = 12;
 const BAR_BOTTOM = 14;
 const UNPLAYED = 0.22;
+const STRIP_ROW = 24;
 
 function roundBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
   const r = Math.min(2, w / 2, h / 2);
@@ -39,9 +40,9 @@ export const EmbedCredit: React.FC<{ id: string }> = ({ id }) => (
     href={`/share/${id}`}
     target="_blank"
     rel="noopener"
-    className="flex shrink-0 items-center gap-1 text-[11px] font-semibold text-zk-muted no-underline hover:text-zk-text"
+    className="flex shrink-0 items-center gap-1 text-[11px] font-semibold text-[#6f695f] no-underline hover:text-[#1b1d21]"
   >
-    <i className="inline-block h-2.5 w-2.5 rounded-full bg-zk-accent" />
+    <i className="inline-block h-2.5 w-2.5 rounded-full bg-[#ff6b5b]" />
     zketch
   </a>
 );
@@ -65,6 +66,9 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ meta, mode, loop }) => {
     playing: false,
     slices: [] as TimeSlice[],
     boxes: [] as StripBox[],
+    stripW: 0,
+    stripShown: false,
+    stripKey: "",
   }).current;
   const [ready, setReady] = useState(false);
   const [total, setTotal] = useState(0);
@@ -98,11 +102,25 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ meta, mode, loop }) => {
     };
   }, [meta.id]);
 
-  const drawStrip = () => {
-    const canvas = stripRef.current;
-    if (!canvas) return;
+  const stripKey = (): string => {
+    let played = 0;
+    let now = -1;
+    st.slices.forEach((s, i) => {
+      if (st.t >= s.end) played = i + 1;
+      else if (st.playing && st.t >= s.start && now < 0) now = i;
+    });
     const dpr = window.devicePixelRatio || 1;
-    const width = canvas.clientWidth;
+    return `${st.slices.length}:${played}:${now}:${st.stripW}:${dpr}`;
+  };
+
+  const drawStrip = (force = false) => {
+    const canvas = stripRef.current;
+    if (!canvas || (!force && !st.stripShown)) return;
+    const key = stripKey();
+    if (!force && key === st.stripKey) return;
+    st.stripKey = key;
+    const dpr = window.devicePixelRatio || 1;
+    const width = st.stripW;
     const w = Math.max(1, Math.round(width * dpr));
     const h = Math.round(STRIP_H * dpr);
     if (canvas.width !== w) canvas.width = w;
@@ -217,7 +235,7 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ meta, mode, loop }) => {
         if (!live) return;
         prepared = true;
         renderer.draw(st.total);
-        drawStrip();
+        drawStrip(true);
         setReady(true);
       })
       .catch((err) => console.error("Failed to prepare the replay:", err));
@@ -244,7 +262,10 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ meta, mode, loop }) => {
   useEffect(() => {
     const strip = stripRef.current;
     if (!strip) return;
-    const observer = new ResizeObserver(() => drawStrip());
+    const observer = new ResizeObserver(([entry]) => {
+      st.stripW = entry.contentRect.width;
+      drawStrip(true);
+    });
     observer.observe(strip);
     return () => observer.disconnect();
   }, []);
@@ -291,6 +312,11 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ meta, mode, loop }) => {
   };
 
   const stripOn = watchable && (playing || hovering);
+  st.stripShown = stripOn;
+
+  useEffect(() => {
+    if (stripOn) drawStrip(true);
+  }, [stripOn]);
   const pillText = mode === "auto" && playing ? "▶ drawing…" : "▶ watch it drawn";
   const pillOn = watchable && (!playing || mode === "auto");
   const ratio = frame.width / frame.height;
@@ -304,48 +330,53 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ meta, mode, loop }) => {
     >
       <div className="flex min-h-0 flex-1 items-center justify-center" style={{ containerType: "size" }}>
         <div
-          ref={stageRef}
           data-share-stage
-          tabIndex={watchable ? 0 : -1}
-          role={watchable ? "button" : "img"}
-          aria-label={watchable ? `${meta.name}, play how it was drawn` : meta.name}
-          className={`relative overflow-hidden bg-white outline-none focus-visible:ring-2 focus-visible:ring-zk-accent focus-visible:ring-inset ${watchable ? "cursor-pointer" : ""}`}
-          style={{ aspectRatio: `${frame.width} / ${frame.height}`, width: `min(100cqw, calc(100cqh * ${ratio}))`, touchAction: "pan-y" }}
-          onClick={onStageClick}
-          onKeyDown={onKeyDown}
+          className="flex flex-col overflow-hidden rounded-[8px] bg-white"
+          style={{ width: `min(100cqw, calc((100cqh - ${STRIP_ROW}px) * ${ratio}))` }}
         >
-          <canvas ref={canvasRef} className={`block h-full w-full ${ready ? "" : "invisible"}`} />
-          {!ready && (
-            <img
-              src={pictureUrl}
-              alt={meta.name}
-              draggable={false}
-              className="pointer-events-none absolute inset-0 h-full w-full"
-            />
-          )}
-          <span
-            ref={pencilRef}
-            aria-hidden="true"
-            className="pointer-events-none absolute h-0 w-0 opacity-0 transition-opacity duration-150"
+          <div
+            ref={stageRef}
+            tabIndex={watchable ? 0 : -1}
+            role={watchable ? "button" : "img"}
+            aria-label={watchable ? `${meta.name}, play how it was drawn` : meta.name}
+            className={`relative w-full overflow-hidden bg-white outline-none focus-visible:ring-2 focus-visible:ring-zk-accent focus-visible:ring-inset ${watchable ? "cursor-pointer" : ""}`}
+            style={{ aspectRatio: `${frame.width} / ${frame.height}`, touchAction: "pan-y" }}
+            onClick={onStageClick}
+            onKeyDown={onKeyDown}
           >
-            <Pencil />
-          </span>
-          <span
+            <canvas ref={canvasRef} className={`block h-full w-full ${ready ? "" : "invisible"}`} />
+            {!ready && (
+              <img
+                src={pictureUrl}
+                alt={meta.name}
+                draggable={false}
+                className="pointer-events-none absolute inset-0 h-full w-full"
+              />
+            )}
+            <span
+              ref={pencilRef}
+              aria-hidden="true"
+              className="pointer-events-none absolute h-0 w-0 opacity-0 transition-opacity duration-150"
+            >
+              <Pencil />
+            </span>
+            <span
+              aria-hidden="true"
+              className={`pointer-events-none absolute bottom-2 left-2.5 rounded-full bg-[#fffdf8d9] px-2 py-0.5 text-[12px] text-[#6f695f] transition-opacity duration-200 ${pillOn ? "opacity-100" : "opacity-0"}`}
+            >
+              {pillText}
+            </span>
+          </div>
+        <div className="flex h-6 shrink-0 items-center gap-3 px-2.5">
+          <canvas
+            ref={stripRef}
             aria-hidden="true"
-            className={`pointer-events-none absolute bottom-2 left-2.5 rounded-full bg-zk-surface/85 px-2 py-0.5 text-[12px] text-zk-text-2 transition-opacity duration-200 ${pillOn ? "opacity-100" : "opacity-0"}`}
-          >
-            {pillText}
-          </span>
+            onPointerDown={onStripDown}
+            className={`h-4 min-w-0 flex-1 cursor-pointer transition-opacity duration-200 ${stripOn ? "opacity-100" : "pointer-events-none opacity-0"}`}
+          />
+          <EmbedCredit id={meta.id} />
         </div>
-      </div>
-      <div className="flex h-6 shrink-0 items-center gap-3 px-2.5">
-        <canvas
-          ref={stripRef}
-          aria-hidden="true"
-          onPointerDown={onStripDown}
-          className={`h-4 min-w-0 flex-1 cursor-pointer transition-opacity duration-200 ${stripOn ? "opacity-100" : "pointer-events-none opacity-0"}`}
-        />
-        <EmbedCredit id={meta.id} />
+        </div>
       </div>
     </div>
   );

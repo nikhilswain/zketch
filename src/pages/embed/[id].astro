@@ -24,6 +24,7 @@ if (!meta) Astro.response.status = 404;
 
 const pictureUrl = meta ? `/api/shares/${meta.id}/picture.png` : '';
 const shareHref = meta ? `/share/${meta.id}` : '/';
+const ratio = meta && meta.previewWidth > 0 && meta.previewHeight > 0 ? meta.previewWidth / meta.previewHeight : 4 / 3;
 ---
 
 <Layout
@@ -58,11 +59,14 @@ const shareHref = meta ? `/share/${meta.id}` : '/';
       </a>
     ) : (
       <EmbedPlayer client:only="react" meta={meta} mode={mode} loop={loop}>
-        <div slot="fallback" class="flex h-full w-full flex-col">
-          <div class="flex min-h-0 flex-1 items-center justify-center">
-            <img src={pictureUrl} alt={meta.name} class="block h-full w-full object-contain" />
+        <div slot="fallback" class="flex h-full w-full items-center justify-center" style="container-type: size">
+          <div
+            class="flex flex-col overflow-hidden rounded-[8px] bg-white"
+            style={`width: min(100cqw, calc((100cqh - 24px) * ${ratio}))`}
+          >
+            <img src={pictureUrl} alt={meta.name} class="block w-full" style={`aspect-ratio: ${ratio}`} />
+            <div class="h-6 shrink-0"></div>
           </div>
-          <div class="h-6 shrink-0"></div>
         </div>
       </EmbedPlayer>
     )
@@ -88,5 +92,10 @@ const shareHref = meta ? `/share/${meta.id}` : '/';
   body {
     background: transparent;
     overflow: hidden;
+    overscroll-behavior: auto;
+  }
+  html,
+  html[data-theme] {
+    color-scheme: normal;
   }
 </style>
