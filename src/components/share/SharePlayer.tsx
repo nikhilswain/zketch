@@ -59,7 +59,7 @@ function speedLabel(mode: SpeedMode, total: number): string {
   return `auto ${times(autoSpeed(total))}×`;
 }
 
-const Pencil: React.FC = () => (
+export const Pencil: React.FC = () => (
   <svg
     width="24"
     height="25.5"

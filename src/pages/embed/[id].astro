@@ -1,0 +1,92 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import EmbedPlayer from '@/components/share/EmbedPlayer';
+import { shareMeta } from '@/share/shareServer';
+import { shareEnvFrom } from '@/share/shareEnv';
+
+export const prerender = false;
+
+const id = Astro.params.id ?? '';
+const runtime = (Astro.locals as any)?.runtime;
+const shareEnv = shareEnvFrom(runtime?.env, runtime?.ctx);
+const meta = shareEnv
+  ? await shareMeta(id, shareEnv).catch((err) => {
+      console.error('Failed to read share:', err);
+      return null;
+    })
+  : null;
+const query = Astro.url.searchParams;
+const mode = query.get('mode') === 'auto' ? 'auto' : query.get('mode') === 'picture' ? 'picture' : 'tap';
+const loop = mode === 'auto' && query.get('loop') === '1';
+
+Astro.response.headers.set('Content-Security-Policy', 'frame-ancestors *');
+if (!meta) Astro.response.status = 404;
+
+const pictureUrl = meta ? `/api/shares/${meta.id}/picture.png` : '';
+const shareHref = meta ? `/share/${meta.id}` : '/';
+---
+
+<Layout
+  pageTitle={meta ? `${meta.name} | zketch` : 'zketch'}
+  description=""
+  noindex
+  zoomable
+  appTheme={false}
+>
+  <Fragment slot="head">
+    <script is:inline>
+      (() => {
+        const media = matchMedia("(prefers-color-scheme: dark)");
+        const apply = () => {
+          document.documentElement.dataset.theme = media.matches ? "dark" : "light";
+        };
+        apply();
+        media.addEventListener("change", apply);
+      })();
+    </script>
+  </Fragment>
+  {meta ? (
+    mode === 'picture' ? (
+      <a
+        href={shareHref}
+        target="_blank"
+        rel="noopener"
+        class="flex h-full w-full items-center justify-center"
+        aria-label={`${meta.name}, open in zketch`}
+      >
+        <img src={pictureUrl} alt={`${meta.name} — drawn in zketch`} class="block h-full w-full object-contain" />
+      </a>
+    ) : (
+      <EmbedPlayer client:only="react" meta={meta} mode={mode} loop={loop}>
+        <div slot="fallback" class="flex h-full w-full flex-col">
+          <div class="flex min-h-0 flex-1 items-center justify-center">
+            <img src={pictureUrl} alt={meta.name} class="block h-full w-full object-contain" />
+          </div>
+          <div class="h-6 shrink-0"></div>
+        </div>
+      </EmbedPlayer>
+    )
+  ) : (
+    <div class="flex h-full w-full items-center justify-center p-4 font-ui">
+      <div class="rounded-[6px] bg-zk-surface px-5 py-4 text-center text-zk-text shadow-(--zk-mini-edge)">
+        <p class="text-[14px]">This drawing is no longer shared</p>
+        <a
+          href="/"
+          target="_blank"
+          rel="noopener"
+          class="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-zk-muted hover:text-zk-text"
+        >
+          <i class="inline-block h-2.5 w-2.5 rounded-full bg-zk-accent"></i>zketch
+        </a>
+      </div>
+    </div>
+  )}
+</Layout>
+
+<style is:global>
+  html,
+  body {
+    background: transparent;
+    overflow: hidden;
+  }
+</style>
