@@ -57,6 +57,10 @@ export const TOPICS: Topic[] = [
     ],
     questions: [
       {
+        q: "Is there a simple, whiteboard-style mode?",
+        a: "Yes. The Simple layout hides the panels and gives you one floating toolbar, with number keys for each tool and a small card for colours and line styles.",
+      },
+      {
         q: "Can I make flowcharts for free?",
         a: "Yes. zketch is free, with no account and no limit on the number of diagrams.",
       },
@@ -89,6 +93,11 @@ export const TOPICS: Topic[] = [
         heading: "the same sketchy diagrams.",
         body: "Rectangles, diamonds, circles and arrows with a hand-drawn look, arrows that stick to shapes, and text inside shapes. If you draw quick flowcharts in Excalidraw, you will feel at home.",
         art: "mini-diagram",
+      },
+      {
+        heading: "a Simple layout that feels familiar.",
+        body: "Switch to the Simple layout and zketch becomes one floating toolbar and a small properties card, and the number keys match Excalidraw's: 1 select, 2 rectangle, 3 diamond, 4 ellipse, 5 arrow, 6 line, 7 pen, 8 text, 0 eraser. Switch back to docked panels, or drag panels where you like them, when it is time to paint.",
+        art: "layout",
       },
       {
         heading: "plus brushes you can paint with.",

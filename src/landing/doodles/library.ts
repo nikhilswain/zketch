@@ -734,6 +734,28 @@ const SPECS: Spec[] = [
     },
   },
   {
+    id: "layout",
+    hero: false,
+    outline: "ink",
+    colorChance: 1,
+    draw(k) {
+      const left = rect(30, 52, 62, 148);
+      const right = rect(140, 52, 170, 104);
+      const bar = rect(78, 132, 124, 146);
+      k.out(rect(20, 40, 180, 160));
+      k.out(left, { size: 3 });
+      k.out(right, { size: 3 });
+      k.out(bar, { size: 3 });
+      k.out(shapes.line({ x: 82, y: 108 }, { x: 130, y: 80 }, -10), { size: 3 });
+      k.out(arrowHead({ x: 120, y: 86 }, { x: 130, y: 80 }, 9), { size: 3 });
+      if (k.colored) {
+        k.paint(left, C.sky, { brush: "marker" });
+        k.paint(right, C.yellow, { brush: "marker" });
+        k.paint(bar, C.pink, { brush: "marker" });
+      }
+    },
+  },
+  {
     id: "padlock",
     hero: false,
     outline: "ink",
