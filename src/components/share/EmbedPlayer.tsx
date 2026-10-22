@@ -26,6 +26,10 @@ const NOW_H = 12;
 const BAR_BOTTOM = 14;
 const UNPLAYED = 0.22;
 const STRIP_ROW = 24;
+const DRAG_PX = 4;
+const STEP_MS = 1000;
+
+type Drag = { id: number; x: number; moved: boolean; strip: boolean };
 
 function roundBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
   const r = Math.min(2, w / 2, h / 2);
@@ -69,11 +73,15 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ meta, mode, loop }) => {
     stripW: 0,
     stripShown: false,
     stripKey: "",
+    scrubRaf: 0,
+    scrubT: 0,
+    drag: null as Drag | null,
   }).current;
   const [ready, setReady] = useState(false);
   const [total, setTotal] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [hovering, setHovering] = useState(false);
+  const [scrubbing, setScrubbing] = useState(false);
   const pictureUrl = `/api/shares/${meta.id}/picture.png`;
   const frame = useMemo(
     () =>
@@ -173,6 +181,8 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ meta, mode, loop }) => {
     st.raf = 0;
     window.clearTimeout(st.loopTimer);
     st.loopTimer = 0;
+    cancelAnimationFrame(st.scrubRaf);
+    st.scrubRaf = 0;
   };
 
   const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -205,6 +215,24 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ meta, mode, loop }) => {
     };
     show(st.from);
     st.raf = requestAnimationFrame(step);
+  };
+
+  const seek = (t: number) => {
+    halt();
+    show(Math.max(0, Math.min(st.total, t)));
+  };
+
+  const scrubTo = (clientX: number, strip: boolean) => {
+    const el = strip ? stripRef.current : canvasRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const k = rect.width > 0 ? (clientX - rect.left) / rect.width : 0;
+    st.scrubT = k * st.total;
+    if (st.scrubRaf) return;
+    st.scrubRaf = requestAnimationFrame(() => {
+      st.scrubRaf = 0;
+      seek(st.scrubT);
+    });
   };
 
   const stop = () => {
@@ -292,8 +320,52 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ meta, mode, loop }) => {
 
   const watchable = ready && total > 0;
 
-  const onStageClick = () => {
-    if (watchable) run(0);
+  const onDown = (e: React.PointerEvent<HTMLElement>, strip: boolean) => {
+    if (!watchable || e.button !== 0) return;
+    st.drag = { id: e.pointerId, x: e.clientX, moved: false, strip };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const onMove = (e: React.PointerEvent<HTMLElement>) => {
+    const drag = st.drag;
+    if (!drag || drag.id !== e.pointerId) return;
+    if (!drag.moved) {
+      if (Math.abs(e.clientX - drag.x) < DRAG_PX) return;
+      drag.moved = true;
+      halt();
+      hidePencil();
+      setPlay(false);
+      setScrubbing(true);
+    }
+    scrubTo(e.clientX, drag.strip);
+  };
+
+  const onUp = (e: React.PointerEvent<HTMLElement>, tapped: boolean) => {
+    const drag = st.drag;
+    if (!drag || drag.id !== e.pointerId) return;
+    st.drag = null;
+    if (drag.moved) {
+      cancelAnimationFrame(st.scrubRaf);
+      st.scrubRaf = 0;
+      seek(st.scrubT);
+      setScrubbing(false);
+      if (!tapped) {
+        hidePencil();
+        drawStrip();
+      } else if (st.t < st.total) run(st.t);
+      else {
+        hidePencil();
+        drawStrip();
+      }
+    } else if (tapped) {
+      if (!drag.strip) {
+        run(0);
+        return;
+      }
+      const rect = e.currentTarget.getBoundingClientRect();
+      const i = sliceAt(st.boxes, e.clientX - rect.left);
+      if (i >= 0) run(st.slices[i].start);
+    }
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -301,24 +373,29 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ meta, mode, loop }) => {
     if (e.key === " " || e.key === "Enter") {
       e.preventDefault();
       run(0);
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      setPlay(false);
+      setScrubbing(true);
+      seek(st.t + (e.key === "ArrowLeft" ? -STEP_MS : STEP_MS));
     }
   };
 
-  const onStripDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!watchable || e.button !== 0) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const i = sliceAt(st.boxes, e.clientX - rect.left);
-    if (i >= 0) run(st.slices[i].start);
+  const onBlur = () => {
+    if (scrubbing && !st.drag) {
+      hidePencil();
+      setScrubbing(false);
+    }
   };
 
-  const stripOn = watchable && (playing || hovering);
+  const stripOn = watchable && (playing || hovering || scrubbing);
   st.stripShown = stripOn;
 
   useEffect(() => {
     if (stripOn) drawStrip(true);
   }, [stripOn]);
   const pillText = mode === "auto" && playing ? "▶ drawing…" : "▶ watch it drawn";
-  const pillOn = watchable && (!playing || mode === "auto");
+  const pillOn = watchable && !scrubbing && (!playing || mode === "auto");
   const ratio = frame.width / frame.height;
 
   return (
@@ -341,8 +418,12 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ meta, mode, loop }) => {
             aria-label={watchable ? `${meta.name}, play how it was drawn` : meta.name}
             className={`relative w-full overflow-hidden bg-white outline-none focus-visible:ring-2 focus-visible:ring-zk-accent focus-visible:ring-inset ${watchable ? "cursor-pointer" : ""}`}
             style={{ aspectRatio: `${frame.width} / ${frame.height}`, touchAction: "pan-y" }}
-            onClick={onStageClick}
+            onPointerDown={(e) => onDown(e, false)}
+            onPointerMove={onMove}
+            onPointerUp={(e) => onUp(e, true)}
+            onPointerCancel={(e) => onUp(e, false)}
             onKeyDown={onKeyDown}
+            onBlur={onBlur}
           >
             <canvas ref={canvasRef} className={`block h-full w-full ${ready ? "" : "invisible"}`} />
             {!ready && (
@@ -371,7 +452,10 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ meta, mode, loop }) => {
           <canvas
             ref={stripRef}
             aria-hidden="true"
-            onPointerDown={onStripDown}
+            onPointerDown={(e) => onDown(e, true)}
+            onPointerMove={onMove}
+            onPointerUp={(e) => onUp(e, true)}
+            onPointerCancel={(e) => onUp(e, false)}
             className={`h-4 min-w-0 flex-1 cursor-pointer transition-opacity duration-200 ${stripOn ? "opacity-100" : "pointer-events-none opacity-0"}`}
           />
           <EmbedCredit id={meta.id} />
