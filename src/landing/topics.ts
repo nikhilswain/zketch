@@ -95,8 +95,8 @@ export const TOPICS: Topic[] = [
         art: "mini-diagram",
       },
       {
-        heading: "a Simple layout that feels familiar.",
-        body: "Switch to the Simple layout and zketch becomes one floating toolbar and a small properties card, and the number keys match Excalidraw's: 1 select, 2 rectangle, 3 diamond, 4 ellipse, 5 arrow, 6 line, 7 pen, 8 text, 0 eraser. Switch back to docked panels, or drag panels where you like them, when it is time to paint.",
+        heading: "simple when you want it.",
+        body: "The Simple layout tucks every panel away and leaves one floating toolbar, a small card for colours and line styles, and a number key for each tool. When it is time to paint, bring the panels back or drag them to whichever side suits you.",
         art: "layout",
       },
       {
