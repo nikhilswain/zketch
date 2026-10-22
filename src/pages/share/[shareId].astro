@@ -17,6 +17,9 @@ const meta = shareEnv
       return null;
     })
   : null;
+const oembedHref = meta
+  ? `${Astro.url.origin}/api/oembed?url=${encodeURIComponent(`${Astro.url.origin}/share/${meta.id}`)}&format=json`
+  : '';
 ---
 
 {meta ? (
@@ -29,6 +32,7 @@ const meta = shareEnv
     imageHeight={meta.previewHeight}
     noindex
   >
+    <link slot="head" rel="alternate" type="application/json+oembed" href={oembedHref} title={meta.name} />
     <SharePlayerPage client:only="react" meta={meta} />
     <Toaster client:only="react" />
   </Layout>
