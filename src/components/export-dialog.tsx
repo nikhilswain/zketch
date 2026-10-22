@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { useCanvasStore, useSettingsStore } from "../hooks/useStores";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
 import StrokeTrack from "./studio/StrokeTrack";
+import EmbedPanel from "./share/EmbedPanel";
 import type { ExportFormat } from "@/models/SettingsModel";
 import type { IStroke, BackgroundType } from "@/models/CanvasModel";
 import { ExportService, type IExportLayer } from "@/services/ExportService";
@@ -68,6 +69,7 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
     const [allowContinue, setAllowContinue] = useState(false);
     const [links, setLinks] = useState<SharedLink[]>([]);
     const [removingId, setRemovingId] = useState<string | null>(null);
+    const [embedFor, setEmbedFor] = useState<SharedLink | null>(null);
 
     const hasContent =
       strokes.length > 0 ||
@@ -198,6 +200,7 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
     const realScale = effectiveExportScale(scale, page);
     const outW = Math.round((page ? page.width : EXPORT_W) * realScale);
     const outH = Math.round((page ? page.height : EXPORT_H) * realScale);
+    const currentLink = shareUrl ? links.find((l) => l.url === shareUrl) ?? null : null;
 
     return (
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -383,12 +386,22 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
                       )}
                     </div>
                     <p className="text-[11px] text-zk-muted">{copied ? "Copied. " : ""}Anyone with the link can play this drawing.</p>
-                    <button
-                      onClick={() => setShareUrl(null)}
-                      className="self-start text-[12px] font-semibold text-zk-text-2 hover:text-zk-text"
-                    >
-                      Create another link
-                    </button>
+                    <div className="flex items-center gap-4">
+                      {currentLink && (
+                        <button
+                          onClick={() => setEmbedFor(currentLink)}
+                          className="text-[12px] font-semibold text-zk-text-2 hover:text-zk-text"
+                        >
+                          Embed
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setShareUrl(null)}
+                        className="text-[12px] font-semibold text-zk-text-2 hover:text-zk-text"
+                      >
+                        Create another link
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">
@@ -417,6 +430,12 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
                           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[4px] text-zk-text hover:bg-zk-hover"
                         >
                           <CopyIcon className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setEmbedFor(l)}
+                          className="shrink-0 px-1.5 text-[12px] font-semibold text-zk-text-2 hover:text-zk-text"
+                        >
+                          Embed
                         </button>
                         <button
                           onClick={() => unshare(l)}
@@ -456,6 +475,10 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
             </div>
           </div>
         </DialogContent>
+        <EmbedPanel
+          link={embedFor ? { id: embedFor.id, url: embedFor.url, name: embedFor.name || drawingName } : null}
+          onClose={() => setEmbedFor(null)}
+        />
       </Dialog>
     );
   },

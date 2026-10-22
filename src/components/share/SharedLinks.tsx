@@ -7,6 +7,7 @@ import { CheckIcon, CopyIcon, ExternalLinkIcon, LinkIcon } from "@/components/ic
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { listAllShares, setShareContinue, unshareLinks, type SharedLink } from "@/share/shareClient";
 import type { ISavedDrawing } from "@/models/VaultModel";
+import EmbedPanel, { type EmbedTarget } from "./EmbedPanel";
 import { formatDate } from "@/utils/date";
 
 interface SharedLinksProps {
@@ -48,6 +49,7 @@ const SharedLinks: React.FC<SharedLinksProps> = observer(({ onOpenDrawing }) => 
   const [count, setCount] = useState(0);
   const [copied, setCopied] = useState<string | null>(null);
   const copiedTimerRef = useRef<number | null>(null);
+  const [embedFor, setEmbedFor] = useState<EmbedTarget | null>(null);
 
   useEffect(() => {
     const refresh = () => {
@@ -233,6 +235,12 @@ const SharedLinks: React.FC<SharedLinksProps> = observer(({ onOpenDrawing }) => 
                 >
                   <ExternalLinkIcon className="h-4 w-4" />
                 </a>
+                <button
+                  onClick={() => setEmbedFor({ id: link.id, url: link.url, name })}
+                  className="h-8 rounded-[4px] px-2.5 text-[12px] font-semibold text-zk-text-2 hover:bg-zk-hover hover:text-zk-text"
+                >
+                  Embed
+                </button>
                 {drawing && (
                   <button
                     onClick={() => onOpenDrawing(drawing.id)}
@@ -281,6 +289,7 @@ const SharedLinks: React.FC<SharedLinksProps> = observer(({ onOpenDrawing }) => 
           </div>
         </DialogContent>
       </Dialog>
+      <EmbedPanel link={embedFor} onClose={() => setEmbedFor(null)} />
     </>
   );
 });
