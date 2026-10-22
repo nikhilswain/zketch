@@ -1,9 +1,9 @@
 export const SITE = {
   name: "zketch",
   url: "https://zketch.zerro.dev",
-  title: "zketch: doodle, diagram and paint in your browser",
+  title: "zketch: a free online sketchpad for doodles and diagrams",
   description:
-    "A free drawing app for quick doodles, sketchy diagrams and brush art, with layers and stroke animation. No sign-up, your drawings stay in your browser.",
+    "Sketch, doodle and paint online with real textured brushes, layers and hand-drawn flowcharts. A free, local-first whiteboard. No sign-up, nothing to install.",
   zicons: "https://zicons.zerro.dev",
   author: "zero",
   authorUrl: "https://zerro.dev",

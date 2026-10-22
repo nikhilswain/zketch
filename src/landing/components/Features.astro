@@ -5,11 +5,13 @@ const features = [
   {
     id: "mini-diagram",
     title: "sketchy diagrams that keep up.",
-    body: "Boxes, diamonds, circles and arrows with a hand-drawn look. Arrows stick to the shapes they point at, so moving a box drags its arrows along. Label anything with text.",
+    link: { href: "/flowchart-maker", label: "more on hand-drawn flowcharts" },
+    body: "Flowcharts, mind maps and whiteboard sketches: boxes, diamonds, circles and arrows with a hand-drawn look. Arrows stick to the shapes they point at, so moving a box drags its arrows along. Label anything with text.",
   },
   {
     id: "brush-jar",
     title: "real textures, not just lines.",
+    link: { href: "/brushes", label: "see all 36 brushes" },
     body: "Pencil with paper grain, watercolor that pools, gouache, crayon, charcoal and oil, plus nature brushes that plant a row of pine trees or a meadow in one stroke.",
   },
   {
@@ -20,17 +22,18 @@ const features = [
   {
     id: "film-replay",
     title: "watch it draw itself.",
-    body: "zketch remembers every stroke, so any drawing can replay stroke by stroke, at the speed you like. This page is doing it right now.",
+    link: { href: "/drawing-timelapse", label: "make a drawing timelapse" },
+    body: "zketch remembers every stroke, so any drawing can replay stroke by stroke, at the speed you like, and turn into a timelapse video. This page is doing it right now.",
   },
   {
     id: "share-arrow",
     title: "send it anywhere.",
-    body: "Share a link anyone can open, or export your drawing as PNG, JPG or SVG.",
+    body: "Share a link anyone can open, embed the replay on your site, or export your drawing as PNG or JPG.",
   },
   {
     id: "padlock",
     title: "your drawings never leave your browser.",
-    body: "No account, no upload. Everything is saved on your device, in the browser you drew in.",
+    body: "No account, and nothing is uploaded unless you share it. Everything is saved on your device, in the browser you drew in.",
     aside: "we can't see your drawings. we tried.",
   },
 ];
@@ -61,6 +64,7 @@ const features = [
           <div class="lp-feature-copy">
             <h3>{f.title}</h3>
             <p>{f.body}</p>
+            {f.link && <p class="lp-more"><a href={f.link.href}>{f.link.label} <span aria-hidden="true">→</span></a></p>}
             {f.aside && <p class="lp-aside">{f.aside}</p>}
           </div>
           <div class="lp-scrap lp-feature-art" data-margin={f.id} style={`--r:${i % 2 ? 2.5 : -2.5}deg`} aria-hidden="true">
