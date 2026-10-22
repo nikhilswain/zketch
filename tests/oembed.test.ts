@@ -66,6 +66,33 @@ describe("oembed", () => {
     expect((await oembed(query({}), origin, lookup)).status).toBe(404);
   });
 
+  it("never exceeds maxheight", async () => {
+    for (const maxheight of ["25", "100", "263", "300"]) {
+      const res = await oembed(query({ url: `${origin}/share/${id}`, maxheight }), origin, lookup);
+      const body = await res.json();
+      expect(body.height).toBeLessThanOrEqual(Number(maxheight));
+      expect(body.width).toBeGreaterThan(0);
+    }
+    const tiny = await oembed(query({ url: `${origin}/share/${id}`, maxheight: "24" }), origin, lookup);
+    expect(tiny.status).toBe(404);
+  });
+
+  it("is a 404 when the lookup fails", async () => {
+    const failing = async () => {
+      throw new Error("storage down");
+    };
+    const res = await oembed(query({ url: `${origin}/share/${id}` }), origin, failing);
+    expect(res.status).toBe(404);
+  });
+
+  it("leaves out an unknown thumbnail size", async () => {
+    const unsized = async () => ({ ...meta, previewWidth: 0, previewHeight: 0 });
+    const body = await (await oembed(query({ url: `${origin}/share/${id}` }), origin, unsized)).json();
+    expect(body.thumbnail_url).toBeDefined();
+    expect(body).not.toHaveProperty("thumbnail_width");
+    expect(body).not.toHaveProperty("thumbnail_height");
+  });
+
   it("does not do xml", async () => {
     const res = await oembed(query({ url: `${origin}/share/${id}`, format: "xml" }), origin, lookup);
     expect(res.status).toBe(501);

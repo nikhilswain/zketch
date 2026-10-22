@@ -35,18 +35,30 @@ export async function oembed(
   if (format && format !== "json") return new Response("Not implemented", { status: 501 });
   const id = shareIdFrom(query.get("url"), origin);
   if (!id) return notFound();
-  const meta = await lookup(id);
+  let meta: ShareMeta | null;
+  try {
+    meta = await lookup(id);
+  } catch (err) {
+    console.error("Failed to read share:", err);
+    return notFound();
+  }
   if (!meta) return notFound();
 
   const aspect = { width: meta.previewWidth, height: meta.previewHeight };
   const ratio = aspect.width > 0 && aspect.height > 0 ? aspect.width / aspect.height : 4 / 3;
   const maxWidth = limit(query.get("maxwidth"));
   const maxHeight = limit(query.get("maxheight"));
+  if (maxHeight !== null && maxHeight <= STRIP_PX) return notFound();
   let width = Math.min(EMBED_WIDTH, maxWidth ?? EMBED_WIDTH);
   let size = embedSize(aspect, "tap", width);
   if (maxHeight !== null && size.height > maxHeight) {
-    width = Math.max(1, Math.floor(Math.max(1, maxHeight - STRIP_PX) * ratio));
+    width = Math.max(1, Math.floor((maxHeight - STRIP_PX) * ratio));
     size = embedSize(aspect, "tap", width);
+    while (size.height > maxHeight && width > 1) {
+      width--;
+      size = embedSize(aspect, "tap", width);
+    }
+    if (size.height > maxHeight) return notFound();
   }
 
   const body = {
@@ -59,8 +71,9 @@ export async function oembed(
     width: size.width,
     height: size.height,
     thumbnail_url: `${origin}/api/shares/${id}/preview.jpg`,
-    thumbnail_width: meta.previewWidth,
-    thumbnail_height: meta.previewHeight,
+    ...(meta.previewWidth > 0 && meta.previewHeight > 0
+      ? { thumbnail_width: meta.previewWidth, thumbnail_height: meta.previewHeight }
+      : {}),
   };
   return new Response(JSON.stringify(body), {
     status: 200,

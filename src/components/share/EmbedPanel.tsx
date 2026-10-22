@@ -50,6 +50,7 @@ const EmbedPanel: React.FC<EmbedPanelProps> = ({ link, onClose }) => {
   const [loop, setLoop] = useState(false);
   const [format, setFormat] = useState<Format>("iframe");
   const [aspect, setAspect] = useState<Aspect>({ width: 4, height: 3 });
+  const [sized, setSized] = useState(false);
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<number | null>(null);
 
@@ -60,12 +61,18 @@ const EmbedPanel: React.FC<EmbedPanelProps> = ({ link, onClose }) => {
     setFormat("iframe");
     setCopied(false);
     setAspect({ width: 4, height: 3 });
+    setSized(false);
     let live = true;
     const img = new Image();
     img.onload = () => {
-      if (live && img.naturalWidth > 0 && img.naturalHeight > 0) {
+      if (!live) return;
+      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
         setAspect({ width: img.naturalWidth, height: img.naturalHeight });
       }
+      setSized(true);
+    };
+    img.onerror = () => {
+      if (live) setSized(true);
     };
     img.src = `/api/shares/${encodeURIComponent(link.id)}/preview.jpg`;
     return () => {
@@ -94,6 +101,7 @@ const EmbedPanel: React.FC<EmbedPanelProps> = ({ link, onClose }) => {
   const previewSrc = link ? embedUrl({ origin: "", id: link.id, mode, loop }) : "";
 
   const copy = async () => {
+    if (!sized) return;
     try {
       await navigator.clipboard.writeText(code);
       setCopied(true);
@@ -199,7 +207,8 @@ const EmbedPanel: React.FC<EmbedPanelProps> = ({ link, onClose }) => {
           </pre>
           <button
             onClick={copy}
-            className="mt-3 flex h-10 w-full shrink-0 items-center justify-center rounded-[4px] bg-zk-accent text-[14px] font-semibold text-zk-on-accent transition-[filter] hover:brightness-110"
+            disabled={!sized}
+            className="mt-3 flex h-10 w-full shrink-0 items-center justify-center rounded-[4px] bg-zk-accent text-[14px] font-semibold text-zk-on-accent transition-[filter] hover:brightness-110 disabled:opacity-50 disabled:hover:brightness-100"
           >
             {copied ? "Copied ✓" : "Copy code"}
           </button>
