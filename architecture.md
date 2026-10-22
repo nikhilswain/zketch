@@ -1087,6 +1087,63 @@ Unshare. Rows have checkboxes with Select all and "Unshare selected (N)"; both
 unshare paths confirm in a dialog. The tab says changes reach everyone within
 a minute, matching the meta cache.
 
+**Embeds** (`pages/embed/[id].astro`, `components/share/EmbedPlayer.tsx`).
+`/embed/<id>` is a server-rendered page made to sit in an iframe: no header or
+footer, transparent background, fills the frame, `noindex`, and it sends
+`Content-Security-Policy: frame-ancestors *` (nothing else in the stack sets
+`X-Frame-Options`). It reads `shareMeta` like the share page; an unknown or
+unshared id gets a small "This drawing is no longer shared" card and a 404.
+Its own chrome follows `prefers-color-scheme` (an inline script sets
+`data-theme`); the drawing keeps its own background. Query: `mode=tap`
+(default), `auto` or `picture`, and `loop=1` (auto only); anything else is
+ignored.
+- `picture`: plain HTML, the `picture.png` wrapped in a link to `/share/<id>`
+  (new tab). No script, no drawing download.
+- `tap` and `auto`: `EmbedPlayer` (client only; `picture.png` is the Astro
+  fallback and stays until the replay is ready) loads the drawing like the share
+  page (`readShareText` + `parseBackup`, image blobs to the renderer), plays with
+  `ReplayRenderer` at auto speed (about 15 s) and shows the share page's
+  pencil. Tap: a "▶ watch it drawn" pill; click, tap, Space or Enter plays from
+  the start (again restarts). Auto: an IntersectionObserver plays it when at
+  least half is on screen and stops on the finished picture when it leaves;
+  `loop=1` replays after 1.2 s; reduced motion means no autoplay; the pill reads
+  "▶ drawing…" while it plays. A "● zketch" credit links to the share page.
+- **Time strip**: one 16 px canvas under the drawing, shown while playing and on
+  mouse hover. `timeSlices(replay, layers, max = 72)` (`share/timeStrip.ts`,
+  pure) cuts the timeline at each item's start when there are at most 72 items,
+  otherwise into 72 equal slices; each slice takes the colour that covers most
+  of its time (stroke `color`, shape/arrow `strokeColor`, text `color`, grey for
+  erasers or no colour; `EMPTY_SLICE` when nothing is drawn in it).
+  `stripLayout` sizes the bars by duration with a floor so short slices stay
+  clickable; `sliceAt` hit-tests. Played bars are solid, unplayed at 22 %, the
+  current one taller. Clicking a bar plays from its start.
+
+**oEmbed** (`share/oembed.ts`, `pages/api/oembed.ts`). `GET /api/oembed?url=`
+takes a share or embed URL on this site's origin with a 12-char id and returns
+`type: "rich"`, `version: "1.0"`, title, provider, the tap-to-play iframe as
+`html`, `width`/`height` (640 wide by default, the preview aspect plus the
+24 px strip row, shrunk to `maxwidth`/`maxheight`) and `preview.jpg` as the
+thumbnail. Anything else is a 404, `format=xml` a 501. The share page head
+links it with `<link rel="alternate" type="application/json+oembed">` (through
+the new `head` slot in `Layout.astro`), for B2/R2 shares only.
+
+**Embed codes** (`share/embedCode.ts`, pure). `iframeCode` gives
+`<iframe src=".../embed/<id>[?mode=auto[&loop=1]|?mode=picture]" title="<name>
+— drawn in zketch" style="width:100%;aspect-ratio:640/<h>;border:0;border-radius:8px"
+loading="lazy">`, where `<h>` is the picture height at 640 wide plus 24 px for
+the strip row (no strip for `picture`); `embedSize` is shared with oEmbed.
+`pictureHtml` and `pictureMarkdown` link `picture.png` to the share page.
+Names are escaped for HTML attributes and Markdown.
+
+**Embed panel** (`components/share/EmbedPanel.tsx`). A dialog with a live
+preview (an iframe of the real `/embed/<id>`, reloaded when the mode or loop
+changes; aspect from `preview.jpg`), three mode cards (Tap to play, Autoplay,
+Picture), a Loop switch for Autoplay, format tabs (Embed code; HTML image and
+Markdown for Picture), the code and Copy code ("Copied ✓" for 1.4 s, an error
+toast if the clipboard fails). Codes use the origin of the share link. Opened
+from the export dialog (next to the new link, and on each listed link) and from
+each row of the Shared tab.
+
 ---
 
 ## 11. Feature deep-dives (how the tricky parts work)
