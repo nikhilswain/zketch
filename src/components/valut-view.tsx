@@ -55,11 +55,15 @@ const SORTS: { id: SortOrder; label: string }[] = [
 
 const BACKGROUND_LABEL: Record<string, string> = { white: "White", transparent: "Transparent", grid: "Grid" };
 
-const ThumbnailImage: React.FC<{ thumbnailId: string; alt: string; className?: string }> = ({
+const repairing = new Set<string>();
+
+const ThumbnailImage: React.FC<{ drawingId: string; thumbnailId: string; alt: string; className?: string }> = ({
+  drawingId,
   thumbnailId,
   alt,
   className,
 }) => {
+  const vaultStore = useVaultStore();
   const [src, setSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -83,6 +87,12 @@ const ThumbnailImage: React.FC<{ thumbnailId: string; alt: string; className?: s
       mounted = false;
     };
   }, [thumbnailId]);
+
+  useEffect(() => {
+    if (loading || src || repairing.has(drawingId)) return;
+    repairing.add(drawingId);
+    vaultStore.repairThumbnail(drawingId).catch((err) => console.error("Failed to rebuild thumbnail:", err));
+  }, [loading, src, drawingId, vaultStore]);
 
   if (loading) return <div className={`${className} animate-pulse bg-[#efeee9]`} />;
   if (!src) {
@@ -216,7 +226,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
           className={`w-full overflow-hidden rounded-[4px] shadow-(--zk-mini-edge) ${checker ? CHECKER_BG : "bg-white"}`}
           style={{ aspectRatio: `${page.width} / ${page.height}` }}
         >
-          <ThumbnailImage thumbnailId={drawing.thumbnail} alt={drawing.name} className="h-full w-full object-cover" />
+          <ThumbnailImage drawingId={drawing.id} thumbnailId={drawing.thumbnail} alt={drawing.name} className="h-full w-full object-cover" />
         </div>
       );
     }
@@ -224,6 +234,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
       return (
         <div className="flex aspect-[4/3] w-full items-center justify-center overflow-hidden rounded-[4px] p-2 shadow-(--zk-mini-edge)" style={{ backgroundColor: surround }}>
           <ThumbnailImage
+            drawingId={drawing.id}
             thumbnailId={drawing.thumbnail}
             alt={drawing.name}
             className={`max-h-full max-w-full shadow-[0_2px_8px_rgba(0,0,0,0.18)] ${checker ? CHECKER_BG : ""}`}
@@ -233,7 +244,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
     }
     return (
       <div className={`aspect-[4/3] w-full overflow-hidden rounded-[4px] shadow-(--zk-mini-edge) ${checker ? CHECKER_BG : "bg-white"}`}>
-        <ThumbnailImage thumbnailId={drawing.thumbnail} alt={drawing.name} className="h-full w-full object-cover" />
+        <ThumbnailImage drawingId={drawing.id} thumbnailId={drawing.thumbnail} alt={drawing.name} className="h-full w-full object-cover" />
       </div>
     );
   };
@@ -328,13 +339,14 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
     setPendingDelete(null);
     setDeleting((current) => new Set(current).add(id));
     const toastId = toast(`Deleted “${name}”`, {
-      duration: Infinity,
+      duration: 6000,
       action: {
         label: "Undo",
         onClick: () => {
           if (deletes.undo(id)) unhide(id);
         },
       },
+      onAutoClose: () => void deletes.flush(id),
       onDismiss: () => void deletes.flush(id),
     });
     deletes.schedule(
@@ -344,7 +356,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
         await vaultStore.deleteDrawing(id);
         unhide(id);
       },
-      6000,
+      60000,
     );
   };
 
@@ -701,6 +713,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
                   style={drawing.page ? { backgroundColor: surround } : undefined}
                 >
                   <ThumbnailImage
+                    drawingId={drawing.id}
                     thumbnailId={drawing.thumbnail}
                     alt=""
                     className={drawing.page ? "max-h-full max-w-full" : "h-full w-full object-cover"}

@@ -2,6 +2,7 @@ import { types, type Instance, type SnapshotIn } from "mobx-state-tree";
 import type { ElementLook } from "./ShapeLayerModel";
 import { DexieService } from "@/services/DexieService";
 import { BlobStorageService } from "@/services/BlobStorageService";
+import { ThumbnailService } from "@/services/ThumbnailService";
 import { keepStorage } from "@/services/VaultBackup";
 import { Stroke, PageModel } from "./CanvasModel";
 import type { Page } from "@/utils/page";
@@ -229,6 +230,10 @@ export const VaultModel = types
     clearDrawings() {
       self.drawings.clear();
     },
+    setDrawingThumbnail(id: string, thumbnail: string) {
+      const drawing = self.drawings.find((d) => d.id === id);
+      if (drawing) drawing.thumbnail = thumbnail;
+    },
     addDrawingToList(drawingData: SnapshotIn<typeof SavedDrawing>) {
       self.drawings.push(SavedDrawing.create(drawingData));
     },
@@ -454,6 +459,28 @@ export const VaultModel = types
     },
     loadDrawings() {
       return self.loadFromDB();
+    },
+    async repairThumbnail(id: string): Promise<void> {
+      const stored = await DexieService.getDrawing(id);
+      if (!stored) return;
+      if (BlobStorageService.isThumbnailId(stored.thumbnail) && (await BlobStorageService.getBlob(stored.thumbnail))) {
+        self.setDrawingThumbnail(id, stored.thumbnail);
+        return;
+      }
+      const blob = await ThumbnailService.generateThumbnailBlob(
+        stored.layers as any,
+        stored.background,
+        200,
+        150,
+        stored.page ?? null,
+      );
+      if (!blob.size) return;
+      const thumbnail = await BlobStorageService.storeThumbnail(blob);
+      if (await DexieService.replaceThumbnail(id, stored.thumbnail, thumbnail)) {
+        self.setDrawingThumbnail(id, thumbnail);
+      } else {
+        await BlobStorageService.deleteBlob(thumbnail);
+      }
     },
     /**
      * Clean up orphaned blobs that are no longer referenced by any drawing.

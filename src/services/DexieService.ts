@@ -43,6 +43,15 @@ export class DexieService {
     return await this.db.drawings.get(id);
   }
 
+  static async replaceThumbnail(id: string, from: string, to: string): Promise<boolean> {
+    return this.db.transaction("rw", this.db.drawings, async () => {
+      const drawing = await this.db.drawings.get(id);
+      if (!drawing || drawing.thumbnail !== from) return false;
+      await this.db.drawings.update(id, { thumbnail: to });
+      return true;
+    });
+  }
+
   static async getStorageInfo(): Promise<{ used: number; quota: number }> {
     if ("storage" in navigator && "estimate" in navigator.storage) {
       const estimate = await navigator.storage.estimate();
