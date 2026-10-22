@@ -30,11 +30,11 @@ const meta = shareEnv
     noindex
   >
     <SharePlayerPage client:only="react" meta={meta} />
-    <Toaster richColors client:only="react" />
+    <Toaster client:only="react" />
   </Layout>
 ) : (
   <Layout pageTitle="shared drawing | zketch" description="A drawing made in zketch, the doodle app." noindex>
     {shareId && <ShareByIdPage client:only="react" shareId={shareId} />}
-    <Toaster richColors client:only="react" />
+    <Toaster client:only="react" />
   </Layout>
 )}
