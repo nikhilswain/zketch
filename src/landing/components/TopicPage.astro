@@ -3,6 +3,8 @@ import Layout from "@/layouts/Layout.astro";
 import Header from "@/landing/components/Header.astro";
 import FinalCta from "@/landing/components/FinalCta.astro";
 import Footer from "@/landing/components/Footer.astro";
+import Faq from "@/landing/components/Faq.astro";
+import PencilLine from "@/landing/components/PencilLine.astro";
 import { SITE } from "@/config";
 import type { Topic } from "@/landing/topics";
 import "@/landing/landing.css";
@@ -64,6 +66,7 @@ const jsonLd = {
         </div>
       </section>
       <section class="lp-section lp-topic-sections" aria-label={topic.link}>
+        <PencilLine />
         <ol class="lp-feature-list">
           {
             topic.sections.map((s, i) => (
@@ -81,21 +84,7 @@ const jsonLd = {
         </ol>
       </section>
       <slot />
-      <section class="lp-section lp-faq" aria-labelledby="lp-faq-title">
-        <div class="lp-section-head">
-          <h2 id="lp-faq-title">questions people ask.</h2>
-        </div>
-        <dl>
-          {
-            topic.questions.map((item) => (
-              <div class="lp-faq-item">
-                <dt>{item.q}</dt>
-                <dd>{item.a}</dd>
-              </div>
-            ))
-          }
-        </dl>
-      </section>
+      <Faq questions={topic.questions} />
       <FinalCta />
     </main>
     <Footer />
@@ -104,7 +93,10 @@ const jsonLd = {
 
 <script>
   import { mountMargins } from "../margins";
+  import { mountPencilLine } from "../line";
 
   const root = document.querySelector<HTMLElement>("[data-topic]");
   if (root) mountMargins(root);
+  const sections = document.querySelector<HTMLElement>(".lp-topic-sections");
+  if (sections) mountPencilLine(sections);
 </script>

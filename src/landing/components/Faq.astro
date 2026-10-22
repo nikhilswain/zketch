@@ -1,0 +1,33 @@
+---
+import type { TopicQuestion } from "@/landing/topics";
+
+interface Props {
+  questions: TopicQuestion[];
+}
+
+const { questions } = Astro.props;
+---
+
+<section class="lp-section lp-faq" aria-labelledby="lp-faq-title">
+  <div class="lp-section-head">
+    <h2 id="lp-faq-title">questions people ask.</h2>
+  </div>
+  <dl>
+    {
+      questions.map((item) => (
+        <div class="lp-faq-item">
+          <dt>{item.q}</dt>
+          <dd>
+            {item.a}
+            {item.link && (
+              <>
+                {" "}
+                <a href={item.link.href}>{item.link.label}</a>
+              </>
+            )}
+          </dd>
+        </div>
+      ))
+    }
+  </dl>
+</section>

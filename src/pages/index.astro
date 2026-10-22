@@ -6,8 +6,10 @@ import Pad from "@/landing/components/Pad.astro";
 import Cards from "@/landing/components/Cards.astro";
 import Features from "@/landing/components/Features.astro";
 import FinalCta from "@/landing/components/FinalCta.astro";
+import Faq from "@/landing/components/Faq.astro";
 import Footer from "@/landing/components/Footer.astro";
 import { SITE } from "@/config";
+import { LANDING_QUESTIONS } from "@/landing/topics";
 import "@/landing/landing.css";
 
 export const prerender = true;
@@ -50,6 +52,7 @@ const jsonLd = {
       <Pad />
       <Cards />
       <Features />
+      <Faq questions={LANDING_QUESTIONS} />
       <FinalCta />
     </main>
     <Footer />

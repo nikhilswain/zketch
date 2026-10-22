@@ -1210,3 +1210,19 @@ html[data-lp-theme="dark"] .lp-brush-tile img {
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
 }
+
+.lp-faq dd a {
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.lp-topic-sections {
+  max-width: 1080px;
+}
+
+.lp-topic-sections .lp-pencil-clip {
+  top: 130px;
+  height: calc(100% - 190px);
+}

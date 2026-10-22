@@ -7,6 +7,7 @@ export interface TopicSection {
 export interface TopicQuestion {
   q: string;
   a: string;
+  link?: { href: string; label: string };
 }
 
 export interface Topic {
@@ -259,6 +260,40 @@ export const TOPICS: Topic[] = [
       },
     ],
     og: ["A drawing timelapse,", "without a screen", "recorder."],
+  },
+];
+
+export const LANDING_QUESTIONS: TopicQuestion[] = [
+  {
+    q: "Is zketch free?",
+    a: "Yes. Every brush and every feature is free, with no account, no watermark and no paid tier. zketch is open source under the MIT licence.",
+  },
+  {
+    q: "Do I need to sign up?",
+    a: "No. Open zketch and start drawing. There is nothing to install and no account to make.",
+  },
+  {
+    q: "Where are my drawings saved?",
+    a: "In your browser, on your device. Nothing is uploaded unless you share a drawing. Clearing your browser's site data deletes them, so save a .zketch backup file from your vault now and then.",
+  },
+  {
+    q: "Can I make flowcharts and diagrams?",
+    a: "Yes. Draw boxes, diamonds and circles, connect them with arrows that stay attached, label them, and pick a look from Clean to Charcoal.",
+    link: { href: "/flowchart-maker", label: "More on hand-drawn flowcharts." },
+  },
+  {
+    q: "How is zketch different from Excalidraw?",
+    a: "Both do hand-drawn diagrams. zketch adds textured brushes, layers and replays; Excalidraw has live collaboration, shape libraries and SVG export.",
+    link: { href: "/excalidraw-alternative", label: "See them side by side." },
+  },
+  {
+    q: "Can I export or share a drawing?",
+    a: "Export a PNG or JPG, or share a link that replays the drawing stroke by stroke. From a share link you can also download the replay as a video or embed it on a site.",
+    link: { href: "/drawing-timelapse", label: "More on drawing timelapses." },
+  },
+  {
+    q: "Does it work on a phone?",
+    a: "zketch is made for tablets and computers. On a phone you can open shared drawings and watch them replay, but drawing needs a bigger screen.",
   },
 ];
 
