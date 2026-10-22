@@ -322,7 +322,6 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
       const success = await performSave();
       if (success) {
         setSaveStatus("saved");
-        toast.success("Drawing saved successfully!");
         if (saveStatusResetTimerRef.current !== null) {
           clearTimeout(saveStatusResetTimerRef.current);
         }
@@ -355,12 +354,9 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     };
 
     // Rename drawing (without saving all content)
-    const handleRename = async (showToast = true) => {
+    const handleRename = async () => {
       if (currentDrawingId && drawingName.trim()) {
         await vaultStore.renameDrawing(currentDrawingId, drawingName.trim());
-        if (showToast) {
-          toast.success("Drawing renamed!");
-        }
       }
     };
 
@@ -546,10 +542,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             <TopLeftBlock
               drawingName={drawingName}
               onNameChange={setDrawingName}
-              onNameCommit={(viaEnter) => {
-                if (viaEnter) handleRename(true);
-                else if (currentDrawingId && drawingName.trim()) handleRename(false);
-              }}
+              onNameCommit={() => handleRename()}
               saveStatus={saveStatus}
               onBack={onBackToVault}
               onImport={() => setShowImportDialog(true)}

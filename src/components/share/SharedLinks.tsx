@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { toast } from "sonner";
 import { useVaultStore } from "@/hooks/useStores";
-import { CopyIcon, ExternalLinkIcon, LinkIcon } from "@/components/icons";
+import { CheckIcon, CopyIcon, ExternalLinkIcon, LinkIcon } from "@/components/icons";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { listAllShares, setShareContinue, unshareLinks, type SharedLink } from "@/share/shareClient";
 import type { ISavedDrawing } from "@/models/VaultModel";
@@ -46,6 +46,8 @@ const SharedLinks: React.FC<SharedLinksProps> = observer(({ onOpenDrawing }) => 
   const [pendingUnshare, setPendingUnshare] = useState<SharedLink[] | null>(null);
   const [unsharing, setUnsharing] = useState(false);
   const [count, setCount] = useState(0);
+  const [copied, setCopied] = useState<string | null>(null);
+  const copiedTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const refresh = () => {
@@ -54,6 +56,13 @@ const SharedLinks: React.FC<SharedLinksProps> = observer(({ onOpenDrawing }) => 
     window.addEventListener("focus", refresh);
     return () => window.removeEventListener("focus", refresh);
   }, []);
+
+  useEffect(
+    () => () => {
+      if (copiedTimerRef.current !== null) clearTimeout(copiedTimerRef.current);
+    },
+    [],
+  );
 
   const drawingFor = (link: SharedLink): ISavedDrawing | undefined =>
     link.drawingId ? vaultStore.drawings.find((d: ISavedDrawing) => d.id === link.drawingId) : undefined;
@@ -65,10 +74,15 @@ const SharedLinks: React.FC<SharedLinksProps> = observer(({ onOpenDrawing }) => 
     setSelected((current) => new Set([...current].filter((id) => !ids.includes(id))));
   };
 
-  const copy = async (url: string) => {
+  const copy = async (link: SharedLink) => {
     try {
-      await navigator.clipboard.writeText(url);
-      toast("Link copied");
+      await navigator.clipboard.writeText(link.url);
+      setCopied(link.id);
+      if (copiedTimerRef.current !== null) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = window.setTimeout(() => {
+        setCopied(null);
+        copiedTimerRef.current = null;
+      }, 1500);
     } catch {
       toast.error("Couldn't copy the link.");
     }
@@ -121,9 +135,8 @@ const SharedLinks: React.FC<SharedLinksProps> = observer(({ onOpenDrawing }) => 
       const { removed, failed } = await unshareLinks(pendingUnshare);
       const remaining = new Set(listAllShares().map((l) => l.id));
       removeRows(pendingUnshare.map((l) => l.id).filter((id) => !remaining.has(id)));
-      const failure = failed > 0 ? `${plural(failed, "link")} couldn't be unshared. Please try again.` : undefined;
-      if (removed > 0) toast.success(`Unshared ${plural(removed, "link")}`, { description: failure });
-      else toast.error(failure ?? "Couldn't unshare. Please try again.");
+      if (failed > 0) toast.error(`${plural(failed, "link")} couldn't be unshared. Please try again.`);
+      else if (removed === 0) toast.error("Couldn't unshare. Please try again.");
     } finally {
       setUnsharing(false);
       setPendingUnshare(null);
@@ -203,12 +216,12 @@ const SharedLinks: React.FC<SharedLinksProps> = observer(({ onOpenDrawing }) => 
               </label>
               <div className="flex shrink-0 items-center gap-1">
                 <button
-                  onClick={() => copy(link.url)}
-                  aria-label="Copy link"
-                  title="Copy link"
+                  onClick={() => copy(link)}
+                  aria-label={copied === link.id ? "Link copied" : "Copy link"}
+                  title={copied === link.id ? "Link copied" : "Copy link"}
                   className="flex h-8 w-8 items-center justify-center rounded-[4px] text-zk-text-2 hover:bg-zk-hover hover:text-zk-text"
                 >
-                  <CopyIcon className="h-4 w-4" />
+                  {copied === link.id ? <CheckIcon className="h-4 w-4" /> : <CopyIcon className="h-4 w-4" />}
                 </button>
                 <a
                   href={link.url}

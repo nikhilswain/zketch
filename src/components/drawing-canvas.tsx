@@ -1555,7 +1555,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               centerY,
             );
 
-            toast.success("Image pasted successfully!");
             return true;
           } else {
             toast.error(result.error || "Failed to paste image");
