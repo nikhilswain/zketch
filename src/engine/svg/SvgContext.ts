@@ -32,7 +32,16 @@ const n = (v: number) => {
 const m4 = (m: Matrix) => m.map((v) => String(Math.round(v * 1e4) / 1e4)).join(" ");
 
 export const escapeXml = (s: string) =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  s
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+const paint = (c: string) => (c === "transparent" ? "none" : escapeXml(c));
+
+const roundPath = (d: string) => d.replace(/-?\d*\.\d+(?:e-?\d+)?/g, (v) => n(Number(v)));
 
 function multiply(a: Matrix, b: Matrix): Matrix {
   return [
@@ -139,7 +148,7 @@ export class SvgContext {
     return this.s.lineWidth;
   }
   set lineWidth(v: number) {
-    this.s.lineWidth = v;
+    if (Number.isFinite(v) && v > 0) this.s.lineWidth = v;
   }
   get lineCap() {
     return this.s.lineCap;
@@ -163,7 +172,7 @@ export class SvgContext {
     return this.s.globalAlpha;
   }
   set globalAlpha(v: number) {
-    this.s.globalAlpha = v;
+    if (Number.isFinite(v) && v >= 0 && v <= 1) this.s.globalAlpha = v;
   }
   get globalCompositeOperation() {
     return this.s.comp as GlobalCompositeOperation;
@@ -399,12 +408,14 @@ export class SvgContext {
     return Math.sqrt(Math.abs(a * d - b * c));
   }
 
-  private common(): string {
-    let out = "";
-    if (this.s.globalAlpha < 1) out += ` opacity="${Math.round(this.s.globalAlpha * 1000) / 1000}"`;
-    if (this.s.comp === "multiply") out += ` style="mix-blend-mode:multiply"`;
-    if (this.s.clip) out += ` clip-path="url(#${this.s.clip})"`;
-    return out;
+  private emit(tag: string, attrs: string, transformed: boolean, style = "", content?: string) {
+    let a = attrs;
+    if (this.s.globalAlpha < 1) a += ` opacity="${Math.round(this.s.globalAlpha * 1000) / 1000}"`;
+    const styles = [style, this.s.comp === "multiply" ? "mix-blend-mode:multiply" : ""].filter(Boolean).join(";");
+    if (styles) a += ` style="${styles}"`;
+    const clip = this.s.clip ? ` clip-path="url(#${this.s.clip})"` : "";
+    const el = content === undefined ? `<${tag}${a}${transformed ? "" : clip}/>` : `<${tag}${a}${transformed ? "" : clip}>${content}</${tag}>`;
+    this.parts.push(transformed && clip ? `<g${clip}>${el}</g>` : el);
   }
 
   private pathData() {
@@ -416,7 +427,7 @@ export class SvgContext {
     const rule = (typeof a === "string" ? a : b) === "evenodd" ? ` fill-rule="evenodd"` : "";
     const d = this.pathData();
     if (!d) return;
-    this.parts.push(`<path d="${d}" fill="${escapeXml(this.s.fillStyle)}"${rule}${this.common()}/>`);
+    this.emit("path", ` d="${d}" fill="${paint(this.s.fillStyle)}"${rule}`, false);
   }
 
   stroke(path?: Path2D) {
@@ -430,13 +441,14 @@ export class SvgContext {
       attrs += ` stroke-dasharray="${this.s.dash.map((v) => n(v * k)).join(" ")}"`;
       if (this.s.dashOffset) attrs += ` stroke-dashoffset="${n(this.s.dashOffset * k)}"`;
     }
-    this.parts.push(`<path d="${d}" fill="none" stroke="${escapeXml(this.s.strokeStyle)}"${attrs}${this.common()}/>`);
+    this.emit("path", ` d="${d}" fill="none" stroke="${paint(this.s.strokeStyle)}"${attrs}`, false);
   }
 
   fillPathData(d: string, rule: CanvasFillRule = "nonzero") {
-    const transform = this.s.m === IDENTITY ? "" : ` transform="matrix(${m4(this.s.m)})"`;
+    const transformed = this.s.m !== IDENTITY;
+    const transform = transformed ? ` transform="matrix(${m4(this.s.m)})"` : "";
     const fr = rule === "evenodd" ? ` fill-rule="evenodd"` : "";
-    this.parts.push(`<path d="${escapeXml(d)}" fill="${escapeXml(this.s.fillStyle)}"${fr}${transform}${this.common()}/>`);
+    this.emit("path", ` d="${escapeXml(roundPath(d))}" fill="${paint(this.s.fillStyle)}"${fr}${transform}`, transformed);
   }
 
   fillRect(x: number, y: number, w: number, h: number) {
@@ -475,10 +487,8 @@ export class SvgContext {
       ` x="${n(x)}" y="${n(y)}" transform="matrix(${m4(this.s.m)})"` +
       ` text-anchor="${ANCHORS[this.s.textAlign]}"` +
       (baseline ? ` dominant-baseline="${baseline}"` : "") +
-      ` fill="${escapeXml(this.s.fillStyle)}"`;
-    this.parts.push(
-      `<text${attrs} style="font:${escapeXml(this.s.font)};white-space:pre"${this.common()}>${escapeXml(text)}</text>`,
-    );
+      ` fill="${paint(this.s.fillStyle)}"`;
+    this.emit("text", attrs, true, `font:${escapeXml(this.s.font)};white-space:pre`, escapeXml(text));
   }
 
   measureText(text: string): TextMetrics {

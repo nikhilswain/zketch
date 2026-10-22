@@ -3,6 +3,7 @@ import type { ElementLook } from "./ShapeLayerModel";
 import { DexieService } from "@/services/DexieService";
 import { BlobStorageService } from "@/services/BlobStorageService";
 import { ThumbnailService } from "@/services/ThumbnailService";
+import { brushAssetsPending, installBrushAssetLoader, whenBrushAssetsReady } from "@/engine/stamp/assets";
 import { keepStorage } from "@/services/VaultBackup";
 import { Stroke, PageModel } from "./CanvasModel";
 import type { Page } from "@/utils/page";
@@ -467,13 +468,14 @@ export const VaultModel = types
         self.setDrawingThumbnail(id, stored.thumbnail);
         return;
       }
-      const blob = await ThumbnailService.generateThumbnailBlob(
-        stored.layers as any,
-        stored.background,
-        200,
-        150,
-        stored.page ?? null,
-      );
+      installBrushAssetLoader();
+      const render = () =>
+        ThumbnailService.generateThumbnailBlob(stored.layers as any, stored.background, 200, 150, stored.page ?? null);
+      let blob = await render();
+      if (brushAssetsPending()) {
+        await whenBrushAssetsReady();
+        blob = await render();
+      }
       if (!blob.size) return;
       const thumbnail = await BlobStorageService.storeThumbnail(blob);
       if (await DexieService.replaceThumbnail(id, stored.thumbnail, thumbnail)) {

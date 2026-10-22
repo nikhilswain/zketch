@@ -3,10 +3,12 @@ import { buildElementLookup, elementBounds, renderDrawLayer, unionBounds, type B
 import { ensureFonts, fontFamiliesIn } from "@/engine/render/fonts";
 import { labelsByContainer } from "@/engine/geometry/labels";
 import { outlineData } from "@/engine/brushes/FreehandBrush";
-import { brushAssetsPending, onBrushAssetsChanged } from "@/engine/stamp/assets";
+import { brushAssetsPending, whenBrushAssetsReady } from "@/engine/stamp/assets";
+import { LOOK_BRUSHES } from "@/engine/render/sketchy";
+import { BlobStorageService } from "./BlobStorageService";
 import { SvgContext, escapeXml } from "@/engine/svg/SvgContext";
 import type { BackgroundType } from "@/models/CanvasModel";
-import { ExportService, type IExportLayer } from "./ExportService";
+import type { IExportLayer } from "./ExportService";
 
 export type SvgFrame = { x: number; y: number; width: number; height: number };
 
@@ -49,10 +51,14 @@ async function embeddedFonts(layers: IExportLayer[]): Promise<string> {
     const font = GOOGLE_FAMILIES[family];
     if (!font || !text) continue;
     try {
-      const css = await (await fetch(`https://fonts.googleapis.com/css2?family=${font.query}&text=${encodeURIComponent(text)}`)).text();
+      const css = await (
+        await fetch(`https://fonts.googleapis.com/css2?family=${font.query}&text=${encodeURIComponent(text)}`, {
+          signal: AbortSignal.timeout(4000),
+        })
+      ).text();
       const src = css.match(/url\((https:[^)]+)\)\s*format\(['"]?([\w-]+)['"]?\)/);
       if (!src) continue;
-      const data = toBase64(await (await fetch(src[1])).arrayBuffer());
+      const data = toBase64(await (await fetch(src[1], { signal: AbortSignal.timeout(4000) })).arrayBuffer());
       const mime = src[2] === "woff2" ? "font/woff2" : src[2] === "woff" ? "font/woff" : "font/ttf";
       rules.push(`@font-face{font-family:"${font.name}";src:url(data:${mime};base64,${data}) format("${src[2]}");}`);
     } catch (error) {
@@ -62,28 +68,24 @@ async function embeddedFonts(layers: IExportLayer[]): Promise<string> {
   return rules.length ? `<style>${rules.join("")}</style>` : "";
 }
 
-function waitForBrushAssets(timeout = 5000): Promise<void> {
-  if (!brushAssetsPending()) return Promise.resolve();
-  return new Promise((resolve) => {
-    const timer = setTimeout(done, timeout);
-    const off = onBrushAssetsChanged(() => {
-      if (!brushAssetsPending()) done();
-    });
-    function done() {
-      clearTimeout(timer);
-      off();
-      resolve();
-    }
+function blobDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
   });
 }
 
-function imageDataUrl(img: HTMLImageElement): string {
-  const canvas = document.createElement("canvas");
-  canvas.width = img.naturalWidth || img.width;
-  canvas.height = img.naturalHeight || img.height;
-  canvas.getContext("2d")?.drawImage(img, 0, 0);
-  return canvas.toDataURL("image/png");
+function reach(el: ElementLike): number {
+  if (elementKind(el) === "stroke") return Math.max(RASTER_PAD, (el as StrokeLike).size * 2.2 + 2);
+  const { look, strokeWidth } = el as { look?: string; strokeWidth?: number };
+  const spec = look && look !== "clean" ? LOOK_BRUSHES[look as keyof typeof LOOK_BRUSHES] : undefined;
+  const w = strokeWidth ?? 0;
+  return spec ? Math.max(RASTER_PAD, w * spec.scale + 3 + 0.8 * w) : RASTER_PAD;
 }
+
+const href = (url: string) => ` href="${url}" xlink:href="${url}"`;
 
 export function fitFrame(layers: IExportLayer[], width: number, height: number): SvgFrame {
   const lookup = buildElementLookup(layers as any);
@@ -109,6 +111,8 @@ export function fitFrame(layers: IExportLayer[], width: number, height: number):
 class Builder {
   private id = 0;
   readonly defs: string[] = [];
+  private masks = new Map<string, { area: string; paths: string[] }>();
+  private assetDeadline = 0;
 
   constructor(
     private frame: SvgFrame,
@@ -121,6 +125,7 @@ class Builder {
   async drawLayer(elements: ElementLike[]): Promise<string> {
     const labels = labelsByContainer(elements);
     let out = "";
+    let lastMask: { id: string; length: number } | null = null;
     let run: ElementLike[] = [];
     const flush = async () => {
       if (run.length) out += await this.raster(run);
@@ -131,7 +136,16 @@ class Builder {
       if (kind === "text" && (el as { containerId?: string }).containerId) continue;
       if (kind === "stroke" && (el as StrokeLike).brushStyle === "eraser") {
         await flush();
-        out = this.erase(el as StrokeLike, out);
+        const d = outlineData({ ...(el as StrokeLike), taperStart: 0, taperEnd: 0, opacity: 1, input: null });
+        if (!d || !out) continue;
+        const path = `<path d="${escapeXml(d)}" fill="#000"/>`;
+        if (lastMask && lastMask.length === out.length) {
+          this.masks.get(lastMask.id)!.paths.push(path);
+        } else {
+          const id = this.mask(path);
+          out = `<g mask="url(#${id})">${out}</g>`;
+          lastMask = { id, length: out.length };
+        }
         continue;
       }
       const label = kind === "stroke" || kind === "text" ? undefined : labels.get(el.id);
@@ -151,33 +165,35 @@ class Builder {
     return out;
   }
 
-  private erase(stroke: StrokeLike, content: string): string {
-    const d = outlineData({ ...stroke, taperStart: 0, taperEnd: 0, opacity: 1, input: null });
-    if (!d || !content) return content;
+  private mask(path: string): string {
     const id = this.nextId();
     const f = this.frame;
     const big = Math.max(f.width, f.height);
-    const x = f.x - big;
-    const y = f.y - big;
-    const w = f.width + big * 2;
-    const h = f.height + big * 2;
-    this.defs.push(
-      `<mask id="${id}" maskUnits="userSpaceOnUse" x="${num(x)}" y="${num(y)}" width="${num(w)}" height="${num(h)}">` +
-        `<rect x="${num(x)}" y="${num(y)}" width="${num(w)}" height="${num(h)}" fill="#fff"/>` +
-        `<path d="${escapeXml(d)}" fill="#000"/></mask>`,
-    );
-    return `<g mask="url(#${id})">${content}</g>`;
+    const area = `x="${num(f.x - big)}" y="${num(f.y - big)}" width="${num(f.width + big * 2)}" height="${num(f.height + big * 2)}"`;
+    this.masks.set(id, { area, paths: [path] });
+    return id;
+  }
+
+  maskDefs(): string {
+    return [...this.masks]
+      .map(([id, m]) => `<mask id="${id}" maskUnits="userSpaceOnUse" ${m.area}><rect ${m.area} fill="#fff"/>${m.paths.join("")}</mask>`)
+      .join("");
   }
 
   private async raster(els: ElementLike[]): Promise<string> {
     let b: Bounds | null = null;
-    for (const el of els) b = unionBounds(b, elementBounds(el, this.lookup));
+    for (const el of els) {
+      const e = elementBounds(el, this.lookup);
+      if (!e) continue;
+      const r = reach(el);
+      b = unionBounds(b, { minX: e.minX - r, minY: e.minY - r, maxX: e.maxX + r, maxY: e.maxY + r });
+    }
     if (!b) return "";
     const f = this.frame;
-    const minX = Math.max(b.minX - RASTER_PAD, f.x);
-    const minY = Math.max(b.minY - RASTER_PAD, f.y);
-    const maxX = Math.min(b.maxX + RASTER_PAD, f.x + f.width);
-    const maxY = Math.min(b.maxY + RASTER_PAD, f.y + f.height);
+    const minX = Math.max(b.minX, f.x);
+    const minY = Math.max(b.minY, f.y);
+    const maxX = Math.min(b.maxX, f.x + f.width);
+    const maxY = Math.min(b.maxY, f.y + f.height);
     if (maxX <= minX || maxY <= minY) return "";
     const w = maxX - minX;
     const h = maxY - minY;
@@ -195,11 +211,11 @@ class Builder {
     };
     draw();
     if (brushAssetsPending()) {
-      await waitForBrushAssets();
-      draw();
+      this.assetDeadline ||= Date.now() + 5000;
+      const left = this.assetDeadline - Date.now();
+      if (left > 0 && (await whenBrushAssetsReady(left))) draw();
     }
-    const href = canvas.toDataURL("image/png");
-    return `<image x="${num(minX)}" y="${num(minY)}" width="${num(canvas.width / k)}" height="${num(canvas.height / k)}" preserveAspectRatio="none" href="${href}"/>`;
+    return `<image x="${num(minX)}" y="${num(minY)}" width="${num(canvas.width / k)}" height="${num(canvas.height / k)}" preserveAspectRatio="none"${href(canvas.toDataURL("image/png"))}/>`;
   }
 }
 
@@ -208,9 +224,10 @@ function background(kind: BackgroundType, transparent: boolean, frame: SvgFrame,
   const rect = `<rect x="${num(frame.x)}" y="${num(frame.y)}" width="${num(frame.width)}" height="${num(frame.height)}"`;
   if (kind !== "grid") return `${rect} fill="#ffffff"/>`;
   const g = GRID * unit;
+  const half = unit / 2;
   defs.push(
-    `<pattern id="zgrid" patternUnits="userSpaceOnUse" x="${num(frame.x)}" y="${num(frame.y)}" width="${num(g)}" height="${num(g)}">` +
-      `<path d="M0 0H${num(g)}M0 0V${num(g)}" fill="none" stroke="#f0f0f0" stroke-width="${num(unit)}"/></pattern>`,
+    `<pattern id="zgrid" patternUnits="userSpaceOnUse" x="${num(frame.x - half)}" y="${num(frame.y - half)}" width="${num(g)}" height="${num(g)}">` +
+      `<path d="M0 ${num(half)}H${num(g)}M${num(half)} 0V${num(g)}" fill="none" stroke="#f0f0f0" stroke-width="${num(unit)}"/></pattern>`,
   );
   return `${rect} fill="#ffffff"/>${rect} fill="url(#zgrid)"/>`;
 }
@@ -227,7 +244,6 @@ export async function exportSvg(
   },
 ): Promise<string> {
   const { frame, outWidth, outHeight } = options;
-  await ExportService.preloadImages(layers);
   await ensureFonts(fontFamiliesIn(layers as any));
   const lookup = buildElementLookup(layers as any);
   const builder = new Builder(frame, (outWidth / frame.width) * 2, lookup);
@@ -241,13 +257,14 @@ export async function exportSvg(
       if (content) body += `<g${opacity} style="isolation:isolate">${content}</g>`;
     } else if (layer.type === "image" && layer.imageData) {
       const i = layer.imageData;
-      const img = await ExportService.loadImage(i.blobId);
-      if (!img) continue;
+      const stored = await BlobStorageService.getBlob(i.blobId);
+      if (!stored) continue;
+      const url = await blobDataUrl(stored.blob);
       const rot = i.rotation ? ` transform="rotate(${num(i.rotation)} ${num(i.x + i.width / 2)} ${num(i.y + i.height / 2)})"` : "";
       const imgOpacity = i.opacity < 1 ? ` opacity="${Math.round(i.opacity * 1000) / 1000}"` : "";
       body +=
         `<g${opacity}><image x="${num(i.x)}" y="${num(i.y)}" width="${num(i.width)}" height="${num(i.height)}"` +
-        ` preserveAspectRatio="none"${rot}${imgOpacity} href="${imageDataUrl(img)}"/></g>`;
+        ` preserveAspectRatio="none"${rot}${imgOpacity}${href(url)}/></g>`;
     }
   }
   const fonts = await embeddedFonts(layers);
@@ -258,6 +275,6 @@ export async function exportSvg(
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${Math.round(outWidth)}" height="${Math.round(outHeight)}"` +
     ` viewBox="${num(frame.x)} ${num(frame.y)} ${num(frame.width)} ${num(frame.height)}">` +
-    `<defs>${fonts}${builder.defs.join("")}</defs>${bg}<g clip-path="url(#${clipId})">${body}</g></svg>`
+    `<defs>${fonts}${builder.defs.join("")}${builder.maskDefs()}</defs>${bg}<g clip-path="url(#${clipId})">${body}</g></svg>`
   );
 }

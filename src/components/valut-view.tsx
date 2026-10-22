@@ -56,6 +56,7 @@ const SORTS: { id: SortOrder; label: string }[] = [
 const BACKGROUND_LABEL: Record<string, string> = { white: "White", transparent: "Transparent", grid: "Grid" };
 
 const repairing = new Set<string>();
+let repairQueue: Promise<void> = Promise.resolve();
 
 const ThumbnailImage: React.FC<{ drawingId: string; thumbnailId: string; alt: string; className?: string }> = ({
   drawingId,
@@ -91,7 +92,12 @@ const ThumbnailImage: React.FC<{ drawingId: string; thumbnailId: string; alt: st
   useEffect(() => {
     if (loading || src || repairing.has(drawingId)) return;
     repairing.add(drawingId);
-    vaultStore.repairThumbnail(drawingId).catch((err) => console.error("Failed to rebuild thumbnail:", err));
+    repairQueue = repairQueue.then(() =>
+      vaultStore.repairThumbnail(drawingId).catch((err) => {
+        repairing.delete(drawingId);
+        console.error("Failed to rebuild thumbnail:", err);
+      }),
+    );
   }, [loading, src, drawingId, vaultStore]);
 
   if (loading) return <div className={`${className} animate-pulse bg-[#efeee9]`} />;

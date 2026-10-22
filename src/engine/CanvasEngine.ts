@@ -268,8 +268,11 @@ export class CanvasEngine {
   private animatingLayerId: string | null = null;
   private animationFrame: PlaybackElement[] | null = null;
   private animationCanvas: HTMLCanvasElement | null = null;
+  private settled: { canvas: HTMLCanvasElement; key: string; count: number } | null = null;
 
   setAnimationState(layerId: string | null, frame: PlaybackElement[] | null) {
+    if (!frame || layerId !== this.animatingLayerId) this.settled = null;
+    if (!frame) this.animationCanvas = null;
     this.animatingLayerId = layerId;
     this.animationFrame = frame;
     this.invalidate();
@@ -602,23 +605,52 @@ export class CanvasEngine {
   private renderAnimationFrame(opacity: number, elements: readonly ElementLike[], view: TileView) {
     const w = this.display.width;
     const h = this.display.height;
-    const canvas = (this.animationCanvas ??= document.createElement("canvas"));
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
-    }
-    const actx = canvas.getContext("2d")!;
-    actx.setTransform(1, 0, 0, 1, 0, 0);
-    actx.clearRect(0, 0, w, h);
-    actx.setTransform(1, 0, 0, 1, view.originX, view.originY);
-    actx.scale(view.scale, view.scale);
+    const key = `${w}x${h}|${view.originX},${view.originY},${view.scale}`;
+    const byId = new Map(this.animationFrame!.map((f) => [f.element.id, f]));
+    let done = 0;
+    while (done < elements.length && byId.get(elements[done].id)?.progress === 1) done++;
+
+    const fresh = (c: HTMLCanvasElement | null) => {
+      const canvas = c ?? document.createElement("canvas");
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      const cctx = canvas.getContext("2d")!;
+      cctx.setTransform(1, 0, 0, 1, 0, 0);
+      cctx.clearRect(0, 0, w, h);
+      return { canvas, cctx };
+    };
+    const toView = (c: CanvasRenderingContext2D) => {
+      c.setTransform(1, 0, 0, 1, view.originX, view.originY);
+      c.scale(view.scale, view.scale);
+    };
     const labels = labelsByContainer(elements);
     const opts = { getBrushOptions: this.config.getBrushOptions, lookup: this.lookup };
-    for (const { element, progress } of this.animationFrame!) {
-      const kind = elementKind(element);
-      if (kind === "text" && (element as { containerId?: string }).containerId) continue;
-      const label = kind === "stroke" || kind === "text" ? undefined : labels.get(element.id);
-      renderRevealed(actx, element, progress, label, opts);
+    const draw = (c: CanvasRenderingContext2D, f: PlaybackElement) => {
+      const kind = elementKind(f.element);
+      if (kind === "text" && (f.element as { containerId?: string }).containerId) return;
+      const label = kind === "stroke" || kind === "text" ? undefined : labels.get(f.element.id);
+      renderRevealed(c, f.element, f.progress, label, opts);
+    };
+
+    if (!this.settled || this.settled.key !== key || done < this.settled.count) {
+      this.settled = { canvas: fresh(this.settled?.canvas ?? null).canvas, key, count: 0 };
+    }
+    if (this.settled.count < done) {
+      const sctx = this.settled.canvas.getContext("2d")!;
+      toView(sctx);
+      for (let i = this.settled.count; i < done; i++) draw(sctx, byId.get(elements[i].id)!);
+      this.settled.count = done;
+    }
+
+    const { canvas, cctx } = fresh(this.animationCanvas);
+    this.animationCanvas = canvas;
+    cctx.drawImage(this.settled.canvas, 0, 0);
+    toView(cctx);
+    for (let i = done; i < elements.length; i++) {
+      const f = byId.get(elements[i].id);
+      if (f) draw(cctx, f);
     }
     const ctx = this.displayCtx;
     ctx.save();
