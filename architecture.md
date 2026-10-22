@@ -469,12 +469,18 @@ classifies intent (`draw` / `gesture` / `ignore`), and emits callbacks.
 
 ### 4.5 `AnimationPlaybackEngine.ts`
 
-Replays a draw layer's strokes over time using each stroke's `startTime` /
-`duration`. **Gap compression** collapses idle gaps > `maxGap` (default 500ms)
-so a drawing made across hours plays in seconds. Supports play/pause/stop,
-seek (playback pauses while the timeline is dragged and resumes on release),
-speed (0.5/1/2/4/8/16/32), loop, partial strokes for progressive draw-on, and
-emits `onFrame(info, visibleStrokes)`. Shapes are not animated (they stay static).
+Replays every element of a draw layer over time with the same timing as share
+links (`buildReplay` / `progressAt` from `share/replay.ts`): strokes use
+`startTime` / `duration`, shapes, arrows and free text use `createdAt` (or follow
+the previous element) and take 300 ms, labels follow their container. **Gap
+compression** collapses idle gaps > `maxGap` (default 500ms) so a drawing made
+across hours plays in seconds. Supports play/pause/stop, seek (playback pauses
+while the timeline is dragged and resumes on release), speed
+(0.5/1/2/4/8/16/32), loop, and emits `onFrame(info, frame)` where `frame` is
+`PlaybackElement[]` (`{ element, progress }`, in stacking order).
+`render/renderReveal.ts` (`renderRevealed`) draws one element at a progress:
+strokes draw on point by point, everything else wipes in left to right. The
+share player, video and embeds use the same helper.
 
 ---
 
@@ -1206,9 +1212,11 @@ feedback). The circular cursor overlay is drawn only when
 ### 11.3 Animation
 
 `LayerAnimationControls` (in `layers-panel`) owns an
-`AnimationPlaybackEngine`, feeds it the layer's stroke elements, and on each
+`AnimationPlaybackEngine`, feeds it all of the layer's elements, and on each
 frame calls back `canvas-view` → `drawing-canvas` → `engine.setAnimationState`,
-which substitutes the animated strokes for that layer's content during render.
+which substitutes the frame for that layer's content during render. The
+animated layer is drawn on its own offscreen canvas first, so pixel erasers only
+erase that layer.
 While animating, `canvasLocked` blocks all drawing/import.
 
 ### 11.4 Panel / performance notes
@@ -1322,7 +1330,6 @@ never block on stroke rendering). Vitest render tests run with `npm test`.
   save format without coarse truncation, camera-relative rendering and LOD.
 - SVG export only handles strokes, so it is hidden in the export dialog.
 - No polygon (n-sided) shape kind.
-- Shape animation ("how shapes appear" during playback) is an open design question.
 - No brush import (.abr / .brushset). The RaV89 pack licence forbids
   redistributing its files, so never add a brush export.
 - Undo/redo history includes pan/zoom.

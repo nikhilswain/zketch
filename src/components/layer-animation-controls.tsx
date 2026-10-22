@@ -1,6 +1,5 @@
 "use client";
 
-import { isStrokeElement } from "@/engine/types";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { observer } from "mobx-react-lite";
 import { getSnapshot } from "mobx-state-tree";
@@ -17,13 +16,13 @@ import {
   AnimationPlaybackEngine,
   type PlaybackSpeed,
   type PlaybackState,
-  type StrokeLike,
+  type PlaybackElement,
 } from "@/engine";
 import type { IStrokeLayer } from "@/models/LayerModel";
 
 interface LayerAnimationControlsProps {
   layer: IStrokeLayer;
-  onPlaybackFrame?: (visibleStrokes: StrokeLike[]) => void;
+  onPlaybackFrame?: (frame: PlaybackElement[]) => void;
   onPlaybackStateChange?: (state: PlaybackState) => void;
   className?: string;
 }
@@ -66,9 +65,9 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
     // Initialize engine
     useEffect(() => {
       const engine = new AnimationPlaybackEngine({
-        onFrame: (info, visibleStrokes) => {
+        onFrame: (info, frame) => {
           setCurrentTime(info.currentTime);
-          onPlaybackFrameRef.current?.(visibleStrokes);
+          onPlaybackFrameRef.current?.(frame);
         },
         onStateChange: (state) => {
           playbackStateRef.current = state;
@@ -97,10 +96,7 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
 
       try {
         const snapshot = getSnapshot(layer) as any;
-        // Animation only plays back stroke elements; shape elements stay static.
-        const elements = (snapshot.elements || []) as any[];
-        const strokes = elements.filter((e) => isStrokeElement(e)) as StrokeLike[];
-        engine.setStrokes(strokes);
+        engine.setElements((snapshot.elements || []) as any[]);
         const info = engine.getPlaybackInfo();
         setTotalDuration(info.totalDuration);
         setOriginalDuration(info.originalDuration);
@@ -157,9 +153,8 @@ const LayerAnimationControls: React.FC<LayerAnimationControlsProps> = observer(
       engineRef.current?.play();
     }, []);
 
-    // Don't render if no strokes or no timing data
-    const strokeCount = (layer as any).strokeCount ?? 0;
-    if (strokeCount === 0 || totalDuration === 0) {
+    const elementCount = (layer as any).elements?.length ?? 0;
+    if (elementCount === 0 || totalDuration === 0) {
       return null;
     }
 

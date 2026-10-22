@@ -38,7 +38,7 @@ import type { ILayer, IStrokeLayer } from "@/models/LayerModel";
 import { getSnapshot } from "mobx-state-tree";
 import { BlobStorageService } from "@/services/BlobStorageService";
 import LayerAnimationControls from "@/components/layer-animation-controls";
-import type { StrokeLike } from "@/engine";
+import type { PlaybackElement } from "@/engine";
 import { renderDrawLayer } from "@/engine/render/renderDrawLayer";
 import { elementBounds } from "@/engine/render/elementBounds";
 import { onFontsReady } from "@/engine/render/fonts";
@@ -164,7 +164,7 @@ interface LayerItemProps {
   isFirst: boolean;
   isLast: boolean;
   canDelete: boolean;
-  onAnimationFrame?: (strokes: StrokeLike[]) => void;
+  onAnimationFrame?: (frame: PlaybackElement[]) => void;
   onAnimationStateChange?: (state: PlaybackState) => void;
 }
 
@@ -542,7 +542,7 @@ interface LayersPanelProps {
   collapsed?: boolean;
   embedded?: boolean;
   listClassName?: string;
-  onAnimationFrame?: (layerId: string, strokes: StrokeLike[]) => void;
+  onAnimationFrame?: (layerId: string, frame: PlaybackElement[]) => void;
   onAnimationStateChange?: (layerId: string, state: PlaybackState) => void;
 }
 
@@ -650,8 +650,8 @@ const LayersPanel: React.FC<LayersPanelProps> = observer(
           isFirst={actualIndex === 0}
           isLast={actualIndex === canvasStore.layers.length - 1}
           canDelete={canvasStore.layerCount > 1}
-          onAnimationFrame={(strokes) =>
-            onAnimationFrame?.(layer.id, strokes)
+          onAnimationFrame={(frame) =>
+            onAnimationFrame?.(layer.id, frame)
           }
           onAnimationStateChange={(state) =>
             onAnimationStateChange?.(layer.id, state)

@@ -16,8 +16,12 @@ import {
   installBrushAssetLoader,
   onBrushAssetsChanged,
 } from "./stamp/assets";
+import type { PlaybackElement } from "./AnimationPlaybackEngine";
+import { renderRevealed } from "./render/renderReveal";
+import { labelsByContainer } from "./geometry/labels";
 import type {
   ArrowElementLike,
+  DrawLayerLike,
   ElementLike,
   EngineConfig,
   PanZoom,
@@ -262,14 +266,12 @@ export class CanvasEngine {
 
   // Animation state
   private animatingLayerId: string | null = null;
-  private animationStrokes: StrokeLike[] | null = null;
+  private animationFrame: PlaybackElement[] | null = null;
+  private animationCanvas: HTMLCanvasElement | null = null;
 
-  /**
-   * Set the animation state - when a layer is being animated, render these strokes instead
-   */
-  setAnimationState(layerId: string | null, strokes: StrokeLike[] | null) {
+  setAnimationState(layerId: string | null, frame: PlaybackElement[] | null) {
     this.animatingLayerId = layerId;
-    this.animationStrokes = strokes;
+    this.animationFrame = frame;
     this.invalidate();
   }
 
@@ -502,7 +504,7 @@ export class CanvasEngine {
     }
 
     const tracked = layers.filter(
-      (l) => l.type === "draw" && l.visible && !(this.animatingLayerId === l.id && this.animationStrokes),
+      (l) => l.type === "draw" && l.visible && !(this.animatingLayerId === l.id && this.animationFrame),
     ) as { id: string; elements: readonly ElementLike[] }[];
     const changes = this.changes.next(tracked);
     let layersWithContent = 0;
@@ -529,18 +531,16 @@ export class CanvasEngine {
       this.tilesSeen.set(layer.id, now);
       const ctx = this.displayCtx;
 
-      if (layer.type === "image" || (this.animatingLayerId === layer.id && this.animationStrokes)) {
+      if (layer.type === "draw" && this.animatingLayerId === layer.id && this.animationFrame) {
+        this.renderAnimationFrame(layer.opacity, (layer as DrawLayerLike).elements, view);
+        continue;
+      }
+      if (layer.type === "image") {
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, view.originX, view.originY);
         ctx.scale(view.scale, view.scale);
         ctx.globalAlpha = layer.opacity;
-        if (layer.type === "image") {
-          this.renderImageLayer(ctx, layer as ImageLayerLike);
-        } else {
-          for (const stroke of this.animationStrokes!) {
-            renderStroke(ctx, stroke, brushRegistry, this.config.getBrushOptions);
-          }
-        }
+        this.renderImageLayer(ctx, layer as ImageLayerLike);
         ctx.restore();
         continue;
       }
@@ -597,6 +597,35 @@ export class CanvasEngine {
     }
 
     this.renderPageVeil();
+  }
+
+  private renderAnimationFrame(opacity: number, elements: readonly ElementLike[], view: TileView) {
+    const w = this.display.width;
+    const h = this.display.height;
+    const canvas = (this.animationCanvas ??= document.createElement("canvas"));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    const actx = canvas.getContext("2d")!;
+    actx.setTransform(1, 0, 0, 1, 0, 0);
+    actx.clearRect(0, 0, w, h);
+    actx.setTransform(1, 0, 0, 1, view.originX, view.originY);
+    actx.scale(view.scale, view.scale);
+    const labels = labelsByContainer(elements);
+    const opts = { getBrushOptions: this.config.getBrushOptions, lookup: this.lookup };
+    for (const { element, progress } of this.animationFrame!) {
+      const kind = elementKind(element);
+      if (kind === "text" && (element as { containerId?: string }).containerId) continue;
+      const label = kind === "stroke" || kind === "text" ? undefined : labels.get(element.id);
+      renderRevealed(actx, element, progress, label, opts);
+    }
+    const ctx = this.displayCtx;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = opacity;
+    ctx.drawImage(canvas, 0, 0);
+    ctx.restore();
   }
 
   private renderImageLayer(

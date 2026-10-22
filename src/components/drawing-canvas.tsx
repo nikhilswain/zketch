@@ -9,6 +9,7 @@ import { useCanvasStore, useSettingsStore } from "../hooks/useStores";
 type PointLike = { x: number; y: number; pressure: number };
 import { CanvasEngine, transformController, InputManager } from "@/engine";
 import type {
+  PlaybackElement,
   StrokeLike,
   TransformHandleType,
   ShapeElementLike,
@@ -47,7 +48,7 @@ interface DrawingCanvasProps {
   width?: number;
   height?: number;
   animatingLayerId?: string | null;
-  animationStrokes?: StrokeLike[] | null;
+  animationFrame?: PlaybackElement[] | null;
   canvasLocked?: boolean;
 }
 
@@ -58,7 +59,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
     width,
     height,
     animatingLayerId,
-    animationStrokes,
+    animationFrame,
     canvasLocked = false,
   }) => {
     const canvasStore = useCanvasStore();
@@ -344,9 +345,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       if (!engine) return;
       engine.setAnimationState(
         animatingLayerId ?? null,
-        animationStrokes ?? null,
+        animationFrame ?? null,
       );
-    }, [animatingLayerId, animationStrokes]);
+    }, [animatingLayerId, animationFrame]);
 
     // Coordinate conversion
     const hitTestBindable = useCallback(

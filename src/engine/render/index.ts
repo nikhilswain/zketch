@@ -11,3 +11,4 @@ export * from "./fonts";
 export * from "./renderArrow";
 export * from "./renderText";
 export * from "./elementBounds";
+export * from "./renderReveal";

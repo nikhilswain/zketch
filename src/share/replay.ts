@@ -116,13 +116,7 @@ export function progressAt(replay: Replay, t: number): Map<string, number> {
   return out;
 }
 
-export function partialStroke<T extends { points: unknown[] }>(
-  stroke: T,
-  p: number,
-): T {
-  const count = Math.max(1, Math.floor(stroke.points.length * p));
-  return { ...stroke, points: stroke.points.slice(0, count) };
-}
+export { partialStroke } from "../engine/render/renderReveal";
 
 export function autoSpeed(total: number): number {
   return Math.max(1, total / TARGET_MS);

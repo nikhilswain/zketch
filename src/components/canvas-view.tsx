@@ -27,7 +27,7 @@ import SettingsPage from "./studio/SettingsPage";
 import type { ExportFormat } from "@/models/SettingsModel";
 import type { BackgroundType } from "@/models/CanvasModel";
 import { toast } from "sonner";
-import type { StrokeLike } from "@/engine";
+import type { PlaybackElement } from "@/engine";
 import type { PlaybackState } from "@/engine/AnimationPlaybackEngine";
 import { reaction } from "mobx";
 import { getSnapshot } from "mobx-state-tree";
@@ -74,15 +74,15 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     const [animatingLayerId, setAnimatingLayerId] = useState<string | null>(
       null,
     );
-    const [animationStrokes, setAnimationStrokes] = useState<
-      StrokeLike[] | null
+    const [animationFrame, setAnimationFrame] = useState<
+      PlaybackElement[] | null
     >(null);
 
     // Animation callbacks
     const handleAnimationFrame = useCallback(
-      (layerId: string, strokes: StrokeLike[]) => {
+      (layerId: string, frame: PlaybackElement[]) => {
         setAnimatingLayerId(layerId);
-        setAnimationStrokes(strokes);
+        setAnimationFrame(frame);
       },
       [],
     );
@@ -93,7 +93,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           setAnimatingLayerId(layerId);
         } else if (state === "stopped") {
           setAnimatingLayerId(null);
-          setAnimationStrokes(null);
+          setAnimationFrame(null);
         }
       },
       [],
@@ -557,7 +557,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
           <DrawingCanvas
             isDrawingMode={isDrawingMode}
             animatingLayerId={animatingLayerId}
-            animationStrokes={animationStrokes}
+            animationFrame={animationFrame}
             canvasLocked={canvasLocked}
           />
           {canvasLocked && (

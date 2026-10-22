@@ -6,8 +6,9 @@ import {
   buildElementLookup,
   drawImageLayer,
   elementBounds,
-  renderDrawLayer,
   renderStroke,
+  renderRevealed,
+  unionBounds,
   type Bounds,
   type ElementLookup,
 } from "@/engine/render";
@@ -20,7 +21,7 @@ import {
   onBrushAssetsChanged,
 } from "@/engine/stamp/assets";
 import type { Page } from "@/utils/page";
-import { buildReplay, partialStroke, progressAt, type Replay } from "./replay";
+import { buildReplay, progressAt, type Replay } from "./replay";
 
 export type Frame = { x: number; y: number; width: number; height: number };
 
@@ -52,7 +53,6 @@ type ImageState = {
 };
 
 const FRAME_PAD = 40;
-const REVEAL_PAD = 8;
 const ASSET_WAIT_MS = 1500;
 
 function sourcesOf(layers: ILayerData[]): Source[] {
@@ -72,17 +72,6 @@ function sourcesOf(layers: ILayerData[]): Source[] {
 
 function lookupOf(sources: Source[]): ElementLookup {
   return buildElementLookup(sources.flatMap((s) => (s.type === "draw" ? [s] : [])));
-}
-
-function unionBounds(a: Bounds | null, b: Bounds | null): Bounds | null {
-  if (!a) return b;
-  if (!b) return a;
-  return {
-    minX: Math.min(a.minX, b.minX),
-    minY: Math.min(a.minY, b.minY),
-    maxX: Math.max(a.maxX, b.maxX),
-    maxY: Math.max(a.maxY, b.maxY),
-  };
 }
 
 export function shareFrame(drawing: ISavedDrawingData): Frame {
@@ -418,31 +407,7 @@ export class ReplayRenderer {
     const el = layer.elements[i];
     const kind = elementKind(el);
     if (kind === "text" && el.containerId) return null;
-    if (kind === "stroke") {
-      const stroke = p < 1 ? partialStroke(el, p) : el;
-      renderDrawLayer(ctx, [stroke], { lookup: this.lookup });
-      const last = stroke.points[stroke.points.length - 1];
-      return last ? { x: last.x, y: last.y } : null;
-    }
-    const label = kind === "text" ? undefined : layer.labels.get(el.id);
-    const els = label ? [el, label] : [el];
-    if (p >= 1) {
-      renderDrawLayer(ctx, els, { lookup: this.lookup });
-      return null;
-    }
-    const b = els.reduce<Bounds | null>(
-      (acc, e) => unionBounds(acc, elementBounds(e, this.lookup)),
-      null,
-    );
-    if (!b) return null;
-    const x = b.minX - REVEAL_PAD;
-    const w = (b.maxX - b.minX + REVEAL_PAD * 2) * p;
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x, b.minY - REVEAL_PAD, w, b.maxY - b.minY + REVEAL_PAD * 2);
-    ctx.clip();
-    renderDrawLayer(ctx, els, { lookup: this.lookup });
-    ctx.restore();
-    return { x: x + w, y: (b.minY + b.maxY) / 2 };
+    const label = kind === "stroke" || kind === "text" ? undefined : layer.labels.get(el.id);
+    return renderRevealed(ctx, el, p, label, { lookup: this.lookup });
   }
 }
