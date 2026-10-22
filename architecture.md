@@ -872,13 +872,30 @@ Ctrl+S save · Ctrl+E export · Ctrl+N new · Ctrl+V vault · B/W/R colors ·
 and SEO: props `pageTitle`, `description`, `canonicalPath`, `image`, `noindex`,
 `jsonLd`, `zoomable`. It emits the canonical link (or `noindex` instead), Open Graph and X
 card tags (image `/og/default.png`), and JSON-LD when given. Defaults come from
-`SITE` in `src/config.ts`. The home page passes JSON-LD; `/draw/[id]` and the
-share pages are `noindex`.
+`SITE` in `src/config.ts`. The home page passes `WebApplication` JSON-LD
+(`@id` `https://zketch.zerro.dev/#app`); `/draw/[id]`, the share pages and the
+embed pages are `noindex` (shared drawings are never meant for search; share
+pages only get a `"<name> · drawn in zketch"` title, a description and the
+drawing as preview image).
+
+Topic pages are the search landing pages, one per kind of searcher:
+`/online-sketchpad`, `/flowchart-maker`, `/excalidraw-alternative`, `/brushes`,
+`/drawing-timelapse`. Their copy lives in `src/landing/topics.ts` (`TOPICS`:
+title, description, tape, h1, sections with a doodle id, questions, OG lines;
+`BRUSH_GROUPS` for the brush grid). Each `src/pages/<slug>.astro` is
+prerendered and renders `landing/components/TopicPage.astro`, which reuses the
+landing header, footer, final CTA, dark roller theme and the self-drawing
+doodles (`mountMargins`), adds `WebPage` + `BreadcrumbList` JSON-LD, and takes a
+slot for page-only blocks (the comparison table, the brush grid).
+`TopicLinks.astro` sits in the landing footer, so every topic page is linked
+from every landing-style page. Copy rule: only claims that are true today.
 
 SEO files: `public/robots.txt`; `@astrojs/sitemap` (in `astro.config.mjs`,
-`site: https://zketch.zerro.dev`) lists only `/` and `/draw`. `npm run
-share-images` (`tools/build-share-images.ts`, runs as `predev` and `prebuild`)
-renders `public/og/default.png` from `src/lib/og.ts` with `@resvg/resvg-js` and
+`site: https://zketch.zerro.dev`) lists `/`, `/draw` and the topic pages (add a
+new topic's slug to its filter). `npm run share-images`
+(`tools/build-share-images.ts`, runs as `predev` and `prebuild`) renders
+`public/og/default.png` (`ogDefault`) and `public/og/<slug>.png` for every topic
+(`ogPage`) from `src/lib/og.ts` with `@resvg/resvg-js` and
 the fonts in `src/assets/og/`, plus `favicon.ico` (16/32/48) and
 `favicon-96.png` from `public/favicon.svg`. Those outputs are gitignored. It
 runs with `node --experimental-strip-types` so it works on Node 22.
