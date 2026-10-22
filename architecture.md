@@ -1089,7 +1089,7 @@ a minute, matching the meta cache.
 
 **Embeds** (`pages/embed/[id].astro`, `components/share/EmbedPlayer.tsx`).
 `/embed/<id>` is a server-rendered page made to sit in an iframe: no header or
-footer, transparent background, fills the frame, `noindex`, and it sends
+footer, transparent background, the drawing, time strip and credit sit on one paper card (8 px radius, `color-scheme: normal`, `overscroll-behavior: auto` so the host page keeps scrolling), `noindex`, and it sends
 `Content-Security-Policy: frame-ancestors *` (nothing else in the stack sets
 `X-Frame-Options`). It reads `shareMeta` like the share page; an unknown or
 unshared id gets a small "This drawing is no longer shared" card and a 404.
