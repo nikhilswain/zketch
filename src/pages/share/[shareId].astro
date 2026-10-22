@@ -24,10 +24,10 @@ const oembedHref = meta
 
 {meta ? (
   <Layout
-    pageTitle={meta.name}
-    description=""
+    pageTitle={`${meta.name} · drawn in zketch`}
+    description={`Watch "${meta.name}" draw itself stroke by stroke. Made in zketch, a free online sketchpad.`}
     image={`/api/shares/${meta.id}/preview.jpg`}
-    imageAlt={meta.name}
+    imageAlt={`${meta.name}, drawn in zketch`}
     imageWidth={meta.previewWidth}
     imageHeight={meta.previewHeight}
     noindex
