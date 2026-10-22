@@ -7,6 +7,7 @@ import type {
   StrokeLike,
   StrokeSettingKey,
 } from "../types";
+import type { SvgContext } from "../svg/SvgContext";
 
 export class FreehandBrush implements Brush {
   key = "ink" as const;
@@ -38,11 +39,24 @@ export class FreehandBrush implements Brush {
     ctx.fill(path);
     ctx.globalAlpha = prevAlpha;
   }
+
+  renderSvg(ctx: SvgContext, stroke: StrokeLike, options?: BrushOptions) {
+    const d = outlineData(stroke, options);
+    if (!d) return;
+    ctx.fillStyle = stroke.color;
+    ctx.globalAlpha *= stroke.opacity ?? 1;
+    ctx.fillPathData(d);
+  }
 }
 
 const outlines = new WeakMap<StrokeLike, Path2D | null>();
 
 function outlinePath(stroke: StrokeLike, options?: BrushOptions): Path2D | null {
+  const d = outlineData(stroke, options);
+  return d ? new Path2D(d) : null;
+}
+
+export function outlineData(stroke: StrokeLike, options?: BrushOptions): string | null {
   const pts = stroke.points.map((p) => [p.x, p.y, p.pressure ?? 0.5]);
   // Use stroke's own settings first, then fallback to options, then defaults
   const outline = getStroke(pts, {
@@ -57,5 +71,5 @@ function outlinePath(stroke: StrokeLike, options?: BrushOptions): Path2D | null 
     last: true,
   } as any);
   if (outline.length < 3) return null;
-  return new Path2D(toPathData(outline));
+  return toPathData(outline);
 }

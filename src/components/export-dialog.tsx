@@ -41,9 +41,10 @@ interface ExportDialogProps {
 const EXPORT_W = 1920;
 const EXPORT_H = 1080;
 
-const FORMATS: { id: "png" | "jpg"; label: string; hint: string }[] = [
-  { id: "png", label: "PNG", hint: "Lossless, keeps transparency" },
-  { id: "jpg", label: "JPG", hint: "Smaller file, solid background" },
+const FORMATS: { id: ExportFormat; label: string; hint: string }[] = [
+  { id: "png", label: "PNG", hint: "Lossless, transparent" },
+  { id: "jpg", label: "JPG", hint: "Smaller, solid" },
+  { id: "svg", label: "SVG", hint: "Sharp at any size" },
 ];
 
 const CHECKER = "repeating-conic-gradient(#e6e6e6 0% 25%, #ffffff 0% 50%) 0 0 / 16px 16px";
@@ -57,9 +58,9 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
     const settingsStore = useSettingsStore();
     const canvasStore = useCanvasStore();
     const { scale, quality, transparentBackground } = settingsStore.exportSettings;
-    const format: "png" | "jpg" = settingsStore.exportSettings.format === "jpg" ? "jpg" : "png";
+    const format = settingsStore.exportSettings.format as ExportFormat;
     const canvasTransparent = background === "transparent";
-    const transparent = format === "png" && (transparentBackground || canvasTransparent);
+    const transparent = format !== "jpg" && (transparentBackground || canvasTransparent);
 
     const [preview, setPreview] = useState("");
     const [rendering, setRendering] = useState(false);
@@ -122,14 +123,14 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
             Math.min(1, 1280 / Math.max(page.width, page.height)),
             format === "jpg" && canvasTransparent ? "white" : background,
             "png",
-            { transparentBackground: format === "png" && transparentBackground, quality: 1 },
+            { transparentBackground: format !== "jpg" && transparentBackground, quality: 1 },
           )
         : ExportService.exportToPNG(
             strokes,
             format === "jpg" && canvasTransparent ? "white" : background,
             1280,
             720,
-            { ...settingsStore.exportSettings, scale: 1, transparentBackground: format === "png" && transparentBackground },
+            { ...settingsStore.exportSettings, scale: 1, transparentBackground: format !== "jpg" && transparentBackground },
             layers,
           );
       render
@@ -288,7 +289,7 @@ const ExportDialog: React.FC<ExportDialogProps> = observer(
               <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 pb-4">
                 <div>
                   <SectionLabel>Format</SectionLabel>
-                  <div className="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="Format">
+                  <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="Format">
                     {FORMATS.map((f) => {
                       const selected = format === f.id;
                       return (

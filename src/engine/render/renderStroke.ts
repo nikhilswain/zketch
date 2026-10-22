@@ -1,5 +1,6 @@
 import type { BrushOptions, BrushStyle, StrokeLike } from "../types";
 import type { BrushRegistry } from "./BrushRegistry";
+import { isSvgContext } from "../svg/SvgContext";
 
 export function renderStroke(
   ctx: CanvasRenderingContext2D,
@@ -22,6 +23,7 @@ export function renderStroke(
   const opts = getBrushOptions?.(key, stroke.size);
   ctx.save();
   if (isEraser) ctx.globalCompositeOperation = "destination-out";
-  brush.render(ctx, strokeForRender, opts);
+  if (isSvgContext(ctx) && brush.renderSvg) brush.renderSvg(ctx, strokeForRender, opts);
+  else brush.render(ctx, strokeForRender, opts);
   ctx.restore();
 }

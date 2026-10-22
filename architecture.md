@@ -35,7 +35,7 @@ Core capabilities:
 - Infinite or fixed-size pages per drawing (presets + custom, `utils/page.ts`).
 - Selection / move / resize / rotate (single + multi-select, marquee, anchor bbox).
 - Undo / redo, eraser (Whole / Pixels / Smart modes).
-- Local vault (Dexie/IndexedDB), PNG/JPG export (SVG method kept but hidden),
+- Local vault (Dexie/IndexedDB), PNG/JPG/SVG export,
   image import, playable share links.
 - Per-layer **timelapse animation playback** (replays stroke timing with gap
   compression).
@@ -160,7 +160,8 @@ src/
 │   ├── BlobStorageService.ts  # "ImageBlobs" DB (rasters + thumbnails)
 │   ├── BackupService.ts       # .zketch file format: pack, parse, import plan (pure)
 │   ├── VaultBackup.ts         # .zketch download/import against the DBs, persist()
-│   ├── ExportService.ts       # PNG/JPG renderers (SVG method retained, UI hidden)
+│   ├── ExportService.ts       # PNG/JPG renderers
+│   ├── SvgExport.ts           # SVG export (vector where possible, PNG runs otherwise)
 │   ├── ThumbnailService.ts    # Vault/layer thumbnail generator
 │   ├── ImportService.ts       # File / URL / clipboard → blob
 │   └── ShareService.ts        # Client for the old /api/share/* (KV)
@@ -801,7 +802,7 @@ Persistence layers:
 
 ## 8. Services (`src/services/`)
 
-- **`ExportService`** — `exportToPNG/JPG/SVG` (Infinite: content-fit into
+- **`ExportService`** — `exportToPNG/JPG` (Infinite: content-fit into
   1920 x 1080 x scale) and `exportPage` / `renderPageToCanvas` (Fixed: exactly
   page W x H x scale, clipped to the page, strokes rendered at output
   resolution; scale capped by `exportScaleCap` to 16.7 MP / 8192 px a side).
@@ -813,8 +814,19 @@ Persistence layers:
     bounds include stroke `size`/shape `strokeWidth` and the offscreen bake is
     offset to the content bounds (handles negative coordinates). `imageCache` is
     cleared after each export.
-  - SVG export is **hidden in the UI** (still strokes-only in the service) until
-    shapes/images/eraser are supported.
+  - SVG export lives in `SvgExport.ts` (`exportSvg`, `fitFrame`), same framing as
+    PNG/JPG (page rect, or content fit at 90% of 1920 x 1080). Each element is
+    replayed through the normal renderers into `engine/svg/SvgContext`, a
+    recording 2D context that writes SVG (paths, arcs as Béziers, fills,
+    strokes, clips, text, `multiply` → `mix-blend-mode`). Brushes that fill a
+    Path2D expose `renderSvg` (Pen, Marker); `renderStroke` uses it for an
+    `SvgContext`. Anything the recorder can't express (stamp brushes, airbrush
+    blur, see-through calligraphy, Pencil/Crayon/Charcoal looks) throws
+    `SvgUnsupported`, and consecutive such elements are drawn together into one
+    embedded PNG at 2x (4096 px cap). Pixel erasers become `<mask>`s over the
+    earlier content of their layer; layers are isolated `<g>`s; image layers
+    become `<image>`s. Text stays `<text>`; the fonts it uses are embedded as
+    Google Fonts subsets (`&text=`) so the file renders the same anywhere.
   - `downloadFile(dataUrl, filename)` triggers the browser download.
 - **`ThumbnailService`** — `generateThumbnailBlob(layers, background, w, h)`
   renders visible layers (strokes + shapes + images) to a PNG `Blob` (async
@@ -1328,7 +1340,6 @@ never block on stroke rendering). Vitest render tests run with `npm test`.
 **Known gaps / likely next work:**
 - Deep zoom: zoom is clamped to 0.1..5 (`utils/zoom.ts`); finer scales need a
   save format without coarse truncation, camera-relative rendering and LOD.
-- SVG export only handles strokes, so it is hidden in the export dialog.
 - No polygon (n-sided) shape kind.
 - No brush import (.abr / .brushset). The RaV89 pack licence forbids
   redistributing its files, so never add a brush export.

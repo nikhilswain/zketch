@@ -7,6 +7,7 @@ import type {
   StrokeLike,
   StrokeSettingKey,
 } from "../types";
+import type { SvgContext } from "../svg/SvgContext";
 
 export class MarkerBrush implements Brush {
   key = "marker" as const;
@@ -38,6 +39,28 @@ export class MarkerBrush implements Brush {
     stroke: StrokeLike,
     options?: BrushOptions,
   ) {
+    const d = this.outline(stroke, options);
+    if (!d) return;
+    const prevAlpha = ctx.globalAlpha;
+    const prevComp = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = "multiply";
+    ctx.globalAlpha = (stroke.opacity ?? 1) * prevAlpha;
+    ctx.fillStyle = stroke.color;
+    ctx.fill(new Path2D(d));
+    ctx.globalAlpha = prevAlpha;
+    ctx.globalCompositeOperation = prevComp;
+  }
+
+  renderSvg(ctx: SvgContext, stroke: StrokeLike, options?: BrushOptions) {
+    const d = this.outline(stroke, options);
+    if (!d) return;
+    ctx.globalCompositeOperation = "multiply";
+    ctx.globalAlpha *= stroke.opacity ?? 1;
+    ctx.fillStyle = stroke.color;
+    ctx.fillPathData(d);
+  }
+
+  private outline(stroke: StrokeLike, options?: BrushOptions): string | null {
     const pts = stroke.points.map((p) => [p.x, p.y, p.pressure ?? 0.5]);
     const dynamic = stroke.input != null;
     const outline = getStroke(pts, {
@@ -50,15 +73,7 @@ export class MarkerBrush implements Brush {
       simulatePressure: stroke.input !== "pen",
       last: true,
     } as any);
-    if (outline.length < 3) return;
-
-    const prevAlpha = ctx.globalAlpha;
-    const prevComp = ctx.globalCompositeOperation;
-    ctx.globalCompositeOperation = "multiply";
-    ctx.globalAlpha = (stroke.opacity ?? 1) * prevAlpha;
-    ctx.fillStyle = stroke.color;
-    ctx.fill(new Path2D(toPathData(outline)));
-    ctx.globalAlpha = prevAlpha;
-    ctx.globalCompositeOperation = prevComp;
+    if (outline.length < 3) return null;
+    return toPathData(outline);
   }
 }

@@ -51,7 +51,7 @@ export const TOPICS: Topic[] = [
       },
       {
         heading: "share it or export it.",
-        body: "Export a PNG or JPG for a doc or a slide, or share a link that replays the diagram being drawn, which is a nice way to walk someone through a flow.",
+        body: "Export a PNG or JPG for a doc or a slide, an SVG that stays sharp at any size, or share a link that replays the diagram being drawn, which is a nice way to walk someone through a flow.",
         art: "share-arrow",
       },
     ],
@@ -70,7 +70,7 @@ export const TOPICS: Topic[] = [
       },
       {
         q: "Can I export a diagram as SVG?",
-        a: "Not yet. PNG and JPG export work today, and SVG is planned.",
+        a: "Yes. Shapes, arrows, text and pen strokes come out as real vectors you can edit in Figma, Illustrator or Inkscape. Textured brushes like pencil and watercolor are kept as images inside the SVG.",
       },
       {
         q: "Can several people edit one diagram together?",
@@ -111,7 +111,7 @@ export const TOPICS: Topic[] = [
       },
       {
         heading: "when Excalidraw is the better pick.",
-        body: "If you need to draw live with teammates, use shape libraries, export SVG or edit on a phone, Excalidraw does those today and zketch does not. Both are free, open source and need no account, so try both.",
+        body: "If you need to draw live with teammates, use shape libraries or edit on a phone, Excalidraw does those today and zketch does not. Both are free, open source and need no account, so try both.",
         art: "share-arrow",
       },
     ],
@@ -241,12 +241,12 @@ export const LANDING_QUESTIONS: TopicQuestion[] = [
   },
   {
     q: "How is zketch different from Excalidraw?",
-    a: "Both do hand-drawn diagrams. zketch adds textured brushes, layers and replays; Excalidraw has live collaboration, shape libraries and SVG export.",
+    a: "Both do hand-drawn diagrams. zketch adds textured brushes, layers and replays; Excalidraw has live collaboration and shape libraries.",
     link: { href: "/excalidraw-alternative", label: "See them side by side." },
   },
   {
     q: "Can I export or share a drawing?",
-    a: "Export a PNG or JPG, or share a link that replays the drawing stroke by stroke. From a share link you can also download the replay as a video or embed it on a site.",
+    a: "Export a PNG, JPG or SVG, or share a link that replays the drawing stroke by stroke. From a share link you can also download the replay as a video or embed it on a site.",
     link: { href: "/drawing-timelapse", label: "More on drawing timelapses." },
   },
   {

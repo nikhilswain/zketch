@@ -25,6 +25,7 @@ import TopRightBlock from "./studio/TopRightBlock";
 import { StudioContext } from "./studio/StudioContext";
 import SettingsPage from "./studio/SettingsPage";
 import type { ExportFormat } from "@/models/SettingsModel";
+import { exportSvg, fitFrame } from "@/services/SvgExport";
 import type { BackgroundType } from "@/models/CanvasModel";
 import { toast } from "sonner";
 import type { PlaybackElement } from "@/engine";
@@ -462,6 +463,25 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         const exportLayers = canvasStore.exportLayers;
         const page = canvasStore.page;
 
+        if (format === "svg") {
+          const scale = page ? effectiveExportScale(settingsStore.exportSettings.scale, page) : settingsStore.exportSettings.scale;
+          const frame = page
+            ? { x: page.x, y: page.y, width: page.width, height: page.height }
+            : fitFrame(exportLayers as any, exportSize.width, exportSize.height);
+          const svg = await exportSvg(exportLayers as any, {
+            frame,
+            outWidth: (page ? page.width : exportSize.width) * scale,
+            outHeight: (page ? page.height : exportSize.height) * scale,
+            background: canvasStore.background as BackgroundType,
+            transparent: settingsStore.exportSettings.transparentBackground,
+            gridUnit: page ? 1 : frame.width / exportSize.width,
+          });
+          const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+          ExportService.downloadFile(url, `${drawingName.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.svg`);
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          return;
+        }
+
         if (page && (format === "png" || format === "jpg")) {
           dataUrl = await ExportService.exportPage(
             exportLayers as any,
@@ -495,15 +515,6 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
               exportSize.height,
               settingsStore.exportSettings,
               exportLayers as any,
-            );
-            break;
-          case "svg":
-            dataUrl = await ExportService.exportToSVG(
-              allStrokes as any,
-              canvasStore.background as BackgroundType,
-              exportSize.width,
-              exportSize.height,
-              settingsStore.exportSettings,
             );
             break;
           default:

@@ -1,3 +1,4 @@
+import type { SvgContext } from "./svg/SvgContext";
 export const BRUSH_STYLES = [
   "ink",
   "eraser",
@@ -279,6 +280,7 @@ export interface Brush {
     stroke: StrokeLike,
     options?: BrushOptions,
   ): void;
+  renderSvg?(ctx: SvgContext, stroke: StrokeLike, options?: BrushOptions): void;
 }
 
 export interface EngineConfig {
