@@ -5,6 +5,7 @@ import VaultView from "@/components/valut-view";
 import NewDrawingDialog from "@/components/NewDrawingDialog";
 import { useIsMobile } from "@/hooks/useMobile";
 import { pageParam } from "@/utils/page";
+import { flushAll } from "@/utils/pendingDelete";
 import NoMobile from "./no-mobile";
 
 const VaultPage: React.FC = observer(() => {
@@ -27,11 +28,13 @@ const VaultPage: React.FC = observer(() => {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const handleCreate = (size: { width: number; height: number } | null) => {
+  const handleCreate = async (size: { width: number; height: number } | null) => {
+    await flushAll();
     window.location.href = size ? `/draw?page=${pageParam(size.width, size.height)}` : "/draw";
   };
 
-  const handleEditDrawing = (drawingId: string) => {
+  const handleEditDrawing = async (drawingId: string) => {
+    await flushAll();
     window.location.href = `/draw/${drawingId}`;
   };
 

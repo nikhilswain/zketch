@@ -38,6 +38,7 @@ import { themeState } from "@/utils/theme";
 import MasonryColumns from "./MasonryColumns";
 import SharedLinks from "./share/SharedLinks";
 import { formatDate } from "@/utils/date";
+import * as deletes from "@/utils/pendingDelete";
 
 type SortOrder = "updated" | "created" | "name";
 
@@ -162,12 +163,14 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const [pendingDelete, setPendingDelete] = useState<ISavedDrawing | null>(null);
+  const [deleting, setDeleting] = useState<Set<string>>(new Set());
   const [showSettings, setShowSettings] = useState(false);
   const [dropping, setDropping] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
 
   const importFiles = async (files: File[]) => {
+    await deletes.flushAll();
     let added = 0;
     let skipped = 0;
     for (const f of files) {
@@ -192,6 +195,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
   };
 
   const saveFile = async (ids?: string[]) => {
+    await deletes.flushAll();
     try {
       const n = await exportDrawings(ids);
       if (!ids && n > 0) toast.success(`Backed up ${plural(n, "drawing")}`, { description: "Keep the file somewhere safe. Import it here to restore." });
@@ -297,12 +301,51 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
     }
   };
 
-  const confirmDelete = async () => {
+  useEffect(() => {
+    const flush = () => void deletes.flushAll();
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVisibility);
+      flush();
+    };
+  }, []);
+
+  const unhide = (id: string) =>
+    setDeleting((current) => {
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
+
+  const confirmDelete = () => {
     if (!pendingDelete) return;
-    const name = pendingDelete.name;
-    await vaultStore.deleteDrawing(pendingDelete.id);
+    const { id, name } = pendingDelete;
     setPendingDelete(null);
-    toast.success(`Deleted “${name}”`);
+    setDeleting((current) => new Set(current).add(id));
+    const toastId = toast(`Deleted “${name}”`, {
+      duration: Infinity,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          if (deletes.undo(id)) unhide(id);
+        },
+      },
+      onDismiss: () => void deletes.flush(id),
+    });
+    deletes.schedule(
+      id,
+      async () => {
+        toast.dismiss(toastId);
+        await vaultStore.deleteDrawing(id);
+        unhide(id);
+      },
+      6000,
+    );
   };
 
   const commitRename = async (drawingId: string) => {
@@ -319,15 +362,17 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
   };
 
   const query = searchQuery.trim().toLowerCase();
+  const visible: ISavedDrawing[] = vaultStore.drawings.filter((d: ISavedDrawing) => !deleting.has(d.id));
+  const isEmpty = visible.length === 0;
   const drawings: ISavedDrawing[] = vaultStore.sortedDrawings
-    .filter((d: ISavedDrawing) => d.name.toLowerCase().includes(query))
+    .filter((d: ISavedDrawing) => !deleting.has(d.id) && d.name.toLowerCase().includes(query))
     .sort((a: ISavedDrawing, b: ISavedDrawing) => {
       if (sortBy === "name") return a.name.localeCompare(b.name);
       if (sortBy === "created") return b.createdAt.getTime() - a.createdAt.getTime();
       return b.updatedAt.getTime() - a.updatedAt.getTime();
     });
 
-  const count = vaultStore.drawings.length;
+  const count = visible.length;
 
   const nameField = (drawing: ISavedDrawing, className: string) =>
     editingId === drawing.id ? (
@@ -447,7 +492,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
-              <DropdownMenuItem disabled={vaultStore.isEmpty} onClick={() => saveFile()}>
+              <DropdownMenuItem disabled={isEmpty} onClick={() => saveFile()}>
                 <DownloadIcon className="h-4 w-4" />
                 Back up all drawings
               </DropdownMenuItem>
@@ -506,7 +551,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
             </p>
           </div>
 
-          {tab === "drawings" && !vaultStore.isEmpty && (
+          {tab === "drawings" && !isEmpty && (
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
                 <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-zk-muted" />
@@ -574,7 +619,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
               <div key={i} className="aspect-[4/3] animate-pulse rounded-[6px] bg-zk-raised" />
             ))}
           </div>
-        ) : vaultStore.isEmpty ? (
+        ) : isEmpty ? (
           <div className="flex flex-col items-center py-24 text-center">
             <button
               onClick={onNewDrawing}
