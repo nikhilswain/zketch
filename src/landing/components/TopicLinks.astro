@@ -1,0 +1,19 @@
+---
+import { TOPICS } from "@/landing/topics";
+
+const current = Astro.url.pathname.replace(/^\/|\/$/g, "");
+const links = TOPICS.filter((t) => t.slug !== current);
+---
+
+<nav class="lp-topic-links" aria-label="zketch for">
+  <span>zketch for</span>
+  <ul>
+    {
+      links.map((t) => (
+        <li>
+          <a href={`/${t.slug}`}>{t.link}</a>
+        </li>
+      ))
+    }
+  </ul>
+</nav>

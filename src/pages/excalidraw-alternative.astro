@@ -1,0 +1,53 @@
+---
+import TopicPage from "@/landing/components/TopicPage.astro";
+import { topicBySlug } from "@/landing/topics";
+
+export const prerender = true;
+
+const rows: [feature: string, zketch: string, excalidraw: string][] = [
+  ["Hand-drawn shapes and arrows", "Yes, in five looks", "Yes"],
+  ["Arrows that stay attached to shapes", "Yes", "Yes"],
+  ["Textured brushes", "36: pencil, watercolor, oil, charcoal and more", "One freehand pen"],
+  ["Layers", "Yes", "No"],
+  ["Replay how a drawing was made", "Yes, in the app and on share links", "No"],
+  ["Timelapse video download", "MP4 or WebM", "No"],
+  ["Live collaboration", "Not yet", "Yes"],
+  ["Shape libraries", "No", "Yes"],
+  ["Export", "PNG, JPG", "PNG, SVG"],
+  ["Drawing on a phone", "Tablets and computers", "Yes"],
+  ["Account needed", "No", "No"],
+  ["Open source", "Yes (MIT)", "Yes (MIT)"],
+];
+---
+
+<TopicPage topic={topicBySlug("excalidraw-alternative")}>
+  <section class="lp-section" aria-labelledby="lp-compare-title">
+    <div class="lp-section-head">
+      <h2 id="lp-compare-title">zketch and Excalidraw, side by side.</h2>
+      <p>Both are good. They are just good at different things.</p>
+    </div>
+    <div class="lp-compare-wrap">
+      <table class="lp-compare">
+        <caption>Compared October 2026. Excalidraw is a separate project, not affiliated with zketch.</caption>
+        <thead>
+          <tr>
+            <th scope="col"><span class="sr-only">Feature</span></th>
+            <th scope="col">zketch</th>
+            <th scope="col">Excalidraw</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            rows.map(([feature, z, e]) => (
+              <tr>
+                <th scope="row">{feature}</th>
+                <td>{z}</td>
+                <td>{e}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+</TopicPage>

@@ -1,0 +1,34 @@
+---
+import TopicPage from "@/landing/components/TopicPage.astro";
+import { BRUSH_GROUPS, topicBySlug } from "@/landing/topics";
+
+export const prerender = true;
+---
+
+<TopicPage topic={topicBySlug("brushes")}>
+  <section class="lp-section" aria-labelledby="lp-brush-list-title">
+    <div class="lp-section-head">
+      <h2 id="lp-brush-list-title">all 36 brushes.</h2>
+      <p>Every one is free and ready the moment you open a drawing.</p>
+    </div>
+    <div class="lp-brush-groups">
+      {
+        BRUSH_GROUPS.map((group) => (
+          <div class="lp-brush-group">
+            <h3>{group.label}</h3>
+            <ul class="lp-brush-grid">
+              {group.brushes.map(([key, name]) => (
+                <li>
+                  <figure class="lp-brush-tile">
+                    <img src={`/brushes/previews/${key}.png`} alt={`${name} brush stroke`} width="280" height="80" loading="lazy" decoding="async" />
+                    <figcaption>{name}</figcaption>
+                  </figure>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+</TopicPage>

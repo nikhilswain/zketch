@@ -1,0 +1,110 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/landing/components/Header.astro";
+import FinalCta from "@/landing/components/FinalCta.astro";
+import Footer from "@/landing/components/Footer.astro";
+import { SITE } from "@/config";
+import type { Topic } from "@/landing/topics";
+import "@/landing/landing.css";
+
+interface Props {
+  topic: Topic;
+}
+
+const { topic } = Astro.props;
+const url = `${SITE.url}/${topic.slug}`;
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebPage",
+      "@id": `${url}#page`,
+      url,
+      name: topic.title,
+      description: topic.description,
+      inLanguage: "en",
+      isPartOf: { "@type": "WebSite", name: SITE.name, url: `${SITE.url}/` },
+      about: { "@id": `${SITE.url}/#app` },
+      breadcrumb: { "@id": `${url}#breadcrumb` },
+    },
+    {
+      "@type": "BreadcrumbList",
+      "@id": `${url}#breadcrumb`,
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: SITE.name, item: `${SITE.url}/` },
+        { "@type": "ListItem", position: 2, name: topic.link, item: url },
+      ],
+    },
+  ],
+};
+---
+
+<Layout
+  pageTitle={topic.title}
+  description={topic.description}
+  image={`/og/${topic.slug}.png`}
+  imageAlt={`zketch: ${topic.og.join(" ")}`}
+  jsonLd={jsonLd}
+  zoomable
+  appTheme={false}
+>
+  <div class="lp" data-landing>
+    <script is:inline>try{if(localStorage.getItem("zketch-landing-theme")==="dark")document.documentElement.dataset.lpTheme="dark"}catch(e){}</script>
+    <Header />
+    <main class="lp-topic" data-topic>
+      <section class="lp-topic-hero" aria-labelledby="lp-title">
+        <p class="lp-tape">{topic.tape}</p>
+        <h1 id="lp-title" class="lp-title">{topic.h1}</h1>
+        <p class="lp-sub">{topic.sub}</p>
+        <div class="lp-actions">
+          <a href="/draw" class="lp-btn lp-desktop-only" data-cta>start drawing <span aria-hidden="true">→</span></a>
+          <a href="/" class="lp-btn lp-btn-ghost lp-desktop-only">see what zketch can do</a>
+          <p class="lp-phone-note lp-phone-only">zketch works on tablets and computers. open zketch.zerro.dev there.</p>
+        </div>
+      </section>
+      <section class="lp-section lp-topic-sections" aria-label={topic.link}>
+        <ol class="lp-feature-list">
+          {
+            topic.sections.map((s, i) => (
+              <li class:list={["lp-feature", { "lp-feature-flip": i % 2 === 1 }]}>
+                <div class="lp-feature-copy">
+                  <h2>{s.heading}</h2>
+                  <p>{s.body}</p>
+                </div>
+                <div class="lp-scrap lp-feature-art" data-margin={s.art} style={`--r:${i % 2 ? 2.5 : -2.5}deg`} aria-hidden="true">
+                  <canvas />
+                </div>
+              </li>
+            ))
+          }
+        </ol>
+      </section>
+      <slot />
+      <section class="lp-section lp-faq" aria-labelledby="lp-faq-title">
+        <div class="lp-section-head">
+          <h2 id="lp-faq-title">questions people ask.</h2>
+        </div>
+        <dl>
+          {
+            topic.questions.map((item) => (
+              <div class="lp-faq-item">
+                <dt>{item.q}</dt>
+                <dd>{item.a}</dd>
+              </div>
+            ))
+          }
+        </dl>
+      </section>
+      <FinalCta />
+    </main>
+    <Footer />
+  </div>
+</Layout>
+
+<script>
+  import { mountMargins } from "../margins";
+
+  const root = document.querySelector<HTMLElement>("[data-topic]");
+  if (root) mountMargins(root);
+</script>

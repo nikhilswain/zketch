@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { Resvg } from "@resvg/resvg-js";
-import { OG_FONTS, ogDefault } from "../src/lib/og.ts";
+import { OG_FONTS, ogDefault, ogPage } from "../src/lib/og.ts";
+import { TOPICS } from "../src/landing/topics.ts";
 
 const faviconSvg = readFileSync("public/favicon.svg", "utf8");
 const faviconPng = (size: number) => new Resvg(faviconSvg, { fitTo: { mode: "width", value: size } }).render().asPng();
@@ -26,9 +27,9 @@ function faviconIco(sizes: number[]): Buffer {
 }
 
 mkdirSync("public/og", { recursive: true });
-writeFileSync(
-  "public/og/default.png",
-  new Resvg(ogDefault(), { font: { fontFiles: OG_FONTS, loadSystemFonts: false, defaultFontFamily: "Kalam" } }).render().asPng(),
-);
+const png = (svg: string) => new Resvg(svg, { font: { fontFiles: OG_FONTS, loadSystemFonts: false, defaultFontFamily: "Kalam" } }).render().asPng();
+
+writeFileSync("public/og/default.png", png(ogDefault()));
+for (const topic of TOPICS) writeFileSync(`public/og/${topic.slug}.png`, png(ogPage(topic.og, topic.tape)));
 writeFileSync("public/favicon.ico", faviconIco([16, 32, 48]));
 writeFileSync("public/favicon-96.png", faviconPng(96));

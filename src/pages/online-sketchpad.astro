@@ -1,0 +1,8 @@
+---
+import TopicPage from "@/landing/components/TopicPage.astro";
+import { topicBySlug } from "@/landing/topics";
+
+export const prerender = true;
+---
+
+<TopicPage topic={topicBySlug("online-sketchpad")} />

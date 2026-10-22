@@ -186,34 +186,25 @@ const pine = (x: number, base: number, h: number) => {
   return `<path d="${tiers.join("")}" fill="#2f6b3a" fill-opacity="0.85" filter="url(#wash)"/>` + ink(`M${f(x)} ${f(base - h * 0.2)}L${f(x)} ${f(base)}`, 4, "#5a3b22");
 };
 
-export function ogDefault(): string {
-  const art =
-    apple(780, 30, 1.05) +
-    sun(1068, 132, 50) +
-    wash(blob(842, 410, 92, 48), "#8ec5ea", 0.6) +
-    box(752, 368, 180, 84) +
-    text("idea", 842, 422, 38, { anchor: "middle" }) +
-    arrow({ x: 948, y: 402 }, { x: 1040, y: 380 }, { x: 1056, y: 452 }) +
-    star(1072, 520, 58, 25) +
-    pine(800, 590, 74) +
-    pine(846, 594, 92) +
-    pine(892, 588, 66) +
-    ink(curve([
-      { x: 742, y: 596 },
-      { x: 820, y: 586 },
-      { x: 900, y: 594 },
-      { x: 960, y: 586 },
-    ]), 4);
+const art = () =>
+  apple(780, 30, 1.05) +
+  sun(1068, 132, 50) +
+  wash(blob(842, 410, 92, 48), "#8ec5ea", 0.6) +
+  box(752, 368, 180, 84) +
+  text("idea", 842, 422, 38, { anchor: "middle" }) +
+  arrow({ x: 948, y: 402 }, { x: 1040, y: 380 }, { x: 1056, y: 452 }) +
+  star(1072, 520, 58, 25) +
+  pine(800, 590, 74) +
+  pine(846, 594, 92) +
+  pine(892, 588, 66) +
+  ink(curve([
+    { x: 742, y: 596 },
+    { x: 820, y: 586 },
+    { x: 900, y: 594 },
+    { x: 960, y: 586 },
+  ]), 4);
 
-  const underline = curve([
-    { x: 156, y: 352 },
-    { x: 212, y: 342 },
-    { x: 272, y: 356 },
-    { x: 334, y: 346 },
-    { x: 370, y: 350 },
-  ]);
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+const frame = (headline: string, tape: string) => `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
 <defs>
 <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="12" cy="12" r="1.4" fill="${DOT}"/></pattern>
 <filter id="wash" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7"/><feDisplacementMap in="SourceGraphic" scale="9" xChannelSelector="R" yChannelSelector="G"/></filter>
@@ -222,13 +213,38 @@ export function ogDefault(): string {
 <rect width="${W}" height="${H}" fill="url(#dots)"/>
 ${mark(74, 48, 66)}
 ${text("zketch", 152, 96, 50, { font: "display" })}
-${text("Doodle, diagram", 80, 236, 84, { font: "display" })}
+${headline}
+<g transform="rotate(-2 80 560)"><rect x="80" y="548" width="${Math.round(36 + tape.length * 11.4)}" height="44" fill="${TAPE}"/>${text(tape, 98, 580, 26, { fill: SOFT })}</g>
+${art()}
+</svg>`;
+
+export function ogDefault(): string {
+  const underline = curve([
+    { x: 156, y: 352 },
+    { x: 212, y: 342 },
+    { x: 272, y: 356 },
+    { x: 334, y: 346 },
+    { x: 370, y: 350 },
+  ]);
+
+  return frame(
+    `${text("Doodle, diagram", 80, 236, 84, { font: "display" })}
 ${text("&", 80, 330, 84, { font: "display" })}
 ${text("paint,", 150, 330, 84, { font: "display", fill: CORAL_TEXT })}
 ${ink(underline, 7, CORAL)}
 ${text("right in your", 80, 424, 84, { font: "display" })}
-${text("browser.", 80, 518, 84, { font: "display" })}
-<g transform="rotate(-2 80 560)"><rect x="80" y="548" width="468" height="44" fill="${TAPE}"/>${text("free · no sign-up · nothing to install", 98, 580, 26, { fill: SOFT })}</g>
-${art}
-</svg>`;
+${text("browser.", 80, 518, 84, { font: "display" })}`,
+    "free · no sign-up · nothing to install",
+  );
+}
+
+export function ogPage(lines: string[], tape: string): string {
+  const longest = Math.max(...lines.map((l) => l.length));
+  const size = Math.min(80, Math.floor(1240 / longest));
+  const step = Math.round(size * 1.14);
+  const top = 500 - step * (lines.length - 1);
+  const headline = lines
+    .map((line, i) => text(line, 80, top + i * step, size, { font: "display", fill: i === lines.length - 1 ? CORAL_TEXT : INK }))
+    .join("\n");
+  return frame(headline, tape);
 }
