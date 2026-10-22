@@ -724,7 +724,7 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
           <div>
             <DialogTitle className="text-[24px]">Delete drawing?</DialogTitle>
             <DialogDescription className="mt-2 text-[13px] leading-relaxed text-zk-muted">
-              “{pendingDelete?.name}” and all its layers will be removed from this device. This can’t be undone.
+              “{pendingDelete?.name}” and all its layers will be removed from this device. You can undo it for a few seconds afterwards.
             </DialogDescription>
           </div>
           <div className="flex justify-end gap-2">
