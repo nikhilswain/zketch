@@ -879,7 +879,7 @@ pages only get a `"<name> · drawn in zketch"` title, a description and the
 drawing as preview image).
 
 Topic pages are the search landing pages, one per kind of searcher:
-`/online-sketchpad`, `/flowchart-maker`, `/excalidraw-alternative`, `/brushes`,
+`/flowchart-maker`, `/excalidraw-alternative`, `/brushes`,
 `/drawing-timelapse`. Their copy lives in `src/landing/topics.ts` (`TOPICS`:
 title, description, tape, h1, sections with a doodle id, questions, OG lines;
 `BRUSH_GROUPS` for the brush grid). Each `src/pages/<slug>.astro` is

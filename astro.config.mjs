@@ -19,7 +19,7 @@ export default defineConfig({
     react(),
     sitemap({
       filter: (page) =>
-        /^https:\/\/zketch\.zerro\.dev\/(draw|online-sketchpad|flowchart-maker|excalidraw-alternative|brushes|drawing-timelapse)?\/?$/.test(page),
+        /^https:\/\/zketch\.zerro\.dev\/(draw|flowchart-maker|excalidraw-alternative|brushes|drawing-timelapse)?\/?$/.test(page),
       serialize(item) {
         item.url = item.url.replace(/(.)\/$/, "$1");
         return item;

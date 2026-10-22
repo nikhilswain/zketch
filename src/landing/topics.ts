@@ -25,57 +25,6 @@ export interface Topic {
 
 export const TOPICS: Topic[] = [
   {
-    slug: "online-sketchpad",
-    link: "online sketchpad",
-    title: "Free online sketchpad, no sign-up | zketch",
-    description:
-      "Sketch and doodle online for free with zketch: pencil, ink, watercolor and 30+ more brushes, layers and undo. No account, nothing to install.",
-    tape: "free · no sign-up · nothing to install",
-    h1: "A free online sketchpad that feels like paper.",
-    sub: "Open zketch and start sketching. Pencil with real paper grain, ink, markers, watercolor and more, with layers and undo. No account, and your sketches are saved in your browser.",
-    sections: [
-      {
-        heading: "sketch the second you land.",
-        body: "There is no sign-up, no download and no tour. Press start drawing and you have a blank page and a pen. Every stroke is saved as you go, so closing the tab loses nothing.",
-        art: "coffee",
-      },
-      {
-        heading: "brushes that feel like the real thing.",
-        body: "Pencil that catches the paper grain, ink that tapers with pressure, crayon, charcoal, see-through watercolor, and nature brushes that plant a row of pines in one stroke. Pen pressure works with a stylus or drawing tablet.",
-        art: "brush-jar",
-      },
-      {
-        heading: "doodle in layers.",
-        body: "Rough sketch on one layer, clean lines on the next, colour underneath. Hide, lock and reorder layers, or focus on one and hide the rest for a moment.",
-        art: "paper-stack",
-      },
-      {
-        heading: "your sketchbook stays yours.",
-        body: "Sketches are saved on your device, in the browser you drew in, and nothing is uploaded unless you share it. Back up your whole sketchbook to a single .zketch file whenever you like.",
-        art: "padlock",
-      },
-    ],
-    questions: [
-      {
-        q: "Is zketch really free?",
-        a: "Yes. Every brush and every feature is free, with no account and no watermark.",
-      },
-      {
-        q: "Where are my sketches saved?",
-        a: "In your browser, on your device. Your vault at zketch.zerro.dev/vault lists them all, and you can save any of them, or all of them, as a .zketch file.",
-      },
-      {
-        q: "Can I export my sketch?",
-        a: "Yes, as a PNG or JPG. You can also share a link that replays the sketch stroke by stroke.",
-      },
-      {
-        q: "Does it work on a phone?",
-        a: "zketch is made for tablets and computers. On a phone you can view shared drawings, but drawing needs a bigger screen.",
-      },
-    ],
-    og: ["A free online", "sketchpad,", "no sign-up."],
-  },
-  {
     slug: "flowchart-maker",
     link: "hand-drawn flowcharts",
     title: "Hand-drawn flowchart maker, free online | zketch",
