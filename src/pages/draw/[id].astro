@@ -16,3 +16,9 @@ export const prerender = false;
 	<DrawByIdPage client:only="react" />
 	<Toaster offset={{ bottom: 68 }} mobileOffset={{ bottom: 68 }} client:only="react" /> 
 </Layout>
+
+<script>
+	import { registerServiceWorker } from "@/pwa/register";
+
+	void registerServiceWorker();
+</script>

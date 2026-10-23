@@ -8,6 +8,8 @@ import cloudflare from "@astrojs/cloudflare";
 
 import sitemap from "@astrojs/sitemap";
 
+import { serviceWorker } from "./src/pwa/integration.ts";
+
 // https://astro.build/config
 export default defineConfig({
   site: "https://zketch.zerro.dev",
@@ -17,6 +19,7 @@ export default defineConfig({
 
   integrations: [
     react(),
+    serviceWorker(),
     sitemap({
       filter: (page) =>
         /^https:\/\/zketch\.zerro\.dev\/(draw|flowchart-maker|excalidraw-alternative|brushes|drawing-timelapse)?\/?$/.test(page),
@@ -36,5 +39,7 @@ export default defineConfig({
     },
   },
 
-  adapter: cloudflare(),
+  adapter: cloudflare({
+    routes: { extend: { exclude: [{ pattern: "/sw.js" }] } },
+  }),
 });

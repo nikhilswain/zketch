@@ -1,5 +1,6 @@
 import { isStrokeElement } from "@/engine/types";
 import ZketchMark from "@/components/ZketchMark";
+import { promptInstall, useInstallState } from "@/pwa/install";
 import type React from "react";
 import { useState, useEffect, useRef } from "react";
 import { observer } from "mobx-react-lite";
@@ -57,6 +58,16 @@ const BACKGROUND_LABEL: Record<string, string> = { white: "White", transparent: 
 
 const repairing = new Set<string>();
 let repairQueue: Promise<void> = Promise.resolve();
+const THUMBS_REDRAWN = "zketch-thumbs-redrawn-v2";
+let redrawStarted = false;
+
+function needsRedraw(): boolean {
+  try {
+    return !redrawStarted && localStorage.getItem(THUMBS_REDRAWN) !== "1";
+  } catch {
+    return false;
+  }
+}
 
 const ThumbnailImage: React.FC<{ drawingId: string; thumbnailId: string; alt: string; className?: string }> = ({
   drawingId,
@@ -163,6 +174,7 @@ const CHECKER_BG = "bg-[repeating-conic-gradient(#efefef_0%_25%,#ffffff_0%_50%)]
 
 const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDrawing }) => {
   const vaultStore = useVaultStore();
+  const installState = useInstallState();
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     try {
@@ -182,6 +194,25 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
   const [deleting, setDeleting] = useState<Set<string>>(new Set());
   const [showSettings, setShowSettings] = useState(false);
   const [dropping, setDropping] = useState(false);
+
+  useEffect(() => {
+    if (vaultStore.isLoading || vaultStore.drawings.length === 0 || !needsRedraw()) return;
+    redrawStarted = true;
+    const ids = vaultStore.drawings.filter((d: ISavedDrawing) => !d.page).map((d: ISavedDrawing) => d.id);
+    for (const id of ids) {
+      repairing.add(id);
+      repairQueue = repairQueue.then(() =>
+        vaultStore.repairThumbnail(id, true).catch((err) => console.error("Failed to redraw thumbnail:", err)),
+      );
+    }
+    repairQueue = repairQueue.then(() => {
+      try {
+        localStorage.setItem(THUMBS_REDRAWN, "1");
+      } catch {
+        return;
+      }
+    });
+  }, [vaultStore.isLoading, vaultStore, vaultStore.drawings.length]);
   const fileInput = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
 
@@ -518,6 +549,15 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
                 <UploadIcon className="h-4 w-4" />
                 Import {BACKUP_EXTENSION} file…
               </DropdownMenuItem>
+              {installState === "prompt" && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => void promptInstall()}>
+                    <ZketchMark size={16} />
+                    Install zketch as an app
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
           <button

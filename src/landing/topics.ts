@@ -250,6 +250,10 @@ export const LANDING_QUESTIONS: TopicQuestion[] = [
     link: { href: "/drawing-timelapse", label: "More on drawing timelapses." },
   },
   {
+    q: "Can I install zketch or use it offline?",
+    a: "Yes. Once you've opened zketch, it keeps working without internet. Install it as an app from Settings in Chrome or Edge, or choose Add to Dock or Add to Home Screen in Safari, and it opens in its own window.",
+  },
+  {
     q: "Does it work on a phone?",
     a: "zketch is made for tablets and computers. On a phone you can open shared drawings and watch them replay, but drawing needs a bigger screen.",
   },

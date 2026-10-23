@@ -10,12 +10,14 @@ import { KEY_BINDINGS, type KeyBinding } from "@/utils/keyBindings";
 import HsvPicker from "./HsvPicker";
 import { SURROUND, type SurroundTone } from "@/utils/page";
 import type { SurroundMode, ThemePreference } from "@/models/SettingsModel";
+import { promptInstall, useInstallState } from "@/pwa/install";
 
 const SECTIONS = [
   { id: "appearance", label: "Appearance" },
   { id: "layout", label: "Layout" },
   { id: "canvas", label: "Canvas" },
   { id: "drawing", label: "Drawing" },
+  { id: "app", label: "App" },
   { id: "shortcuts", label: "Shortcuts" },
 ];
 
@@ -195,6 +197,36 @@ const Section: React.FC<{ id: string; title: string; lead?: string; children: Re
   </section>
 );
 
+const INSTALL_COPY = {
+  installed: "zketch is installed on this device. It opens in its own window, works without internet, and your drawings are kept safe from browser clean-ups.",
+  prompt: "Install zketch to open it in its own window, draw without internet, and keep your drawings safe from browser clean-ups.",
+  safari: "In Safari, choose File → Add to Dock on a Mac, or Share → Add to Home Screen on an iPad. It then opens in its own window, works without internet, and Safari won't clear your drawings.",
+  unsupported: "This browser can't install zketch as an app, but zketch still works without internet here once you've opened it online.",
+};
+
+const AppSection: React.FC = () => {
+  const state = useInstallState();
+  return (
+    <Section id="app" title="App" lead={INSTALL_COPY[state]}>
+      {state === "prompt" && (
+        <button
+          type="button"
+          onClick={() => void promptInstall()}
+          className="flex h-9 items-center rounded-[4px] bg-zk-accent px-4 text-[14px] font-semibold text-zk-on-accent hover:brightness-110"
+        >
+          Install zketch
+        </button>
+      )}
+      {state === "installed" && (
+        <p className="flex items-center gap-1.5 text-[13px] text-zk-text-2">
+          <CheckIcon className="h-3.5 w-3.5 text-zk-accent" />
+          Installed
+        </p>
+      )}
+    </Section>
+  );
+};
+
 const SettingsPage: React.FC<{ onClose: () => void }> = observer(({ onClose }) => {
   const settings = useSettingsStore();
   const scroller = useRef<HTMLDivElement>(null);
@@ -361,6 +393,8 @@ const SettingsPage: React.FC<{ onClose: () => void }> = observer(({ onClose }) =
               ))}
             </div>
           </Section>
+
+          <AppSection />
 
           <Section id="shortcuts" title="Shortcuts">
             <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">

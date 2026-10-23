@@ -2,9 +2,17 @@
 import { Toaster } from "@/components/ui/sonner";
 import Layout from "@/layouts/Layout.astro";
 import DrawPage from "@/page-components/draw-pages/draw-page";
+
+export const prerender = true;
 ---
 
 <Layout pageTitle="new drawing | zketch" description="Start a fresh drawing in zketch: doodle, diagram or paint with real brushes, right in your browser.">
 	<DrawPage client:only="react" />
 	<Toaster offset={{ bottom: 68 }} mobileOffset={{ bottom: 68 }} client:only="react" /> 
 </Layout>
+
+<script>
+	import { registerServiceWorker } from "@/pwa/register";
+
+	void registerServiceWorker();
+</script>

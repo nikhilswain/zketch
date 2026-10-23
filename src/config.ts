@@ -9,3 +9,6 @@ export const SITE = {
   authorUrl: "https://zerro.dev",
   x: "@iamn1khil",
 };
+
+export const FONT_CSS =
+  "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Instrument+Sans:wght@400;500;600&family=Kalam:wght@400&family=JetBrains+Mono:wght@400&display=swap";

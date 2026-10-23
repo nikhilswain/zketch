@@ -1,0 +1,22 @@
+{
+  "id": "/vault",
+  "name": "zketch",
+  "short_name": "zketch",
+  "description": "Sketch, doodle and paint with real textured brushes, layers and hand-drawn flowcharts. Your drawings stay on your device.",
+  "start_url": "/vault",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F4F5F7",
+  "theme_color": "#F4F5F7",
+  "categories": ["graphics", "productivity", "design"],
+  "icons": [
+    { "src": "/brand/zketch-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/zketch-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/pwa/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/pwa/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "New drawing", "url": "/draw", "icons": [{ "src": "/brand/zketch-icon-192.png", "sizes": "192x192" }] },
+    { "name": "Your drawings", "url": "/vault", "icons": [{ "src": "/brand/zketch-icon-192.png", "sizes": "192x192" }] }
+  ]
+}

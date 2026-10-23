@@ -33,3 +33,11 @@ writeFileSync("public/og/default.png", png(ogDefault()));
 for (const topic of TOPICS) writeFileSync(`public/og/${topic.slug}.png`, png(ogPage(topic.og, topic.tape)));
 writeFileSync("public/favicon.ico", faviconIco([16, 32, 48]));
 writeFileSync("public/favicon-96.png", faviconPng(96));
+
+const maskable = readFileSync("public/brand/zketch-icon.svg", "utf8")
+  .replace(/<rect[^>]*\/>/, '<rect width="100" height="100" fill="#1F1F24"/>')
+  .replace('transform="translate(9 8) scale(0.84)"', 'transform="translate(21.5 19) scale(0.62)"');
+mkdirSync("public/pwa", { recursive: true });
+for (const size of [192, 512]) {
+  writeFileSync(`public/pwa/maskable-${size}.png`, new Resvg(maskable, { fitTo: { mode: "width", value: size } }).render().asPng());
+}

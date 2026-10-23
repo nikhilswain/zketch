@@ -1,6 +1,6 @@
 ---
 import "../styles/global.css"
-import { SITE } from "@/config"
+import { FONT_CSS, SITE } from "@/config"
 
 interface Props {
 	pageTitle?: string
@@ -46,6 +46,11 @@ const ogImage = new URL(image, SITE.url).href
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<link rel="icon" type="image/png" sizes="96x96" href="/favicon-96.png" />
 		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+		<link rel="manifest" href="/manifest.webmanifest" />
+		<meta name="mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-title" content="zketch" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="default" />
 		<link rel="sitemap" href="/sitemap-index.xml" />
 		<meta property="og:title" content={pageTitle} />
 		{description !== "" && <meta property="og:description" content={description} />}
@@ -84,7 +89,7 @@ const ogImage = new URL(image, SITE.url).href
 		<meta name="generator" content={Astro.generator} />
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-		<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Instrument+Sans:wght@400;500;600&family=Kalam:wght@400&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+		<link href={FONT_CSS} rel="stylesheet" />
 	</head>
 	<body>
 		<slot />
