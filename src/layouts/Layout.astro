@@ -89,7 +89,7 @@ const ogImage = new URL(image, SITE.url).href
 		<meta name="generator" content={Astro.generator} />
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-		<link href={FONT_CSS} rel="stylesheet" />
+		<link href={FONT_CSS} rel="stylesheet" crossorigin="anonymous" />
 	</head>
 	<body>
 		<slot />

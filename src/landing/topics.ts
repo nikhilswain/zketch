@@ -251,7 +251,7 @@ export const LANDING_QUESTIONS: TopicQuestion[] = [
   },
   {
     q: "Can I install zketch or use it offline?",
-    a: "Yes. Once you've opened zketch, it keeps working without internet. Install it as an app from Settings in Chrome or Edge, or choose Add to Dock or Add to Home Screen in Safari, and it opens in its own window.",
+    a: "Yes. Once you've opened your drawings or the editor, zketch keeps working without internet. Install it as an app from Settings in Chrome or Edge, or with Add to Dock or Add to Home Screen in Safari. A Safari app keeps its own drawings, so back yours up first and import them in the app.",
   },
   {
     q: "Does it work on a phone?",

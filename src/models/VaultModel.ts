@@ -201,6 +201,7 @@ export const VaultModel = types
   .model("VaultModel", {
     drawings: types.optional(types.array(SavedDrawing), []),
     isLoading: types.optional(types.boolean, false),
+    hasLoaded: types.optional(types.boolean, false),
     storageInfo: types.optional(StorageInfo, {}),
   })
   .volatile(() => ({
@@ -223,6 +224,7 @@ export const VaultModel = types
   .actions((self) => ({
     setLoading(loading: boolean) {
       self.isLoading = loading;
+      if (!loading) self.hasLoaded = true;
     },
     setStorageInfo(used: number, quota: number) {
       self.storageInfo.used = used;

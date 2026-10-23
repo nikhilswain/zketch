@@ -58,16 +58,30 @@ const BACKGROUND_LABEL: Record<string, string> = { white: "White", transparent: 
 
 const repairing = new Set<string>();
 let repairQueue: Promise<void> = Promise.resolve();
-const THUMBS_REDRAWN = "zketch-thumbs-redrawn-v2";
+const REDRAW_KEY = "zketch-thumbs-redraw-v2";
 let redrawStarted = false;
 
-function needsRedraw(): boolean {
+function readRedraw(): string[] | null {
   try {
-    return !redrawStarted && localStorage.getItem(THUMBS_REDRAWN) !== "1";
+    const value = localStorage.getItem(REDRAW_KEY);
+    return value === null ? null : (JSON.parse(value) as string[]);
   } catch {
-    return false;
+    return [];
   }
 }
+
+function writeRedraw(ids: string[]) {
+  try {
+    localStorage.setItem(REDRAW_KEY, JSON.stringify(ids));
+  } catch {
+    return;
+  }
+}
+
+const idle = () =>
+  new Promise<void>((resolve) =>
+    "requestIdleCallback" in window ? requestIdleCallback(() => resolve(), { timeout: 2000 }) : setTimeout(resolve, 50),
+  );
 
 const ThumbnailImage: React.FC<{ drawingId: string; thumbnailId: string; alt: string; className?: string }> = ({
   drawingId,
@@ -196,23 +210,24 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
   const [dropping, setDropping] = useState(false);
 
   useEffect(() => {
-    if (vaultStore.isLoading || vaultStore.drawings.length === 0 || !needsRedraw()) return;
-    redrawStarted = true;
-    const ids = vaultStore.drawings.filter((d: ISavedDrawing) => !d.page).map((d: ISavedDrawing) => d.id);
-    for (const id of ids) {
-      repairing.add(id);
-      repairQueue = repairQueue.then(() =>
-        vaultStore.repairThumbnail(id, true).catch((err) => console.error("Failed to redraw thumbnail:", err)),
-      );
+    if (!vaultStore.hasLoaded || vaultStore.isLoading || redrawStarted) return;
+    let pending = readRedraw();
+    if (pending === null) {
+      pending = vaultStore.drawings.filter((d: ISavedDrawing) => !d.page).map((d: ISavedDrawing) => d.id);
+      writeRedraw(pending);
     }
-    repairQueue = repairQueue.then(() => {
-      try {
-        localStorage.setItem(THUMBS_REDRAWN, "1");
-      } catch {
-        return;
-      }
-    });
-  }, [vaultStore.isLoading, vaultStore, vaultStore.drawings.length]);
+    if (!pending.length) return;
+    redrawStarted = true;
+    for (const id of pending) {
+      repairQueue = repairQueue.then(async () => {
+        await idle();
+        if (!repairing.has(id)) {
+          await vaultStore.repairThumbnail(id, true).catch((err) => console.error("Failed to redraw thumbnail:", err));
+        }
+        writeRedraw((readRedraw() ?? []).filter((x) => x !== id));
+      });
+    }
+  }, [vaultStore.hasLoaded, vaultStore.isLoading, vaultStore]);
   const fileInput = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
 

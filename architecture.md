@@ -932,25 +932,39 @@ new-drawing shortcut opens `/vault?new=1`.
   fills `__PRECACHE__` (`/draw`, `/vault`, manifest, icons, every `dist/_astro`
   file), `__VERSION__` (hash of the list, the template and the two HTML pages) and
   `__FONT_CSS__` (`FONT_CSS` in `config.ts`, also used by Layout) and writes
-  `dist/sw.js`. `/sw.js` is excluded from the Pages Function via the Cloudflare
-  adapter's `routes.extend` (the adapter keeps `_routes.json` under its
-  100-rule limit; never edit that file by hand). No service worker in dev.
+  `dist/sw.js`, plus `__BRUSH_FILES__` (every file under `dist/brushes`).
+  The version also hashes `dist/_worker.js`, so a change to the server-rendered
+  `/draw/[id]` HTML ships a new worker. `/sw.js` is excluded from the Pages
+  Function via the Cloudflare adapter's `routes.extend`. `_routes.json` sits at
+  Cloudflare's 100-rule limit: never edit it by hand, and never add a wildcard
+  that overlaps files the adapter lists (e.g. `/brushes/*`), wrangler rejects
+  both. `/draw` and `/vault` deliberately stay routed through the Function:
+  served as plain static files, Pages would 308 them to `/draw/` and `/vault/`.
+  No service worker in dev.
 - Worker caches: `zketch-shell-<version>` (precache + `/draw/__shell`, the
-  `/draw/[id]` HTML, which is the same for every id), `zketch-pages` (latest app
-  HTML, cleared on each activate), `zketch-assets`, `zketch-brushes`,
-  `zketch-fonts`. Navigations are network first (3 s) with cache fallback;
-  `/_astro/*` cache first; brushes, misc files and Google Fonts CSS
-  stale-while-revalidate; font files cache first. `/api/*`, `/share*`,
-  `/embed/*` and other origins are never handled. Install doesn't skip waiting;
-  the first install claims clients.
+  `/draw/[id]` HTML, which is the same for every id), `zketch-assets` (late
+  `_astro` chunks and misc files, cleared on each activate), `zketch-brushes`,
+  `zketch-fonts`. Offline HTML always comes from the current shell, never from a
+  runtime cache. Navigations are network first: after 3 s the cached shell
+  answers if there is one, otherwise the network keeps going; app paths also
+  fall back on 5xx. `/_astro/*` cache first; brushes and misc files
+  stale-while-revalidate; Google Fonts: only `FONT_CSS` and `/s/` font files
+  (SVG export's `&text=` subsets are not cached). Cache writes never fail a
+  response; range requests are ignored. `/api/*`, `/share*`, `/embed/*` and
+  other origins are never handled. Install doesn't skip waiting; the first
+  install claims clients.
 - `register.ts` (imported by the `/vault`, `/draw`, `/draw/[id]` pages only, not
   the landing pages): registers in production, checks for updates when the tab
-  comes back (hourly at most), shows a "new version" toast whose Reload posts
-  `SKIP_WAITING` and reloads on `controllerchange`. When running installed it
+  comes back and every hour, shows a "new version" toast whose Reload posts
+  `SKIP_WAITING` to the current waiting worker and reloads on
+  `controllerchange` (also in tabs that started without a controller). When running installed it
   asks for persistent storage and posts `WARM_BRUSHES` (caches every file in
   `brushes/manifest.json`).
 - `install.ts`: keeps `beforeinstallprompt`, `useInstallState()` →
-  installed / prompt / safari / unsupported. Settings has an App section;
+  installed / prompt / apple / chromium / unsupported (an accepted install is
+  remembered in localStorage until the browser offers the prompt again). On
+  Apple devices an installed web app has its own storage, so the copy tells
+  people to back up and import their drawings. Settings has an App section;
   the vault backup menu shows "Install zketch as an app" when the browser
   offers it.
 - Testing a production build locally: `npm run build`, then run

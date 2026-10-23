@@ -44,17 +44,22 @@ export function serviceWorker(): AstroIntegration {
         const statics = STATIC.filter((url) => existsSync(join(out, url)));
         const precache = [...pages.map(([url]) => url), ...statics, ...assets];
 
+        const brushes = walk(join(out, "brushes")).map(toUrl).sort();
+
         const template = readFileSync(join(root, "src/pwa/sw.js"), "utf8");
-        const hash = createHash("sha256").update(template).update(precache.join("\n"));
+        const hash = createHash("sha256").update(template).update(precache.join("\n")).update(brushes.join("\n"));
         for (const [, file] of pages) hash.update(readFileSync(join(out, file)));
+        for (const file of walk(join(out, "_worker.js")).sort()) hash.update(readFileSync(file));
+        for (const url of statics) hash.update(readFileSync(join(out, url)));
         const version = hash.digest("hex").slice(0, 12);
 
         writeFileSync(
           join(out, "sw.js"),
           template
-            .replace("__VERSION__", version)
-            .replace("__PRECACHE__", JSON.stringify(precache))
-            .replace("__FONT_CSS__", JSON.stringify(FONT_CSS)),
+            .replace("__VERSION__", () => version)
+            .replace("__PRECACHE__", () => JSON.stringify(precache))
+            .replace("__BRUSH_FILES__", () => JSON.stringify(brushes))
+            .replace("__FONT_CSS__", () => JSON.stringify(FONT_CSS)),
         );
 
         logger.info(`sw.js ${version}: ${precache.length} files precached`);

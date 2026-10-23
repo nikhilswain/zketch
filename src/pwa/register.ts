@@ -4,32 +4,43 @@ import { isInstalled } from "./install";
 
 const UPDATE_CHECK_MS = 60 * 60 * 1000;
 
+let updateRequested = false;
+
 async function toasterReady(): Promise<void> {
-  for (let i = 0; i < 50 && !document.querySelector("section[aria-label*=\"Notifications\"]"); i++) {
+  for (let i = 0; i < 50 && !document.querySelector('section[aria-label*="Notifications"]'); i++) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
 }
 
-async function offerUpdate(worker: ServiceWorker) {
+async function offerUpdate(reg: ServiceWorkerRegistration) {
   await toasterReady();
   toast("A new version of zketch is ready", {
     id: "zketch-update",
     duration: Infinity,
     action: {
       label: "Reload",
-      onClick: () => worker.postMessage({ type: "SKIP_WAITING" }),
+      onClick: () => {
+        updateRequested = true;
+        if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
+        else location.reload();
+      },
     },
   });
 }
 
 function watch(reg: ServiceWorkerRegistration) {
-  if (reg.waiting && navigator.serviceWorker.controller) void offerUpdate(reg.waiting);
+  if (reg.waiting && navigator.serviceWorker.controller) void offerUpdate(reg);
   reg.addEventListener("updatefound", () => {
     const worker = reg.installing;
     worker?.addEventListener("statechange", () => {
-      if (worker.state === "installed" && navigator.serviceWorker.controller) void offerUpdate(worker);
+      if (worker.state === "installed" && navigator.serviceWorker.controller) void offerUpdate(reg);
     });
   });
+}
+
+function loaded(): Promise<void> {
+  if (document.readyState === "complete") return Promise.resolve();
+  return new Promise((resolve) => window.addEventListener("load", () => resolve(), { once: true }));
 }
 
 export async function registerServiceWorker(): Promise<void> {
@@ -40,21 +51,26 @@ export async function registerServiceWorker(): Promise<void> {
     return;
   }
   try {
+    await loaded();
+    const hadController = !!navigator.serviceWorker.controller;
     const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" });
     watch(reg);
     let reloading = false;
-    const hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (!hadController || reloading) return;
+      if (reloading || (!hadController && !updateRequested)) return;
       reloading = true;
       location.reload();
     });
     let lastCheck = Date.now();
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState !== "visible" || Date.now() - lastCheck < UPDATE_CHECK_MS) return;
+    const check = () => {
+      if (Date.now() - lastCheck < UPDATE_CHECK_MS) return;
       lastCheck = Date.now();
       reg.update().catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") check();
     });
+    setInterval(check, UPDATE_CHECK_MS);
     if (isInstalled()) {
       void keepStorage();
       const ready = await navigator.serviceWorker.ready;

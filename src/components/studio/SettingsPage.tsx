@@ -198,10 +198,11 @@ const Section: React.FC<{ id: string; title: string; lead?: string; children: Re
 );
 
 const INSTALL_COPY = {
-  installed: "zketch is installed on this device. It opens in its own window, works without internet, and your drawings are kept safe from browser clean-ups.",
+  installed: "zketch is installed on this device. It opens in its own window, works without internet, and its drawings are kept safe from browser clean-ups.",
   prompt: "Install zketch to open it in its own window, draw without internet, and keep your drawings safe from browser clean-ups.",
-  safari: "In Safari, choose File → Add to Dock on a Mac, or Share → Add to Home Screen on an iPad. It then opens in its own window, works without internet, and Safari won't clear your drawings.",
-  unsupported: "This browser can't install zketch as an app, but zketch still works without internet here once you've opened it online.",
+  apple: "Choose File → Add to Dock on a Mac, or Share → Add to Home Screen on an iPad. The app keeps its own drawings, separate from this browser's, so back up your drawings here first (Your drawings → Back up all) and import the file in the app.",
+  chromium: "Use the install icon in the address bar to install zketch as an app. If you don't see it, zketch is probably installed already.",
+  unsupported: "This browser can't install zketch as an app, but zketch still works without internet here once you've opened your drawings or the editor online.",
 };
 
 const AppSection: React.FC = () => {
