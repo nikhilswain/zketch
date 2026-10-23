@@ -58,6 +58,11 @@ self.addEventListener("install", (event) => {
     (async () => {
       const cache = await caches.open(SHELL);
       await Promise.all([...PRECACHE.map((url) => fill(cache, url)), fill(cache, DRAW_SHELL)]);
+      const shell = await (await cache.match(DRAW_SHELL)).text();
+      const missing = [...new Set([...shell.matchAll(/\/_astro\/[^"'`)\s?#]+\.\w+/g)].map((m) => m[0]))].filter(
+        (url) => !PRECACHE.includes(url),
+      );
+      await Promise.all(missing.map((url) => fill(cache, url)));
       await withTimeout(warmFonts().catch(() => undefined), 10000);
     })(),
   );

@@ -960,20 +960,28 @@ new-drawing shortcut opens `/vault?new=1`.
   the landing pages): registers in production, checks for updates when the tab
   comes back and every hour, shows a "new version" toast whose Reload posts
   `SKIP_WAITING` to the current waiting worker and reloads on
-  `controllerchange` (also in tabs that started without a controller). Before
-  any version reload the page fires `zketch:before-reload`; the editor
-  (`canvas-view`) answers by saving right away if anything is unsaved. If every
-  `/_astro/*.js` the page loaded is already in the waiting worker's precache
-  (asked with a `PRECACHE` message), the tab already runs the new code: it
-  switches silently with no toast and no reload. When running installed it
+  `controllerchange`. If every `/_astro/*.js` the page loaded is already in the
+  waiting worker's precache (asked with a `PRECACHE` message), the tab already
+  runs the new code and switches silently. A tab never reloads unless its own
+  Reload was clicked: when another tab switches versions, each other tab checks
+  its code against the new controller and shows the toast only if it's stale.
+  Before any reload the page fires `zketch:before-reload` and waits (up to 10 s)
+  for the promises listeners push: the editor saves if anything is unsaved, the
+  vault flushes pending deletes. Editor saves run one at a time
+  (`queuedSave` in `canvas-view`) and use `savedIdRef` so overlapping saves of
+  a new drawing can't create it twice. When running installed it
   asks for persistent storage and posts `WARM_BRUSHES` (caches every file in
   `brushes/manifest.json`).
 - Manifest extras: `screenshots` (`public/screenshots/editor.png`,
   `vault.png`, 1280x800, wide) for Chrome's richer install dialog, and
-  `file_handlers` for `.zketch` (Chromium desktop only, installed app): the
-  vault's `launchQueue` consumer imports the files like a drop, and a file
-  with one drawing opens it in the editor. Other browsers keep drag-and-drop
-  and Import.
+  `file_handlers` for `.zketch` (Chromium desktop only, installed app):
+  `vault-page.tsx` sets the `launchQueue` consumer (also when the narrow-window
+  NoMobile view shows), waits for the vault to load, imports the files, and opens
+  the drawing when one file adds one drawing (or is already there). It skips
+  re-imports on a page reload. Other browsers keep drag-and-drop and Import.
+  The build fails if the `/draw/[id]` seed patterns stop matching, and the
+  worker also precaches any `/_astro` file the `/draw/__shell` HTML references
+  that the build list missed.
 - `install.ts`: keeps `beforeinstallprompt`, `useInstallState()` →
   installed / prompt / apple / chromium / unsupported (an accepted install is
   remembered in localStorage until the browser offers the prompt again). On

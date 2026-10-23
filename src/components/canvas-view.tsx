@@ -238,7 +238,8 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
 
     const performSave = async (): Promise<boolean> => {
       if (loadedStoreRef.current !== canvasStore) return false;
-      if (canvasStore.isEmpty && !currentDrawingId) return false;
+      const drawingId = currentDrawingId ?? savedIdRef.current;
+      if (canvasStore.isEmpty && !drawingId) return false;
 
       const saved = [
         getSnapshot(canvasStore.layers),
@@ -246,7 +247,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         canvasStore.activeLayerId,
         drawingName,
         canvasStore.page ? getSnapshot(canvasStore.page) : null,
-        currentDrawingId,
+        drawingId,
       ];
       const last = lastSavedRef.current;
       if (last && saved.every((v, i) => v === last[i])) {
@@ -268,9 +269,9 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         const thumbnailId =
           await BlobStorageService.storeThumbnail(thumbnailBlob);
 
-        if (currentDrawingId) {
+        if (drawingId) {
           await vaultStore.updateDrawing(
-            currentDrawingId,
+            drawingId,
             thumbnailId,
             canvasStore.background as any,
             layersToSave as any,
@@ -311,6 +312,12 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     
     const performSaveRef = useRef(performSave);
     performSaveRef.current = performSave;
+    const saveChainRef = useRef<Promise<unknown>>(Promise.resolve());
+    const queuedSave = (): Promise<boolean> => {
+      const run = saveChainRef.current.then(() => performSaveRef.current());
+      saveChainRef.current = run.catch(() => false);
+      return run;
+    };
 
     const handleSave = async () => {
       // Cancel any pending autosave
@@ -320,7 +327,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
       }
 
       setSaveStatus("saving");
-      const success = await performSave();
+      const success = await queuedSave();
       if (success) {
         setSaveStatus("saved");
         if (saveStatusResetTimerRef.current !== null) {
@@ -340,7 +347,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
         clearTimeout(autosaveTimerRef.current);
         autosaveTimerRef.current = null;
       }
-      const saved = await performSave();
+      const saved = await queuedSave();
       const id = savedIdRef.current;
       if (!saved || !id) {
         toast("Draw something first, then save it as a file");
@@ -404,7 +411,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             }
 
             setSaveStatus("saving");
-            const success = await performSaveRef.current();
+            const success = await queuedSave();
             if (success) {
               setSaveStatus("saved");
               if (saveStatusResetTimerRef.current !== null) {

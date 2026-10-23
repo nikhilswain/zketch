@@ -21,15 +21,16 @@ const STATIC = [
 ];
 
 const ID_PAGE_SEEDS = [/^draw-by-id\./, /^_id_\.astro_astro_type_script/];
-const REF = /(?:\/_astro\/|["'`]_astro\/|["'`]\.\/)([\w.\-]+\.(?:js|css|woff2?|png|svg))/g;
+const REF = /(?:\/_astro\/|["'`]_astro\/|["'`]\.\/)([^"'`)\s?#]+\.\w+)/g;
 
 function appAssets(out: string, html: string[], all: string[]): string[] {
   const astro = join(out, "_astro");
   const names = new Set(all.map((url) => url.slice("/_astro/".length)));
-  const queue = [
-    ...html.flatMap((text) => [...text.matchAll(REF)].map((m) => m[1])),
-    ...[...names].filter((name) => ID_PAGE_SEEDS.some((re) => re.test(name))),
-  ];
+  const seeds = ID_PAGE_SEEDS.map((re) => [...names].filter((name) => re.test(name)));
+  if (seeds.some((found) => !found.length)) {
+    throw new Error(`zketch-service-worker: no build file matches ${ID_PAGE_SEEDS.find((_, i) => !seeds[i].length)} for /draw/[id]; update ID_PAGE_SEEDS`);
+  }
+  const queue = [...html.flatMap((text) => [...text.matchAll(REF)].map((m) => m[1])), ...seeds.flat()];
   const seen = new Set<string>();
   while (queue.length) {
     const name = queue.pop()!;

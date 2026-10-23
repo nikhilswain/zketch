@@ -30,7 +30,7 @@ import {
 import { DexieService } from "@/services/DexieService";
 import { BlobStorageService } from "@/services/BlobStorageService";
 import { exportDrawings, importBackupFile, keepStorage } from "@/services/VaultBackup";
-import { BACKUP_EXTENSION, parseBackup } from "@/services/BackupService";
+import { BACKUP_EXTENSION } from "@/services/BackupService";
 import type { ISavedDrawing } from "@/models/VaultModel";
 import SettingsPage from "./studio/SettingsPage";
 import { toast } from "sonner";
@@ -257,20 +257,11 @@ const VaultView: React.FC<VaultViewProps> = observer(({ onNewDrawing, onEditDraw
   };
 
   useEffect(() => {
-    const queue = (window as Window & { launchQueue?: LaunchQueue }).launchQueue;
-    if (!queue) return;
-    queue.setConsumer(async (params) => {
-      if (!params.files?.length) return;
-      const files = await Promise.all(params.files.map((handle) => handle.getFile()));
-      await importFiles(files);
-      if (files.length !== 1) return;
-      try {
-        const drawings = parseBackup(await files[0].text()).drawings;
-        if (drawings.length === 1 && (await vaultStore.getDrawingById(drawings[0].id))) onEditDrawing(drawings[0].id);
-      } catch {
-        return;
-      }
-    });
+    const onBeforeReload = (event: Event) => {
+      (event as CustomEvent<{ waits: Promise<unknown>[] }>).detail.waits.push(deletes.flushAll());
+    };
+    window.addEventListener("zketch:before-reload", onBeforeReload);
+    return () => window.removeEventListener("zketch:before-reload", onBeforeReload);
   }, []);
 
   const saveFile = async (ids?: string[]) => {

@@ -481,10 +481,12 @@ export const VaultModel = types
       }
       if (!blob.size) return;
       const thumbnail = await BlobStorageService.storeThumbnail(blob);
+      self.setDrawingThumbnail(id, thumbnail);
       if (await DexieService.replaceThumbnail(id, stored.thumbnail, thumbnail)) {
-        self.setDrawingThumbnail(id, thumbnail);
         if (old) await BlobStorageService.deleteBlob(old).catch(() => undefined);
       } else {
+        const current = await DexieService.getDrawing(id);
+        if (current) self.setDrawingThumbnail(id, current.thumbnail);
         await BlobStorageService.deleteBlob(thumbnail);
       }
     },

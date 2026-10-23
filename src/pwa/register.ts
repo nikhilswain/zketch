@@ -3,14 +3,16 @@ import { keepStorage } from "@/services/VaultBackup";
 import { isInstalled } from "./install";
 
 const UPDATE_CHECK_MS = 60 * 60 * 1000;
+const SAVE_WAIT_MS = 10_000;
 
-let updateRequested = false;
-let silentSwitch = false;
+let reloadRequested = false;
 
 async function reloadSafely() {
   const waits: Promise<unknown>[] = [];
   window.dispatchEvent(new CustomEvent("zketch:before-reload", { detail: { waits } }));
-  await Promise.race([Promise.allSettled(waits), new Promise((resolve) => setTimeout(resolve, 2000))]);
+  if (waits.length) {
+    await Promise.race([Promise.allSettled(waits), new Promise((resolve) => setTimeout(resolve, SAVE_WAIT_MS))]);
+  }
   location.reload();
 }
 
@@ -26,7 +28,7 @@ function precacheOf(worker: ServiceWorker): Promise<string[] | null> {
   });
 }
 
-async function runsNewCode(worker: ServiceWorker): Promise<boolean> {
+async function runsCodeOf(worker: ServiceWorker): Promise<boolean> {
   const loaded = performance
     .getEntriesByType("resource")
     .map((entry) => new URL(entry.name).pathname)
@@ -42,29 +44,40 @@ async function toasterReady(): Promise<void> {
   }
 }
 
-async function offerUpdate(reg: ServiceWorkerRegistration) {
-  const worker = reg.waiting;
-  if (!worker) return;
-  if (await runsNewCode(worker)) {
-    toast.dismiss("zketch-update");
-    silentSwitch = true;
-    worker.postMessage({ type: "SKIP_WAITING" });
-    return;
-  }
+async function showUpdateToast(onReload: () => void) {
   await toasterReady();
-  if (reg.waiting !== worker) return;
   toast("A new version of zketch is ready", {
     id: "zketch-update",
     duration: Infinity,
-    action: {
-      label: "Reload",
-      onClick: () => {
-        updateRequested = true;
-        if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
-        else void reloadSafely();
-      },
-    },
+    action: { label: "Reload", onClick: onReload },
   });
+}
+
+async function offerUpdate(reg: ServiceWorkerRegistration) {
+  const worker = reg.waiting;
+  if (!worker) return;
+  const current = await runsCodeOf(worker);
+  if (reg.waiting !== worker) return;
+  if (current) {
+    toast.dismiss("zketch-update");
+    worker.postMessage({ type: "SKIP_WAITING" });
+    return;
+  }
+  await showUpdateToast(() => {
+    reloadRequested = true;
+    if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
+    else void reloadSafely();
+  });
+}
+
+async function onControllerChange() {
+  if (reloadRequested) {
+    void reloadSafely();
+    return;
+  }
+  const controller = navigator.serviceWorker.controller;
+  if (!controller || (await runsCodeOf(controller))) return;
+  await showUpdateToast(() => void reloadSafely());
 }
 
 function watch(reg: ServiceWorkerRegistration) {
@@ -91,19 +104,9 @@ export async function registerServiceWorker(): Promise<void> {
   }
   try {
     await loaded();
-    const hadController = !!navigator.serviceWorker.controller;
     const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" });
     watch(reg);
-    let reloading = false;
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (silentSwitch) {
-        silentSwitch = false;
-        return;
-      }
-      if (reloading || (!hadController && !updateRequested)) return;
-      reloading = true;
-      void reloadSafely();
-    });
+    navigator.serviceWorker.addEventListener("controllerchange", () => void onControllerChange());
     let lastCheck = Date.now();
     const check = () => {
       if (Date.now() - lastCheck < UPDATE_CHECK_MS) return;
