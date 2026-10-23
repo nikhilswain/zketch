@@ -929,8 +929,11 @@ new-drawing shortcut opens `/vault?new=1`.
   gitignored `public/pwa/`; shortcuts New drawing / Your drawings. Layout links
   it on every page with the `apple-mobile-web-app-*` metas.
 - `src/pwa/sw.js` is a template; `src/pwa/integration.ts` (`astro:build:done`)
-  fills `__PRECACHE__` (`/draw`, `/vault`, manifest, icons, every `dist/_astro`
-  file), `__VERSION__` (hash of the list, the template and the two HTML pages) and
+  fills `__PRECACHE__` (`/draw`, `/vault`, manifest, icons, and only the
+  `dist/_astro` files the app pages reach: it follows `/_astro/…`, `"./…"` and
+  `"_astro/…"` references from the two HTML pages and the `/draw/[id]` chunks
+  (`draw-by-id.*`, `_id_.astro…`) through every chunk they import, so share and
+  landing code isn't downloaded), `__VERSION__` (hash of the list, the template and the two HTML pages) and
   `__FONT_CSS__` (`FONT_CSS` in `config.ts`, also used by Layout) and writes
   `dist/sw.js`, plus `__BRUSH_FILES__` (every file under `dist/brushes`).
   The version also hashes `dist/_worker.js`, so a change to the server-rendered
@@ -957,9 +960,20 @@ new-drawing shortcut opens `/vault?new=1`.
   the landing pages): registers in production, checks for updates when the tab
   comes back and every hour, shows a "new version" toast whose Reload posts
   `SKIP_WAITING` to the current waiting worker and reloads on
-  `controllerchange` (also in tabs that started without a controller). When running installed it
+  `controllerchange` (also in tabs that started without a controller). Before
+  any version reload the page fires `zketch:before-reload`; the editor
+  (`canvas-view`) answers by saving right away if anything is unsaved. If every
+  `/_astro/*.js` the page loaded is already in the waiting worker's precache
+  (asked with a `PRECACHE` message), the tab already runs the new code: it
+  switches silently with no toast and no reload. When running installed it
   asks for persistent storage and posts `WARM_BRUSHES` (caches every file in
   `brushes/manifest.json`).
+- Manifest extras: `screenshots` (`public/screenshots/editor.png`,
+  `vault.png`, 1280x800, wide) for Chrome's richer install dialog, and
+  `file_handlers` for `.zketch` (Chromium desktop only, installed app): the
+  vault's `launchQueue` consumer imports the files like a drop, and a file
+  with one drawing opens it in the editor. Other browsers keep drag-and-drop
+  and Import.
 - `install.ts`: keeps `beforeinstallprompt`, `useInstallState()` →
   installed / prompt / apple / chromium / unsupported (an accepted install is
   remembered in localStorage until the browser offers the prompt again). On

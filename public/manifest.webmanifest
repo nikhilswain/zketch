@@ -8,15 +8,91 @@
   "display": "standalone",
   "background_color": "#F4F5F7",
   "theme_color": "#F4F5F7",
-  "categories": ["graphics", "productivity", "design"],
+  "categories": [
+    "graphics",
+    "productivity",
+    "design"
+  ],
   "icons": [
-    { "src": "/brand/zketch-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/brand/zketch-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/pwa/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "/pwa/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/brand/zketch-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/zketch-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa/maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/pwa/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ],
   "shortcuts": [
-    { "name": "New drawing", "url": "/draw", "icons": [{ "src": "/brand/zketch-icon-192.png", "sizes": "192x192" }] },
-    { "name": "Your drawings", "url": "/vault", "icons": [{ "src": "/brand/zketch-icon-192.png", "sizes": "192x192" }] }
+    {
+      "name": "New drawing",
+      "url": "/draw",
+      "icons": [
+        {
+          "src": "/brand/zketch-icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Your drawings",
+      "url": "/vault",
+      "icons": [
+        {
+          "src": "/brand/zketch-icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "file_handlers": [
+    {
+      "action": "/vault",
+      "accept": {
+        "application/x-zketch": [
+          ".zketch"
+        ]
+      },
+      "icons": [
+        {
+          "src": "/brand/zketch-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ],
+      "launch_type": "single-client"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/editor.png",
+      "sizes": "1280x800",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Sketch a hand-drawn flowchart and paint with textured brushes"
+    },
+    {
+      "src": "/screenshots/vault.png",
+      "sizes": "1280x800",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "All your drawings, saved on your device"
+    }
   ]
 }

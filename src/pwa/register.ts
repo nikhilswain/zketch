@@ -5,6 +5,36 @@ import { isInstalled } from "./install";
 const UPDATE_CHECK_MS = 60 * 60 * 1000;
 
 let updateRequested = false;
+let silentSwitch = false;
+
+async function reloadSafely() {
+  const waits: Promise<unknown>[] = [];
+  window.dispatchEvent(new CustomEvent("zketch:before-reload", { detail: { waits } }));
+  await Promise.race([Promise.allSettled(waits), new Promise((resolve) => setTimeout(resolve, 2000))]);
+  location.reload();
+}
+
+function precacheOf(worker: ServiceWorker): Promise<string[] | null> {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    const timer = setTimeout(() => resolve(null), 2000);
+    channel.port1.onmessage = (event) => {
+      clearTimeout(timer);
+      resolve(Array.isArray(event.data) ? event.data : null);
+    };
+    worker.postMessage({ type: "PRECACHE" }, [channel.port2]);
+  });
+}
+
+async function runsNewCode(worker: ServiceWorker): Promise<boolean> {
+  const loaded = performance
+    .getEntriesByType("resource")
+    .map((entry) => new URL(entry.name).pathname)
+    .filter((path) => path.startsWith("/_astro/") && path.endsWith(".js"));
+  if (!loaded.length) return false;
+  const list = await precacheOf(worker);
+  return !!list && loaded.every((path) => list.includes(path));
+}
 
 async function toasterReady(): Promise<void> {
   for (let i = 0; i < 50 && !document.querySelector('section[aria-label*="Notifications"]'); i++) {
@@ -13,7 +43,16 @@ async function toasterReady(): Promise<void> {
 }
 
 async function offerUpdate(reg: ServiceWorkerRegistration) {
+  const worker = reg.waiting;
+  if (!worker) return;
+  if (await runsNewCode(worker)) {
+    toast.dismiss("zketch-update");
+    silentSwitch = true;
+    worker.postMessage({ type: "SKIP_WAITING" });
+    return;
+  }
   await toasterReady();
+  if (reg.waiting !== worker) return;
   toast("A new version of zketch is ready", {
     id: "zketch-update",
     duration: Infinity,
@@ -22,7 +61,7 @@ async function offerUpdate(reg: ServiceWorkerRegistration) {
       onClick: () => {
         updateRequested = true;
         if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
-        else location.reload();
+        else void reloadSafely();
       },
     },
   });
@@ -57,9 +96,13 @@ export async function registerServiceWorker(): Promise<void> {
     watch(reg);
     let reloading = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (silentSwitch) {
+        silentSwitch = false;
+        return;
+      }
       if (reloading || (!hadController && !updateRequested)) return;
       reloading = true;
-      location.reload();
+      void reloadSafely();
     });
     let lastCheck = Date.now();
     const check = () => {

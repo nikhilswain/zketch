@@ -538,6 +538,17 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
     // Add keyboard shortcuts
     useKeyboardShortcuts(handleSave, handleShowExportDialog);
 
+    const saveRef = useRef(handleSave);
+    saveRef.current = handleSave;
+    useEffect(() => {
+      const onBeforeReload = (event: Event) => {
+        if (!isDirtyRef.current && autosaveTimerRef.current === null) return;
+        (event as CustomEvent<{ waits: Promise<unknown>[] }>).detail.waits.push(saveRef.current());
+      };
+      window.addEventListener("zketch:before-reload", onBeforeReload);
+      return () => window.removeEventListener("zketch:before-reload", onBeforeReload);
+    }, []);
+
     const canvasLocked = animatingLayerId !== null;
 
     return (

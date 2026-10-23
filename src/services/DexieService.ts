@@ -46,7 +46,7 @@ export class DexieService {
   static async replaceThumbnail(id: string, from: string, to: string): Promise<boolean> {
     return this.db.transaction("rw", this.db.drawings, async () => {
       const drawing = await this.db.drawings.get(id);
-      if (!drawing || drawing.thumbnail !== from) return false;
+      if (!drawing || (drawing.thumbnail !== from && drawing.thumbnail !== to)) return false;
       await this.db.drawings.update(id, { thumbnail: to });
       return true;
     });

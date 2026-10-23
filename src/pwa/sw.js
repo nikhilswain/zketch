@@ -91,6 +91,7 @@ self.addEventListener("message", (event) => {
   const type = event.data?.type;
   if (type === "SKIP_WAITING") self.skipWaiting();
   if (type === "WARM_BRUSHES") event.waitUntil(warmBrushes());
+  if (type === "PRECACHE") event.ports[0]?.postMessage(PRECACHE);
 });
 
 function shellKey(path) {

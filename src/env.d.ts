@@ -1,5 +1,13 @@
 // Cloudflare Workers/Pages environment types
 declare global {
+  interface LaunchParams {
+    readonly files: readonly FileSystemFileHandle[];
+  }
+
+  interface LaunchQueue {
+    setConsumer(consumer: (params: LaunchParams) => void): void;
+  }
+
   interface CloudflareEnv {
     ZKETCH_SHARES: KVNamespace;
     ZKETCH_SHARE_FILES?: unknown;

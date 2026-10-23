@@ -20,6 +20,28 @@ const STATIC = [
   "/favicon-96.png",
 ];
 
+const ID_PAGE_SEEDS = [/^draw-by-id\./, /^_id_\.astro_astro_type_script/];
+const REF = /(?:\/_astro\/|["'`]_astro\/|["'`]\.\/)([\w.\-]+\.(?:js|css|woff2?|png|svg))/g;
+
+function appAssets(out: string, html: string[], all: string[]): string[] {
+  const astro = join(out, "_astro");
+  const names = new Set(all.map((url) => url.slice("/_astro/".length)));
+  const queue = [
+    ...html.flatMap((text) => [...text.matchAll(REF)].map((m) => m[1])),
+    ...[...names].filter((name) => ID_PAGE_SEEDS.some((re) => re.test(name))),
+  ];
+  const seen = new Set<string>();
+  while (queue.length) {
+    const name = queue.pop()!;
+    if (seen.has(name) || !names.has(name)) continue;
+    seen.add(name);
+    if (name.endsWith(".js") || name.endsWith(".css")) {
+      for (const m of readFileSync(join(astro, name), "utf8").matchAll(REF)) queue.push(m[1]);
+    }
+  }
+  return all.filter((url) => seen.has(url.slice("/_astro/".length)));
+}
+
 function walk(dir: string): string[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir).flatMap((name) => {
@@ -39,8 +61,9 @@ export function serviceWorker(): AstroIntegration {
       "astro:build:done": ({ dir, logger }) => {
         const out = fileURLToPath(dir);
         const toUrl = (file: string) => `/${relative(out, file).split(sep).join("/")}`;
-        const assets = walk(join(out, "_astro")).map(toUrl).sort();
         const pages = SHELL_PAGES.filter(([, file]) => existsSync(join(out, file)));
+        const html = pages.map(([, file]) => readFileSync(join(out, file), "utf8"));
+        const assets = appAssets(out, html, walk(join(out, "_astro")).map(toUrl).sort());
         const statics = STATIC.filter((url) => existsSync(join(out, url)));
         const precache = [...pages.map(([url]) => url), ...statics, ...assets];
 
