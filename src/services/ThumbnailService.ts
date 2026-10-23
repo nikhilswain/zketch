@@ -167,7 +167,7 @@ export class ThumbnailService {
         const offCtx = off.getContext("2d");
         if (offCtx) {
           offCtx.save();
-          offCtx.translate(offsetX, offsetY);
+          offCtx.translate(offsetX - minX * scale, offsetY - minY * scale);
           offCtx.scale(scale, scale);
           renderDrawLayer(offCtx, elements, { lookup });
           offCtx.restore();

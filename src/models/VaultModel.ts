@@ -461,10 +461,11 @@ export const VaultModel = types
     loadDrawings() {
       return self.loadFromDB();
     },
-    async repairThumbnail(id: string): Promise<void> {
+    async repairThumbnail(id: string, force = false): Promise<void> {
       const stored = await DexieService.getDrawing(id);
       if (!stored) return;
-      if (BlobStorageService.isThumbnailId(stored.thumbnail) && (await BlobStorageService.getBlob(stored.thumbnail))) {
+      const old = BlobStorageService.isThumbnailId(stored.thumbnail) ? stored.thumbnail : null;
+      if (!force && old && (await BlobStorageService.getBlob(old))) {
         self.setDrawingThumbnail(id, stored.thumbnail);
         return;
       }
@@ -480,6 +481,7 @@ export const VaultModel = types
       const thumbnail = await BlobStorageService.storeThumbnail(blob);
       if (await DexieService.replaceThumbnail(id, stored.thumbnail, thumbnail)) {
         self.setDrawingThumbnail(id, thumbnail);
+        if (old) await BlobStorageService.deleteBlob(old).catch(() => undefined);
       } else {
         await BlobStorageService.deleteBlob(thumbnail);
       }
