@@ -1,6 +1,7 @@
 import type { ArrowElementLike, ArrowHead, ElementLike } from "../types";
 import { bindableBox, boxCenter, isBindable, outlinePoint, type Vec } from "./outline";
 import type { Measure } from "./textLayout";
+import { anchorPoint, validAnchor } from "./anchor";
 import { flattenElbow, polyAngle, polyLength, polyPoint, polySlice } from "./elbowPath";
 
 export interface ResolvedArrow {
@@ -59,12 +60,14 @@ export function resolveArrow(a: ArrowElementLike, lookup: Lookup | undefined, me
   const sb = isBindable(startEl) ? startEl : null;
   const eb = isBindable(endEl) ? endEl : null;
   const gap = bindGap(a.strokeWidth);
-  const sRaw = sb ? boxCenter(bindableBox(sb, measure)) : a.start;
-  const eRaw = eb ? boxCenter(bindableBox(eb, measure)) : a.end;
+  const sAnchor = sb && validAnchor(a.startBinding?.anchor) ? a.startBinding!.anchor! : null;
+  const eAnchor = eb && validAnchor(a.endBinding?.anchor) ? a.endBinding!.anchor! : null;
+  const sRaw = sb ? (sAnchor ? anchorPoint(sb, sAnchor, 0, measure) : boxCenter(bindableBox(sb, measure))) : a.start;
+  const eRaw = eb ? (eAnchor ? anchorPoint(eb, eAnchor, 0, measure) : boxCenter(bindableBox(eb, measure))) : a.end;
   const curved = Math.abs(a.bend) > 1e-4;
   const mid = midFromBend(sRaw, eRaw, a.bend);
-  const s = sb ? outlinePoint(sb, curved ? mid : eRaw, gap, measure) : sRaw;
-  const e = eb ? outlinePoint(eb, curved ? mid : sRaw, gap, measure) : eRaw;
+  const s = sb ? (sAnchor ? anchorPoint(sb, sAnchor, gap, measure) : outlinePoint(sb, curved ? mid : eRaw, gap, measure)) : sRaw;
+  const e = eb ? (eAnchor ? anchorPoint(eb, eAnchor, gap, measure) : outlinePoint(eb, curved ? mid : sRaw, gap, measure)) : eRaw;
   if (!curved) {
     const m = { x: (s.x + e.x) / 2, y: (s.y + e.y) / 2 };
     return { start: s, end: e, mid: m, control: m, rawStart: sRaw, rawEnd: eRaw };

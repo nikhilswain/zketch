@@ -129,14 +129,28 @@ export type ArrowHead = "none" | "arrow" | "triangle" | "dot";
 export type FontFamilyId = "hand" | "sans" | "mono";
 export type TextAlign = "left" | "center" | "right";
 
+export interface ArrowBindingLike {
+  elementId: string;
+  anchor?: { x: number; y: number } | null;
+}
+
+export interface ArrowLegs {
+  first: "h" | "v";
+  at: number[];
+}
+
+export type ArrowRoute = "straight" | "elbow";
+
 export interface ArrowElementLike {
   id: string;
   kind: "arrow";
   start: { x: number; y: number };
   end: { x: number; y: number };
   bend: number;
-  startBinding: { elementId: string } | null;
-  endBinding: { elementId: string } | null;
+  startBinding: ArrowBindingLike | null;
+  endBinding: ArrowBindingLike | null;
+  route?: ArrowRoute;
+  legs?: ArrowLegs | null;
   startHead: ArrowHead;
   endHead: ArrowHead;
   strokeColor: string;

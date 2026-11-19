@@ -4,7 +4,7 @@ import { ELEMENT_LOOKS, newSeed, type ElementLook } from "./ShapeLayerModel";
 export type ArrowHead = "none" | "arrow" | "triangle" | "dot";
 export type ArrowEnd = "start" | "end";
 export type Vec = { x: number; y: number };
-export type ArrowBinding = { elementId: string };
+export type ArrowBinding = { elementId: string; anchor?: Vec | null };
 
 const HEADS = ["none", "arrow", "triangle", "dot"] as const;
 
@@ -38,8 +38,8 @@ export const ArrowElement = types
     setBend(b: number) {
       self.bend = Number.isFinite(b) ? b : 0;
     },
-    bind(which: ArrowEnd, elementId: string | null) {
-      const value = elementId ? { elementId } : null;
+    bind(which: ArrowEnd, elementId: string | null, anchor?: Vec | null) {
+      const value = elementId ? (anchor ? { elementId, anchor: { x: anchor.x, y: anchor.y } } : { elementId }) : null;
       if (which === "start") self.startBinding = value;
       else self.endBinding = value;
     },

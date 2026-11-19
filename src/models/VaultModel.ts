@@ -70,8 +70,10 @@ export interface IArrowElementData {
   start: { x: number; y: number };
   end: { x: number; y: number };
   bend: number;
-  startBinding: { elementId: string } | null;
-  endBinding: { elementId: string } | null;
+  startBinding: { elementId: string; anchor?: { x: number; y: number } | null } | null;
+  endBinding: { elementId: string; anchor?: { x: number; y: number } | null } | null;
+  route?: "straight" | "elbow";
+  legs?: { first: "h" | "v"; at: number[] } | null;
   startHead: "none" | "arrow" | "triangle" | "dot";
   endHead: "none" | "arrow" | "triangle" | "dot";
   strokeColor: string;
