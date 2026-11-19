@@ -100,6 +100,7 @@ export class CanvasEngine {
   private previewShape: ShapeElementLike | null = null;
   private previewArrow: ArrowElementLike | null = null;
   private bindHighlight: string | null = null;
+  private bindPin: { x: number; y: number } | null = null;
   private marquee: { x: number; y: number; width: number; height: number } | null = null;
   private cursor: { visible: boolean; x?: number; y?: number; worldRadius?: number } = {
     visible: false,
@@ -250,9 +251,11 @@ export class CanvasEngine {
     this.previewArrow = a;
     this.invalidate();
   }
-  setBindHighlight(id: string | null) {
-    if (this.bindHighlight === id) return;
+  setBindHighlight(id: string | null, pin: { x: number; y: number } | null = null) {
+    const samePin = this.bindPin === pin || (!!this.bindPin && !!pin && this.bindPin.x === pin.x && this.bindPin.y === pin.y);
+    if (this.bindHighlight === id && samePin) return;
     this.bindHighlight = id;
+    this.bindPin = id ? pin : null;
     this.invalidate();
   }
   setCursor(c: { visible: boolean; x?: number; y?: number; worldRadius?: number }) {
@@ -880,6 +883,12 @@ export class CanvasEngine {
     });
     ctx.closePath();
     ctx.stroke();
+    if (this.bindPin) {
+      ctx.fillStyle = overlayAccent();
+      ctx.beginPath();
+      ctx.arc(this.bindPin.x * this.pz.zoom + this.pz.panX, this.bindPin.y * this.pz.zoom + this.pz.panY, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
   }
 

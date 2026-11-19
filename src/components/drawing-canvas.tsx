@@ -25,6 +25,9 @@ import { getTipSet } from "@/utils/brushMemory";
 import { SURROUND, resolveSurround } from "@/utils/page";
 import { themeState } from "@/utils/theme";
 import {
+  anchorFor,
+  anchorPoint,
+  pinsAt,
   bendFromMid,
   bindableBox,
   dragLeg,
@@ -117,6 +120,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       end: { x: number; y: number };
       startBind: string | null;
       endBind: string | null;
+      startAnchor: { x: number; y: number } | null;
+      endAnchor: { x: number; y: number } | null;
       seed: number;
     } | null>(null);
     const ctrlDownRef = useRef(false);
@@ -369,6 +374,19 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       [canvasStore],
     );
 
+    const bindingAt = useCallback(
+      (x: number, y: number, exclude?: string | null) => {
+        if (ctrlDownRef.current) return null;
+        const elementId = hitTestBindable(x, y, exclude);
+        if (!elementId) return null;
+        const el = canvasStore.findElementById(elementId)?.element as any;
+        if (!isBindable(el) || !pinsAt(el, { x, y }, canvasStore.zoom, measureText)) return { elementId, anchor: null, pin: null };
+        const anchor = anchorFor(el, { x, y }, measureText);
+        return { elementId, anchor, pin: anchorPoint(el, anchor, 0, measureText) };
+      },
+      [canvasStore, hitTestBindable],
+    );
+
     const arrowPreview = (ref: NonNullable<typeof arrowCreationRef.current>): ArrowElementLike => {
       const line = canvasStore.arrowKind === "line";
       return {
@@ -377,8 +395,10 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
         start: ref.start,
         end: ref.end,
         bend: 0,
-        startBinding: ref.startBind ? { elementId: ref.startBind } : null,
-        endBinding: ref.endBind ? { elementId: ref.endBind } : null,
+        startBinding: ref.startBind ? { elementId: ref.startBind, anchor: ref.startAnchor } : null,
+        endBinding: ref.endBind ? { elementId: ref.endBind, anchor: ref.endAnchor } : null,
+        route: canvasStore.arrowRoute as "straight" | "elbow",
+        legs: null,
         startHead: line ? "none" : (canvasStore.arrowStartHead as ArrowHead),
         endHead: line ? "none" : (canvasStore.arrowEndHead as ArrowHead),
         strokeColor: canvasStore.currentColor,
@@ -1089,11 +1109,14 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
           if (canvasStore.activeTool === "arrow") {
             const p = { x: canvasPoint.x, y: canvasPoint.y };
+            const startHit = bindingAt(p.x, p.y);
             arrowCreationRef.current = {
               start: p,
               end: p,
-              startBind: ctrlDownRef.current ? null : hitTestBindable(p.x, p.y),
+              startBind: startHit?.elementId ?? null,
+              startAnchor: startHit?.anchor ?? null,
               endBind: null,
+              endAnchor: null,
               seed: Math.floor(Math.random() * 2 ** 31),
             };
             drawingStartedRef.current = true;
@@ -1177,10 +1200,10 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               return;
             }
             const other = edit.handle === "start" ? arrow.endBinding : arrow.startBinding;
-            const target = ctrlDownRef.current ? null : hitTestBindable(p.x, p.y, other?.elementId ?? null);
+            const target = bindingAt(p.x, p.y, other?.elementId ?? null);
             arrow.setEnd(edit.handle, p);
-            arrow.bind(edit.handle, target);
-            engineRef.current?.setBindHighlight(target);
+            arrow.bind(edit.handle, target?.elementId ?? null, target?.anchor ?? null);
+            engineRef.current?.setBindHighlight(target?.elementId ?? null, target?.pin ?? null);
             return;
           }
 
@@ -1195,9 +1218,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               const angle = Math.round(Math.atan2(dy, dx) / step) * step;
               end = { x: ref.start.x + Math.cos(angle) * len, y: ref.start.y + Math.sin(angle) * len };
             }
-            const endBind = ctrlDownRef.current ? null : hitTestBindable(end.x, end.y, ref.startBind);
-            arrowCreationRef.current = { ...ref, end, endBind };
-            engineRef.current?.setBindHighlight(endBind);
+            const endHit = bindingAt(end.x, end.y, ref.startBind);
+            arrowCreationRef.current = { ...ref, end, endBind: endHit?.elementId ?? null, endAnchor: endHit?.anchor ?? null };
+            engineRef.current?.setBindHighlight(endHit?.elementId ?? null, endHit?.pin ?? null);
             engineRef.current?.setPreviewArrow(arrowPreview(arrowCreationRef.current));
             return;
           }
@@ -1337,7 +1360,12 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             engineRef.current?.setBindHighlight(null);
             const dist = Math.hypot(ref.end.x - ref.start.x, ref.end.y - ref.start.y) * canvasStore.zoom;
             if (dist >= 5) {
-              const created = canvasStore.addArrow(ref.start, ref.end, { start: ref.startBind, end: ref.endBind }, ref.seed);
+              const created = canvasStore.addArrow(
+                ref.start,
+                ref.end,
+                { start: ref.startBind, end: ref.endBind, startAnchor: ref.startAnchor, endAnchor: ref.endAnchor },
+                ref.seed,
+              );
               if (created?.createdLayer) toast("Added a new layer to draw on");
               if (created) {
                 canvasStore.setActiveTool("select");

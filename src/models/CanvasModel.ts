@@ -132,6 +132,7 @@ export const CanvasModel = types
     shapeFillColor: types.optional(types.maybeNull(types.string), null),
     shapeStrokeNone: types.optional(types.boolean, false),
     arrowKind: types.optional(types.enumeration("ArrowKind", ["arrow", "line"]), "arrow"),
+    arrowRoute: types.optional(types.enumeration("ArrowRouteDefault", ["straight", "elbow"]), "straight"),
     arrowStartHead: types.optional(types.enumeration("ArrowHeadDefault", ["none", "arrow", "triangle", "dot"]), "none"),
     arrowEndHead: types.optional(types.enumeration("ArrowHeadDefault", ["none", "arrow", "triangle", "dot"]), "arrow"),
     arrowStrokeWidth: types.optional(types.number, 4),
@@ -951,6 +952,9 @@ export const CanvasModel = types
         } else if (shapes.length) shapes.forEach((s) => s.setStrokeColor("transparent"));
         else self.shapeStrokeNone = true;
       },
+      setArrowRoute(route: "straight" | "elbow") {
+        self.arrowRoute = route;
+      },
       setArrowKind(k: "arrow" | "line") {
         self.arrowKind = k;
       },
@@ -1211,15 +1215,29 @@ export const CanvasModel = types
       addArrow(
         start: { x: number; y: number },
         end: { x: number; y: number },
-        bindings: { start: string | null; end: string | null },
+        bindings: {
+          start: string | null;
+          end: string | null;
+          startAnchor?: { x: number; y: number } | null;
+          endAnchor?: { x: number; y: number } | null;
+        },
         seed?: number,
       ): { layerId: string; elementId: string; createdLayer: boolean } | null {
         const target = (self as any).targetDrawLayer(false) as { layer: IDrawLayer; created: boolean } | null;
         if (!target) return null;
         const line = self.arrowKind === "line";
         const data = createArrowElement(start, end, {
-          startBinding: bindings.start ? { elementId: bindings.start } : null,
-          endBinding: bindings.end ? { elementId: bindings.end } : null,
+          startBinding: bindings.start
+            ? bindings.startAnchor
+              ? { elementId: bindings.start, anchor: bindings.startAnchor }
+              : { elementId: bindings.start }
+            : null,
+          endBinding: bindings.end
+            ? bindings.endAnchor
+              ? { elementId: bindings.end, anchor: bindings.endAnchor }
+              : { elementId: bindings.end }
+            : null,
+          route: self.arrowRoute as "straight" | "elbow",
           startHead: line ? "none" : (self.arrowStartHead as ArrowHead),
           endHead: line ? "none" : (self.arrowEndHead as ArrowHead),
           strokeColor: self.currentColor,
