@@ -294,7 +294,7 @@ const CanvasView: React.FC<CanvasViewProps> = observer(
             // Update the URL so refresh resumes editing this drawing instead of opening a blank canvas.
             if (
               typeof window !== "undefined" &&
-              window.location.pathname === "/draw"
+              window.location.pathname.replace(/\/$/, "") === "/draw"
             ) {
               window.history.replaceState({}, "", `/draw/${newDrawing.id}`);
             }
