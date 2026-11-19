@@ -5,3 +5,4 @@ export * from "./labels";
 export * from "./elbowPath";
 export * from "./anchor";
 export * from "./elbowRoute";
+export * from "./elbowEdit";

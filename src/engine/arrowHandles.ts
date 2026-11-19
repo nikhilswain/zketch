@@ -1,25 +1,44 @@
 import type { PanZoom } from "./types";
 import { elbowSamples, type ResolvedArrow } from "./geometry/arrow";
+import { legHandles } from "./geometry/elbowEdit";
 import type { Vec } from "./geometry/outline";
 import { overlayAccent } from "./render/overlayColor";
 
-export type ArrowHandle = "start" | "end" | "mid";
+export type ArrowHandle = "start" | "end" | "mid" | "leg";
+
+export interface ArrowHandleHit {
+  handle: ArrowHandle;
+  leg?: number;
+}
 
 export const ARROW_HANDLE_RADIUS = 7;
 
-export function arrowHandlePositions(r: ResolvedArrow): Record<ArrowHandle, Vec> {
+export function arrowHandlePositions(r: ResolvedArrow): Record<"start" | "end" | "mid", Vec> {
   return { start: r.start, end: r.end, mid: r.mid };
 }
 
-export function hitArrowHandle(r: ResolvedArrow, p: Vec, zoom: number): ArrowHandle | null {
+export function hitArrowHandle(r: ResolvedArrow, p: Vec, zoom: number): ArrowHandleHit | null {
   const radius = (ARROW_HANDLE_RADIUS + 3) / zoom;
   const pos = arrowHandlePositions(r);
-  let best: ArrowHandle | null = null;
+  let best: ArrowHandleHit | null = null;
   let bestDist = radius;
+  if (r.points) {
+    for (const h of legHandles(r.points)) {
+      const d = Math.hypot(p.x - h.point.x, p.y - h.point.y);
+      if (d <= bestDist) {
+        best = { handle: "leg", leg: h.index };
+        bestDist = d;
+      }
+    }
+    for (const h of ["start", "end"] as const) {
+      if (Math.hypot(p.x - pos[h].x, p.y - pos[h].y) <= radius) return { handle: h };
+    }
+    return best;
+  }
   for (const h of ["mid", "start", "end"] as const) {
     const d = Math.hypot(p.x - pos[h].x, p.y - pos[h].y);
     if (d <= bestDist) {
-      best = h;
+      best = { handle: h };
       bestDist = d;
     }
   }
@@ -50,9 +69,11 @@ export function renderArrowHandles(ctx: CanvasRenderingContext2D, r: ResolvedArr
     ctx.lineWidth = 2;
     ctx.stroke();
   }
-  ctx.beginPath();
-  ctx.arc(m.x, m.y, ARROW_HANDLE_RADIUS - 2, 0, Math.PI * 2);
   ctx.fillStyle = overlayAccent();
-  ctx.fill();
+  for (const p of r.points ? legHandles(r.points).map((h) => toScreen(h.point)) : [m]) {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, ARROW_HANDLE_RADIUS - 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
 }

@@ -27,6 +27,8 @@ import { themeState } from "@/utils/theme";
 import {
   bendFromMid,
   bindableBox,
+  dragLeg,
+  mergeLegs,
   curveDistance,
   isBindable,
   pointInBox,
@@ -118,7 +120,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       seed: number;
     } | null>(null);
     const ctrlDownRef = useRef(false);
-    const arrowEditRef = useRef<{ handle: ArrowHandle; moved: boolean; x: number; y: number } | null>(null);
+    const arrowEditRef = useRef<{ handle: ArrowHandle; leg?: number; moved: boolean; x: number; y: number } | null>(null);
     const lastTapRef = useRef<{ t: number; x: number; y: number } | null>(null);
     const marqueeRef = useRef<{
       startX: number;
@@ -846,14 +848,15 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
             const arrow = selectedArrow();
             if (arrow && !shift) {
               const lookup = buildElementLookup(canvasStore.layers as any);
-              const handle = hitArrowHandle(resolveArrow(arrow, lookup, measureText), canvasPoint, canvasStore.zoom);
-              if (handle === "mid" && doubleTap) {
-                arrow.setBend(0);
+              const hit = hitArrowHandle(resolveArrow(arrow, lookup, measureText), canvasPoint, canvasStore.zoom);
+              if (hit && (hit.handle === "mid" || hit.handle === "leg") && doubleTap) {
+                if (hit.handle === "mid") arrow.setBend(0);
+                else arrow.setLegs(null);
                 canvasStore.saveCurrentStateToHistory();
                 return;
               }
-              if (handle) {
-                arrowEditRef.current = { handle, moved: false, x: canvasPoint.x, y: canvasPoint.y };
+              if (hit) {
+                arrowEditRef.current = { handle: hit.handle, leg: hit.leg, moved: false, x: canvasPoint.x, y: canvasPoint.y };
                 drawingStartedRef.current = true;
                 return;
               }
@@ -1162,6 +1165,17 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               arrow.setBend(bendFromMid(r.rawStart ?? r.start, r.rawEnd ?? r.end, p));
               return;
             }
+            if (edit.handle === "leg") {
+              const lookup = buildElementLookup(canvasStore.layers as any);
+              const r = resolveArrow(arrow, lookup, measureText);
+              if (!r.points || edit.leg === undefined) return;
+              const next = dragLeg(r.points, edit.leg, p);
+              const trial = resolveArrow({ ...(getSnapshot(arrow) as any), legs: next.legs }, lookup, measureText);
+              if (trial.autoRouted) return;
+              arrow.setLegs(next.legs);
+              edit.leg = next.index;
+              return;
+            }
             const other = edit.handle === "start" ? arrow.endBinding : arrow.startBinding;
             const target = ctrlDownRef.current ? null : hitTestBindable(p.x, p.y, other?.elementId ?? null);
             arrow.setEnd(edit.handle, p);
@@ -1273,8 +1287,17 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
 
           if (arrowEditRef.current) {
             const moved = arrowEditRef.current.moved;
+            const wasLeg = arrowEditRef.current.handle === "leg";
             arrowEditRef.current = null;
             engineRef.current?.setBindHighlight(null);
+            const arrow = selectedArrow();
+            if (moved && wasLeg && arrow?.legs) {
+              const lookup = buildElementLookup(canvasStore.layers as any);
+              const r = resolveArrow(arrow, lookup, measureText);
+              const merged = mergeLegs(r.start, r.end, arrow.legs, 6 / canvasStore.zoom);
+              const fits = !merged || !resolveArrow({ ...(getSnapshot(arrow) as any), legs: merged }, lookup, measureText).autoRouted;
+              if (fits) arrow.setLegs(merged);
+            }
             if (moved) canvasStore.saveCurrentStateToHistory();
             return;
           }
