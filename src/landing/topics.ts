@@ -36,7 +36,7 @@ export const TOPICS: Topic[] = [
     sections: [
       {
         heading: "boxes, diamonds and arrows that keep up.",
-        body: "Drag out rectangles, circles, diamonds and triangles, then connect them. Arrows and lines attach to the shapes they point at, so moving a box drags its arrows along. Bend an arrow, change its heads, or give it a label.",
+        body: "Drag out rectangles, circles, diamonds and triangles, then connect them. Arrows and lines attach to the shapes they point at, so moving a box drags its arrows along. Pin an end to the side you want, switch an arrow to right-angle elbows that route themselves around the boxes, bend it, change its heads, or give it a label.",
         art: "mini-diagram",
       },
       {
@@ -66,7 +66,7 @@ export const TOPICS: Topic[] = [
       },
       {
         q: "Do arrows stay connected when I move shapes?",
-        a: "Yes. An arrow that ends on a shape stays attached to it while you move or resize the shape.",
+        a: "Yes. An arrow that ends on a shape stays attached to it while you move or resize the shape, and an elbow arrow re-routes itself as you go.",
       },
       {
         q: "Can I export a diagram as SVG?",

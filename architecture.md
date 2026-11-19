@@ -27,7 +27,9 @@ Core capabilities:
   still registered so old saves render, but hidden from the picker/shortcuts.
 - Shape tools: rectangle, circle, diamond, triangle (drag-to-create; Shift =
   square aspect).
-- Diagrams: arrows and lines that bind to shapes (bend, heads, labels), a text
+- Diagrams: arrows and lines that bind to shapes (bend, heads, labels), straight
+  or elbow (right-angle legs that route themselves and can be reshaped), ends
+  that can be pinned to a spot on a shape, a text
   tool, labels inside shapes, and five looks (Clean, Sketchy, Pencil, Crayon,
   Charcoal). See §4.6.
 - Multi-layer canvas (draw layers mix strokes, shapes, arrows and text; image
@@ -84,7 +86,7 @@ src/
 │   ├── TransformController.ts # bbox math, handles, hit-test, move/resize/rotate
 │   ├── InputManager.ts        # Pointer/touch/stylus intent + gestures (pinch/pan)
 │   ├── AnimationPlaybackEngine.ts # Timelapse playback + gap compression
-│   ├── arrowHandles.ts        # Arrow end/middle handle positions + hit-test
+│   ├── arrowHandles.ts        # Arrow end/middle/leg handle positions + hit-test
 │   ├── brushOptions.ts        # Builds per-brush BrushOptions from settings
 │   ├── easing.ts             # Easing-name → fn resolver (shared by brushes + options)
 │   ├── types.ts              # All engine contracts (StrokeLike, LayerLike, Brush…)
@@ -108,7 +110,7 @@ src/
 │   │   ├── pathData.ts        # perfect-freehand outline → SVG path string
 │   │   ├── color.ts           # hex → rgba helper (airbrush gradients)
 │   │   └── index.ts
-│   ├── geometry/             # Diagram math: arrow, labels, outline, textLayout
+│   ├── geometry/             # Diagram math: arrow, labels, outline, textLayout, anchor, elbowPath/Route/Edit
 │   ├── stamp/                # Stamp engine: StampBrush, tips, grain, lazy assets (§4.2.1)
 │   ├── tiles/                # Tiled rendering: LayerTiles, TileCache, Scheduler, layerDiff, renderBounds (§4.1)
 │   ├── brush-formats/gimp.ts # .gbr/.gih parser used by `npm run brushes`
@@ -513,6 +515,42 @@ share player, video and embeds use the same helper.
   `studio/LookPicker.tsx` shows the five as tiles with a live stroke preview.
 - Arrow bend is measured against the raw chord (bound ends use the element
   centres), so dragging the middle handle never feeds back into the clipped ends.
+- **Pinned ends** (`geometry/anchor.ts`): a binding may carry `anchor` (0..1 in
+  the bound element's unrotated box, always on its outline). `anchorFor` projects
+  a drop point onto the outline, `anchorPoint` turns an anchor back into a world
+  point plus gap, `pinsAt` decides whether a drop pins (within
+  `min(min(w, h) / 4, 24 / zoom)` of a box edge; the middle keeps the
+  aim-at-centre behaviour). `resolveArrow` uses the anchor for both arrow types.
+- **Elbow arrows** (`route: "elbow"`): the same element and the same
+  `ResolvedArrow`, which then carries `points` (corner points, both ends
+  included) and `radius`. Every path helper in `arrow.ts` (`curvePoint`,
+  `curveAngleAt`, `curveSamples`, `curveDistance`, `curveLength`, `curveBounds`,
+  `subCurve`) branches on `points` and works on the flattened rounded polyline
+  from `elbowPath.ts`, with `t` as the fraction of the length; a curve takes
+  exactly the old code path. So heads, labels (`elbowLabelPoint`: middle of the
+  leg holding the halfway point), looks, hit-test, eraser, bounds, replay and
+  export need no elbow code of their own.
+  - `elbowRoute.ts` `routeElbow(start, end, margin)`: each end has a point, an
+    outward direction (side of its anchor, or the side facing the other end, or
+    none for a free end) and its element's bounds. It tries a fixed list of
+    shapes between the two stub points (halfway Z first, straight, L, Z along
+    box edges, around-the-box) and keeps the one with the fewest corners, then
+    the shortest, that does not cross either box. Pure function of positions:
+    no grid, no rounding, so small moves give small changes.
+  - Hand-shaped routes are stored as `legs: { first: "h" | "v", at: number[] }`:
+    the axis of the first leg and the position of every leg between the first
+    and last. The first and last legs are derived from the ends, which is how a
+    shaped arrow follows a moved box. `legsValid` says whether stored legs still
+    fit (axes match the end directions, end legs run outward at least 4);
+    when they do not, `resolveArrow` draws the automatic route with
+    `autoRouted: true` and `syncArrows()` clears `legs`.
+  - `elbowEdit.ts`: `legHandles` (one handle per leg), `dragLeg` (a middle leg
+    moves sideways; an end leg leaves a stub and adds two legs), `mergeLegs`
+    (legs that line up within 6 px on screen collapse, on release). A drag that
+    would make the route invalid is ignored. Double-clicking a leg handle
+    clears `legs`.
+  - Group move shifts `legs`, an unrotated resize scales them, rotate and a
+    rotated resize clear them.
 - Text editing: `components/TextEditorOverlay.tsx` is a textarea laid over the
   canvas (a sibling of the canvas root) at the element's screen box; the engine
   hides that element while `CanvasModel.editingTextId` is set. Empty commits
@@ -528,8 +566,9 @@ share player, video and embeds use the same helper.
   `isStrokeElement` / `isShapeElement` / `isVectorElement`, never `"shapeType" in`.
 - `ArrowElement` (`ArrowElementModel.ts`): `start`/`end` (last resolved ends),
   `bend` (midpoint offset / chord length), `startBinding`/`endBinding`
-  (`{elementId}` of a shape or free text on any layer), heads, stroke, `look`,
-  `seed`. `TextElement` (`TextElementModel.ts`): `x`, `y`, `text`, `fontFamily`
+  (`{elementId, anchor?}` of a shape or free text on any layer), `route`
+  (`straight` | `elbow`), `legs` (hand-placed elbow legs or null), heads,
+  stroke, `look`, `seed`. `TextElement` (`TextElementModel.ts`): `x`, `y`, `text`, `fontFamily`
   (hand / sans / mono), `fontSize`, `align`, `color`, `rotation`, `containerId`
   (set for labels); `width`/`height` are measured views and `setSize` scales the
   font. `ShapeElement` gains `look` (clean / sketchy) and `seed`.
@@ -1397,7 +1436,7 @@ While animating, `canvasLocked` blocks all drawing/import.
 renderers (canvas == export == thumbnails), brush registry with procedural,
 stamp and RaV89 brushes, stylus pressure and stroke dynamics, pan/zoom,
 touch/stylus/palm rejection, shapes + selection/transform, diagrams (bound
-arrows, text, labels, hand-drawn looks), eraser modes, fixed-size pages,
+arrows, elbow arrows, pinned arrow ends, text, labels, hand-drawn looks), eraser modes, fixed-size pages,
 autosave + renderVersion auto-bump, local vault + thumbnails (missing ones are
 rebuilt), `.zketch` backup files (one drawing or the whole vault, import by
 button or drop), PNG/JPG/SVG export, playable share links on Backblaze B2
