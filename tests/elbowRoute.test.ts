@@ -113,3 +113,39 @@ describe("resolveArrow with an elbow route", () => {
     }
   });
 });
+
+describe("ends that face each other closer than two stubs", () => {
+  const box = (minX: number, minY: number, maxX: number, maxY: number) => ({ minX, minY, maxX, maxY });
+  it("goes straight across a small gap between aligned sides", () => {
+    const pts = routeElbow(
+      { point: { x: 100, y: 50 }, dir: "right", box: box(0, 0, 100, 100) },
+      { point: { x: 130, y: 50 }, dir: "left", box: box(130, 0, 230, 100) },
+      32,
+    );
+    expect(pts).toEqual([
+      { x: 100, y: 50 },
+      { x: 130, y: 50 },
+    ]);
+  });
+  it("steps once in the middle of a small gap when the sides are offset", () => {
+    const pts = routeElbow(
+      { point: { x: 100, y: 50 }, dir: "right", box: box(0, 0, 100, 100) },
+      { point: { x: 140, y: 80 }, dir: "left", box: box(140, 30, 240, 130) },
+      32,
+    );
+    expect(pts).toEqual([
+      { x: 100, y: 50 },
+      { x: 120, y: 50 },
+      { x: 120, y: 80 },
+      { x: 140, y: 80 },
+    ]);
+  });
+  it("reaches a free end that is closer than one stub without doubling back", () => {
+    const pts = routeElbow({ point: { x: 100, y: 50 }, dir: "right", box: box(0, 0, 100, 100) }, { point: { x: 115, y: 90 }, dir: null, box: null }, 32);
+    expect(pts).toEqual([
+      { x: 100, y: 50 },
+      { x: 115, y: 50 },
+      { x: 115, y: 90 },
+    ]);
+  });
+});

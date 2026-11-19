@@ -76,10 +76,29 @@ function between(a: Bounds, b: Bounds, axis: "x" | "y"): number | null {
   return null;
 }
 
-export function routeElbow(start: RouteEnd, end: RouteEnd, margin = ELBOW_MARGIN): Vec[] {
+function fitMargin(start: RouteEnd, end: RouteEnd, margin: number): number {
+  const ahead = (from: RouteEnd, to: RouteEnd) => {
+    const v = SIDE_VECTORS[from.dir as Side];
+    return (to.point.x - from.point.x) * v.x + (to.point.y - from.point.y) * v.y;
+  };
+  if (start.dir && end.dir) {
+    const a = SIDE_VECTORS[start.dir];
+    const b = SIDE_VECTORS[end.dir];
+    if (a.x !== -b.x || a.y !== -b.y) return margin;
+    const gap = ahead(start, end);
+    return gap > 0 && gap < margin * 2 ? Math.max(gap / 2, 1) : margin;
+  }
+  const from = start.dir ? start : end.dir ? end : null;
+  if (!from) return margin;
+  const gap = ahead(from, from === start ? end : start);
+  return gap > 0 && gap < margin ? Math.max(gap, 1) : margin;
+}
+
+export function routeElbow(start: RouteEnd, end: RouteEnd, wanted = ELBOW_MARGIN): Vec[] {
   const S = start.point;
   const E = end.point;
   if (same(S, E)) return [S, E];
+  const margin = fitMargin(start, end, wanted);
   const stub = (e: RouteEnd): Vec =>
     e.dir ? { x: e.point.x + SIDE_VECTORS[e.dir].x * margin, y: e.point.y + SIDE_VECTORS[e.dir].y * margin } : e.point;
   const A = stub(start);
