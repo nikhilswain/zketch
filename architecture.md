@@ -55,7 +55,7 @@ Slogan from README: *"A simple drawing app where you can sketch anything you wan
 | Styling | **Tailwind CSS 4** + shadcn/ui (new-york, zinc) + Radix primitives |
 | Drawing | **perfect-freehand**, Canvas 2D |
 | Icons | own brush-drawn set: `src/components/icons/` (generated from the `icons/` pack) |
-| Hosting | Cloudflare Pages + KV (`ZKETCH_SHARES`) |
+| Hosting | Cloudflare Pages + KV (`ZKETCH_SHARES`, rate limits and old links) + Backblaze B2 (share files) |
 | Color picker | own `studio/HsvPicker.tsx` |
 
 ```bash
@@ -1377,14 +1377,10 @@ While animating, `canvasLocked` blocks all drawing/import.
 
 ## 14. Docs index (in-repo)
 
-- `README.md` — short product intro.
-- `REFACTORING.md` — engine/layer/eraser refactor plan + phase status (mostly
-  implemented: layered canvases, destination-out eraser, brush registry).
-- `CHANGELOG.md` — "Unreleased" changelog for the old `layer-refactor` branch
-  (selection, shapes, pending erase, auto-switch to select). Not updated since;
-  later work is described in this file. *(gitignored/local.)*
-- `todo.md` — early Shapes feature brainstorm (superseded by implemented
-  shapes).
+- `README.md` — product intro, feature list, stack and commands.
+- `CHANGELOG.md` — historical changelog of the old `layer-refactor` branch
+  (selection, shapes, pending erase, auto-switch to select). Frozen; later work
+  is described in this file and in the git log. *(gitignored/local.)*
 - `THIRD_PARTY_ASSETS.md` — sources and licences of bundled brush tips and
   grains (the share-image fonts carry their OFL files in `src/assets/og/`).
 - `SHARING_MIGRATION.md`, `CLOUDFLARE_KV_SETUP.md` — share systems (KV, then B2) + Cloudflare/Backblaze setup.
@@ -1402,11 +1398,17 @@ renderers (canvas == export == thumbnails), brush registry with procedural,
 stamp and RaV89 brushes, stylus pressure and stroke dynamics, pan/zoom,
 touch/stylus/palm rejection, shapes + selection/transform, diagrams (bound
 arrows, text, labels, hand-drawn looks), eraser modes, fixed-size pages,
-autosave + renderVersion auto-bump, local vault + thumbnails, PNG/JPG export,
-playable share links on Backblaze B2 (replay, picture and video download, optional continue), old KV links, per-layer timelapse animation, the studio drawing
-screen (docks, layouts, Simple layout, Settings page), brush-drawn icons, the
-swoosh logo, SEO tags and generated share images, tiled rendering (pan/zoom
-never block on stroke rendering). Vitest render tests run with `npm test`.
+autosave + renderVersion auto-bump, local vault + thumbnails (missing ones are
+rebuilt), `.zketch` backup files (one drawing or the whole vault, import by
+button or drop), PNG/JPG/SVG export, playable share links on Backblaze B2
+(replay, picture and video download, optional continue, embeds with oEmbed, the
+vault Shared tab), old KV links, per-layer timelapse animation that also plays
+shapes, arrows and text, the studio drawing screen (docks, layouts, Simple
+layout, Settings page), light and dark themes, brush-drawn icons, the swoosh
+logo, the landing page and four topic pages, SEO tags and generated share
+images, tiled rendering (pan/zoom never block on stroke rendering), and the
+installable offline app (service worker, update toast, `.zketch` file
+handling). Vitest render tests run with `npm test`.
 
 **Known gaps / likely next work:**
 - Deep zoom: zoom is clamped to 0.1..5 (`utils/zoom.ts`); finer scales need a
@@ -1414,7 +1416,9 @@ never block on stroke rendering). Vitest render tests run with `npm test`.
 - No polygon (n-sided) shape kind.
 - No brush import (.abr / .brushset). The RaV89 pack licence forbids
   redistributing its files, so never add a brush export.
-- Undo/redo history includes pan/zoom.
+- No accounts or sync between devices; backup files are the way to move
+  drawings. Planned direction if it happens: OAuth, D1 for the index, object
+  storage for payloads, local-first stays the source of truth.
 - Selection drag over dense content re-renders the affected tiles each move
   (~28 fps on 300 heavy strokes); lifting dragged elements out of tiles during a
   transform would fix it.
@@ -1425,4 +1429,4 @@ never block on stroke rendering). Vitest render tests run with `npm test`.
 
 ---
 
-*Last updated 2026-10-22.*
+*Last updated 2026-11-19.*
