@@ -536,12 +536,16 @@ share player, video and embeds use the same helper.
     shapes between the two stub points (halfway Z first, straight, L, Z along
     box edges, around-the-box) and keeps the one with the fewest corners, then
     the shortest, that does not cross either box. Pure function of positions:
-    no grid, no rounding, so small moves give small changes.
+    no grid, no rounding, so small moves give small changes. When the ends
+    face each other across a gap smaller than two stubs the stubs shrink to
+    fit, and when no shape clears both boxes it retries with half the margin
+    (down to 4) before settling for a route that touches a box.
   - Hand-shaped routes are stored as `legs: { first: "h" | "v", at: number[] }`:
     the axis of the first leg and the position of every leg between the first
     and last. The first and last legs are derived from the ends, which is how a
     shaped arrow follows a moved box. `legsValid` says whether stored legs still
-    fit (axes match the end directions, end legs run outward at least 4);
+    fit (axes match the end directions, end legs run outward at least 4, no
+    leg but the end legs enters an attached box);
     when they do not, `resolveArrow` draws the automatic route with
     `autoRouted: true` and `syncArrows()` clears `legs`.
   - `elbowEdit.ts`: `legHandles` (one handle per leg), `dragLeg` (a middle leg

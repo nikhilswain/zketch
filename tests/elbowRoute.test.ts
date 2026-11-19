@@ -149,3 +149,28 @@ describe("ends that face each other closer than two stubs", () => {
     ]);
   });
 });
+
+describe("stored legs and a box moved onto the route", () => {
+  const start: RouteEnd = { point: { x: 100, y: 30 }, dir: "right", box: box(0, 0, 100, 60) };
+  const legs = { first: "h" as const, at: [400, 200] };
+  it("keeps legs that pass beside the end box", () => {
+    const end: RouteEnd = { point: { x: 250, y: 150 }, dir: "bottom", box: box(200, 70, 100, 80) };
+    expect(legsValid(start, end, legs)).toBe(true);
+  });
+  it("drops legs that cut through the end box", () => {
+    const end: RouteEnd = { point: { x: 250, y: 100 }, dir: "bottom", box: box(200, 0, 100, 100) };
+    expect(legsValid(start, end, legs)).toBe(false);
+  });
+});
+
+describe("boxes too close for the full margin", () => {
+  it("tightens the margin before cutting through a box", () => {
+    const left = box(300, 290, 120, 80);
+    const right = box(460, 290, 140, 100);
+    const pts = routeElbow({ point: { x: 428, y: 330 }, dir: "right", box: left }, { point: { x: 530, y: 398 }, dir: "bottom", box: right }, 32);
+    expect(orthogonal(pts)).toBe(true);
+    const near = (b: Bounds): Bounds => ({ minX: b.minX - 3, minY: b.minY - 3, maxX: b.maxX + 3, maxY: b.maxY + 3 });
+    expect(crosses(pts.slice(1), near(left))).toBe(false);
+    expect(crosses(pts.slice(0, -1), near(right))).toBe(false);
+  });
+});

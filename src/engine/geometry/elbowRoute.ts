@@ -17,6 +17,7 @@ export interface RouteEnd {
 
 export const ELBOW_MARGIN = 20;
 export const MAX_LEGS = 32;
+const MIN_MARGIN = 4;
 
 const same = (a: Vec, b: Vec) => a.x === b.x && a.y === b.y;
 const grow = (b: Bounds, by: number): Bounds => ({ minX: b.minX - by, minY: b.minY - by, maxX: b.maxX + by, maxY: b.maxY + by });
@@ -160,7 +161,9 @@ export function routeElbow(start: RouteEnd, end: RouteEnd, wanted = ELBOW_MARGIN
       bestScore = score;
     }
   }
-  return best ?? loose ?? simplify(dedupe([S, { x: E.x, y: S.y }, E]));
+  if (best) return best;
+  if (margin > MIN_MARGIN) return routeElbow(start, end, Math.max(MIN_MARGIN, margin / 2));
+  return loose ?? simplify(dedupe([S, { x: E.x, y: S.y }, E]));
 }
 
 const flip = (axis: Axis): Axis => (axis === "h" ? "v" : "h");
@@ -208,6 +211,10 @@ export function legsValid(start: RouteEnd, end: RouteEnd, legs: ArrowLegs, min =
     const before = pts[pts.length - 2];
     const last = pts[pts.length - 1];
     if ((before.x - last.x) * v.x + (before.y - last.y) * v.y < min) return false;
+  }
+  for (let i = 1; i < pts.length; i++) {
+    if (start.box && i > 1 && segmentCrosses(pts[i - 1], pts[i], start.box)) return false;
+    if (end.box && i < pts.length - 1 && segmentCrosses(pts[i - 1], pts[i], end.box)) return false;
   }
   return true;
 }
