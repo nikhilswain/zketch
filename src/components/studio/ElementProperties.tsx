@@ -7,6 +7,7 @@ import {
   AlignCenterIcon,
   AlignLeftIcon,
   AlignRightIcon,
+  ArrowElbowIcon,
   ArrowIcon,
   CopyIcon,
   LayerDownIcon,
@@ -339,6 +340,25 @@ const ElementProperties: React.FC<{ variant: Variant }> = observer(({ variant })
             ]}
             value={canvasStore.arrowKind as "arrow" | "line"}
             onPick={(v) => canvasStore.setArrowKind(v)}
+          />
+        </Row>
+      )}
+
+      {showArrow && (
+        <Row label="Type">
+          <Segmented
+            label="Arrow type"
+            options={[
+              { id: "straight", label: "Straight", icon: <ArrowIcon size={16} /> },
+              { id: "elbow", label: "Elbow", icon: <ArrowElbowIcon size={16} /> },
+            ]}
+            value={(hasSelection ? (arrows[0]?.route ?? "straight") : canvasStore.arrowRoute) as "straight" | "elbow"}
+            onPick={(v) => {
+              if (hasSelection) {
+                arrows.forEach((a) => a.setRoute(v));
+                commit();
+              } else canvasStore.setArrowRoute(v);
+            }}
           />
         </Row>
       )}

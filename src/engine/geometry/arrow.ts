@@ -3,7 +3,7 @@ import { bindableBox, boxBounds, boxCenter, isBindable, outlinePoint, type Vec }
 import type { Measure } from "./textLayout";
 import { anchorPoint, anchorSide, SIDE_ANCHORS, sideOfVector, validAnchor, worldSide, type Side } from "./anchor";
 import { ELBOW_RADIUS } from "./elbowPath";
-import { cleanLegs, legsValid, pointsOf, routeElbow, type RouteEnd } from "./elbowRoute";
+import { cleanLegs, ELBOW_MARGIN, legsValid, pointsOf, routeElbow, type RouteEnd } from "./elbowRoute";
 import { flattenElbow, polyAngle, polyLength, polyPoint, polySlice } from "./elbowPath";
 
 export interface ResolvedArrow {
@@ -56,6 +56,11 @@ export function controlFromMid(s: Vec, e: Vec, mid: Vec): Vec {
   return { x: 2 * mid.x - (s.x + e.x) / 2, y: 2 * mid.y - (s.y + e.y) / 2 };
 }
 
+export function elbowMargin(a: ArrowElementLike): number {
+  const heads = a.startHead !== "none" || a.endHead !== "none";
+  return heads ? Math.max(ELBOW_MARGIN, headSize(a.strokeWidth) + ELBOW_RADIUS) : ELBOW_MARGIN;
+}
+
 export function resolveArrow(a: ArrowElementLike, lookup: Lookup | undefined, measure: Measure): ResolvedArrow {
   const startEl = a.startBinding ? lookup?.get(a.startBinding.elementId) : undefined;
   const endEl = a.endBinding ? lookup?.get(a.endBinding.elementId) : undefined;
@@ -81,7 +86,7 @@ export function resolveArrow(a: ArrowElementLike, lookup: Lookup | undefined, me
     const endEnd = endOf(eb, eAnchor, eRaw, sRaw, a.end);
     const legs = cleanLegs(a.legs);
     const stored = !!legs && legsValid(startEnd, endEnd, legs);
-    const points = stored ? pointsOf(startEnd.point, endEnd.point, legs!) : routeElbow(startEnd, endEnd);
+    const points = stored ? pointsOf(startEnd.point, endEnd.point, legs!) : routeElbow(startEnd, endEnd, elbowMargin(a));
     const label = elbowLabelPoint({ points } as ResolvedArrow);
     return {
       start: startEnd.point,

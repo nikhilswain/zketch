@@ -4,6 +4,7 @@ import {
   AlignCenterIcon,
   AlignLeftIcon,
   AlignRightIcon,
+  ArrowElbowIcon,
   ArrowIcon,
   LineIcon,
   TextIcon,
@@ -274,6 +275,15 @@ const BottomBar: React.FC<{ onFit: () => void }> = observer(({ onFit }) => {
             ]}
             value={canvasStore.arrowKind as "arrow" | "line"}
             onPick={(v) => canvasStore.setArrowKind(v)}
+          />
+          <Segmented
+            label="Arrow type"
+            options={[
+              { id: "straight", label: "Straight", icon: <ArrowIcon size={16} /> },
+              { id: "elbow", label: "Elbow", icon: <ArrowElbowIcon size={16} /> },
+            ]}
+            value={canvasStore.arrowRoute as "straight" | "elbow"}
+            onPick={(v) => canvasStore.setArrowRoute(v)}
           />
           {canvasStore.arrowKind === "arrow" && (
             <Segmented

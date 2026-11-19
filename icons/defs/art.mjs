@@ -131,6 +131,12 @@ export default {
   },
   line: { strokes: [ring(5.4, 18.6, 1.7), ring(18.6, 5.4, 1.7), seg(6.9, 17.1, 17.1, 6.9)] },
   arrow: { strokes: [seg(5, 19, 18.4, 5.6), open([[11.6, 5], [19, 5], [19, 12.4]], [0, 1.6, 0])] },
+  "arrow-elbow": {
+    strokes: [
+      open([[4.4, 18.6], [11.8, 18.5], [11.9, 6.9], [19.2, 6.8]], [0, 2.6, 2.6, 0]),
+      open([[15.8, 3.4], [19.4, 6.8], [15.9, 10.3]], [0, 1.2, 0]),
+    ],
+  },
   polygon: { strokes: [regular(12, 12.2, 6, 8.8, 2, -90)] },
   "hide-all": { strokes: [...eyeLid, stackBase] },
   "lock-all": {

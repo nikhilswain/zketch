@@ -27,6 +27,8 @@ import { themeState } from "@/utils/theme";
 import {
   anchorFor,
   anchorPoint,
+  cleanLegs,
+  elbowMargin,
   pinsAt,
   bendFromMid,
   bindableBox,
@@ -154,6 +156,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
       points?: Array<{ x: number; y: number; pressure: number }>;
       size?: number;
       isArrow?: boolean;
+      legs?: { first: "h" | "v"; at: number[] } | null;
       ends?: Array<{ x: number; y: number }>;
       fontSize?: number;
     };
@@ -976,6 +979,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                             height: 0,
                             rotation: 0,
                             isArrow: true,
+                            legs: cleanLegs(el.legs),
                             ends: [
                               { x: el.start.x, y: el.start.y },
                               { x: el.end.x, y: el.end.y },
@@ -1192,7 +1196,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
               const lookup = buildElementLookup(canvasStore.layers as any);
               const r = resolveArrow(arrow, lookup, measureText);
               if (!r.points || edit.leg === undefined) return;
-              const next = dragLeg(r.points, edit.leg, p);
+              const next = dragLeg(r.points, edit.leg, p, elbowMargin(arrow as any));
               const trial = resolveArrow({ ...(getSnapshot(arrow) as any), legs: next.legs }, lookup, measureText);
               if (trial.autoRouted) return;
               arrow.setLegs(next.legs);
@@ -1784,6 +1788,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                 y: (sp.x - cx) * sin + (sp.y - cy) * cos + cy,
               }));
               target.setEnds(a, b);
+              if (s.legs) target.setLegs(null);
             } else if (s.isStroke && s.points) {
               // Rotate each point around the anchor center.
               for (let i = 0; i < s.points.length && i < target.points.length; i++) {
@@ -1856,6 +1861,20 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = observer(
                 return { x: wx, y: wy };
               });
               target.setEnds(a, b);
+              if (s.legs) {
+                if (Math.abs(sin) > 1e-6 || Math.abs(unSin) > 1e-6) target.setLegs(null);
+                else {
+                  const legs = s.legs;
+                  const mapped = (x: number, y: number) => localScale(x - oldCenter.x, y - oldCenter.y);
+                  target.setLegs({
+                    first: legs.first,
+                    at: legs.at.map((v, i) => {
+                      const horizontal = (i % 2 === 1) === (legs.first === "h");
+                      return horizontal ? mapped(oldCenter.x, v).wy : mapped(v, oldCenter.y).wx;
+                    }),
+                  });
+                }
+              }
             } else if (s.isStroke && s.points) {
               for (let i = 0; i < s.points.length && i < target.points.length; i++) {
                 const sp = s.points[i];
