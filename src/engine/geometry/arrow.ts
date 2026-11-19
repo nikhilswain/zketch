@@ -1,6 +1,7 @@
 import type { ArrowElementLike, ArrowHead, ElementLike } from "../types";
 import { bindableBox, boxCenter, isBindable, outlinePoint, type Vec } from "./outline";
 import type { Measure } from "./textLayout";
+import { flattenElbow, polyAngle, polyLength, polyPoint, polySlice } from "./elbowPath";
 
 export interface ResolvedArrow {
   start: Vec;
@@ -9,6 +10,23 @@ export interface ResolvedArrow {
   mid: Vec;
   rawStart?: Vec;
   rawEnd?: Vec;
+  points?: Vec[];
+  radius?: number;
+  autoRouted?: boolean;
+}
+
+export const isElbow = (r: ResolvedArrow) => !!r.points;
+
+const flatCache = new WeakMap<Vec[], { radius: number; flat: Vec[] }>();
+
+export function elbowSamples(r: ResolvedArrow): Vec[] {
+  const points = r.points ?? [r.start, r.end];
+  const radius = r.radius ?? 0;
+  const hit = flatCache.get(points);
+  if (hit && hit.radius === radius) return hit.flat;
+  const flat = flattenElbow(points, radius);
+  flatCache.set(points, { radius, flat });
+  return flat;
 }
 
 type Lookup = Map<string, ElementLike>;
@@ -55,6 +73,7 @@ export function resolveArrow(a: ArrowElementLike, lookup: Lookup | undefined, me
 }
 
 export function curvePoint(r: ResolvedArrow, t: number): Vec {
+  if (r.points) return polyPoint(elbowSamples(r), t);
   const u = 1 - t;
   return {
     x: u * u * r.start.x + 2 * u * t * r.control.x + t * t * r.end.x,
@@ -63,6 +82,7 @@ export function curvePoint(r: ResolvedArrow, t: number): Vec {
 }
 
 export function curveAngleAt(r: ResolvedArrow, t: number): number {
+  if (r.points) return polyAngle(elbowSamples(r), t);
   const dx = 2 * (1 - t) * (r.control.x - r.start.x) + 2 * t * (r.end.x - r.control.x);
   const dy = 2 * (1 - t) * (r.control.y - r.start.y) + 2 * t * (r.end.y - r.control.y);
   if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) return Math.atan2(r.end.y - r.start.y, r.end.x - r.start.x);
@@ -72,6 +92,7 @@ export function curveAngleAt(r: ResolvedArrow, t: number): number {
 const SAMPLES = 24;
 
 export function curveSamples(r: ResolvedArrow, n = SAMPLES): Vec[] {
+  if (r.points) return elbowSamples(r);
   return Array.from({ length: n + 1 }, (_, i) => curvePoint(r, i / n));
 }
 
@@ -91,6 +112,7 @@ export function curveDistance(r: ResolvedArrow, p: Vec): number {
 }
 
 export function curveLength(r: ResolvedArrow): number {
+  if (r.points) return polyLength(elbowSamples(r));
   const pts = curveSamples(r);
   let len = 0;
   for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
@@ -105,6 +127,11 @@ export function curveBounds(r: ResolvedArrow) {
 }
 
 export function subCurve(r: ResolvedArrow, t0: number, t1: number): ResolvedArrow {
+  if (r.points) {
+    const points = polySlice(elbowSamples(r), t0, t1);
+    const mid = polyPoint(points, 0.5);
+    return { start: points[0], end: points[points.length - 1], control: mid, mid, points, radius: 0 };
+  }
   const s = curvePoint(r, t0);
   const e = curvePoint(r, t1);
   const a = (1 - t0) * (1 - t1);
