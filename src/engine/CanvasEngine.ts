@@ -9,7 +9,7 @@ import { renderDrawLayer } from "./render/renderDrawLayer";
 import { buildElementLookup, type ElementLookup } from "./render/lookup";
 import { measureText, onFontsReady } from "./render/fonts";
 import { renderArrow } from "./render/renderArrow";
-import { bindableBox, boxCorners, freeTextBox, isBindable, resolveArrow } from "./geometry";
+import { bindableBox, boxCorners, elbowSamples, freeTextBox, isBindable, resolveArrow } from "./geometry";
 import { renderArrowHandles } from "./arrowHandles";
 import { drawImageLayer } from "./render/renderImage";
 import {
@@ -848,12 +848,14 @@ export class CanvasEngine {
       const z = this.pz.zoom;
       ctx.beginPath();
       ctx.moveTo(r.start.x * z + this.pz.panX, r.start.y * z + this.pz.panY);
-      ctx.quadraticCurveTo(
-        r.control.x * z + this.pz.panX,
-        r.control.y * z + this.pz.panY,
-        r.end.x * z + this.pz.panX,
-        r.end.y * z + this.pz.panY,
-      );
+      if (r.points) for (const p of elbowSamples(r)) ctx.lineTo(p.x * z + this.pz.panX, p.y * z + this.pz.panY);
+      else
+        ctx.quadraticCurveTo(
+          r.control.x * z + this.pz.panX,
+          r.control.y * z + this.pz.panY,
+          r.end.x * z + this.pz.panX,
+          r.end.y * z + this.pz.panY,
+        );
       ctx.stroke();
     }
     ctx.restore();

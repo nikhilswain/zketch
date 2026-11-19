@@ -281,3 +281,44 @@ describe("seededRandom", () => {
     }
   });
 });
+
+describe("elbow arrows", () => {
+  const arrow = (look: string) =>
+    ({
+      id: "elbow",
+      kind: "arrow",
+      start: { x: 20, y: 20 },
+      end: { x: 180, y: 100 },
+      bend: 0,
+      route: "elbow",
+      legs: null,
+      startBinding: null,
+      endBinding: null,
+      startHead: "none",
+      endHead: "arrow",
+      strokeColor: "#000000",
+      strokeWidth: 4,
+      opacity: 1,
+      look,
+      seed: 7,
+    }) as any;
+
+  it("draws along its route, corner included, in clean and hand-drawn looks", async () => {
+    const { renderArrow } = await import("@/engine/render/renderArrow");
+    const { resolveArrow } = await import("@/engine/geometry/arrow");
+    const measure = () => 0;
+    for (const look of ["clean", "sketchy"]) {
+      const { ctx } = newCtx();
+      const a = arrow(look);
+      renderArrow(ctx as never, a, undefined, measure, null);
+      const data = ctx.getImageData(0, 0, W, H).data;
+      expect(alphaCount(data)).toBeGreaterThan(200);
+      const corner = resolveArrow(a, undefined, measure).points![1];
+      let near = 0;
+      for (let y = Math.round(corner.y) - 7; y <= Math.round(corner.y) + 7; y++)
+        for (let x = Math.round(corner.x) - 7; x <= Math.round(corner.x) + 7; x++)
+          if (x >= 0 && y >= 0 && x < W && y < H && data[(y * W + x) * 4 + 3] > 0) near++;
+      expect(near).toBeGreaterThan(0);
+    }
+  });
+});

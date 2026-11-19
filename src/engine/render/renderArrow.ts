@@ -3,6 +3,7 @@ import {
   arrowheadShape,
   curveAngleAt,
   curveLength,
+  elbowSamples,
   headInset,
   resolveArrow,
   subCurve,
@@ -14,6 +15,12 @@ import type { Measure } from "../geometry/textLayout";
 import { drawSketchyCurve, drawSketchyHead } from "./sketchy";
 
 export function traceCurve(ctx: CanvasRenderingContext2D, r: ResolvedArrow) {
+  if (r.points) {
+    const pts = elbowSamples(r);
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    return;
+  }
   ctx.moveTo(r.start.x, r.start.y);
   ctx.quadraticCurveTo(r.control.x, r.control.y, r.end.x, r.end.y);
 }

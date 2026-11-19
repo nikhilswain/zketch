@@ -1,6 +1,6 @@
 import type { ArrowElementLike, ElementLike, ShapeElementLike, TextElementLike } from "../types";
 import { elementKind } from "../types";
-import { curvePoint, resolveArrow } from "./arrow";
+import { curvePoint, elbowLabelPoint, resolveArrow } from "./arrow";
 import { boxCenter, freeTextBox, shapeBox, type Box } from "./outline";
 import { layoutText, type Measure, type TextLayout } from "./textLayout";
 
@@ -39,7 +39,7 @@ export function labelPlacement(
   }
   if (kind === "arrow") {
     const r = resolveArrow(container as ArrowElementLike, lookup, measure);
-    const p = curvePoint(r, 0.5);
+    const p = r.points ? elbowLabelPoint(r) : curvePoint(r, 0.5);
     const layout = layoutText(label.text, label.fontSize, label.fontFamily, null, measure);
     return {
       box: { x: p.x - layout.width / 2, y: p.y - layout.height / 2, width: layout.width, height: layout.height, rotation: 0 },

@@ -1022,8 +1022,11 @@ export const CanvasModel = types
             if (elementKind(el) !== "arrow") continue;
             if (el.startBinding && !isBindable(lookup.get(el.startBinding.elementId))) el.bind("start", null);
             if (el.endBinding && !isBindable(lookup.get(el.endBinding.elementId))) el.bind("end", null);
-            if (!el.startBinding && !el.endBinding) continue;
+            const elbowLegs = el.route === "elbow" && !!el.legs;
+            if (!el.startBinding && !el.endBinding && !elbowLegs) continue;
             const r = resolveArrow(el, lookup, measureText);
+            if (elbowLegs && r.autoRouted) el.setLegs(null);
+            if (!el.startBinding && !el.endBinding) continue;
             if (r.start.x !== el.start.x || r.start.y !== el.start.y || r.end.x !== el.end.x || r.end.y !== el.end.y) {
               el.setEnds(r.start, r.end);
             }

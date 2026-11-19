@@ -1,5 +1,6 @@
 import type { BrushStyle, ElementLook, ShapeElementLike, StrokeLike } from "../types";
-import type { HeadShape, ResolvedArrow } from "../geometry/arrow";
+import { elbowSamples, type HeadShape, type ResolvedArrow } from "../geometry/arrow";
+import { polyLength, polyPoint } from "../geometry/elbowPath";
 import type { Vec } from "../geometry/outline";
 import { brushRegistry } from "./BrushRegistry";
 import { renderStroke } from "./renderStroke";
@@ -244,6 +245,11 @@ export function drawSketchyShape(ctx: CanvasRenderingContext2D, s: ShapeElementL
 }
 
 function curvePoints(r: ResolvedArrow, bow: number): Vec[] {
+  if (r.points) {
+    const flat = elbowSamples(r);
+    const n = Math.max(2, Math.ceil(polyLength(flat) / STEP));
+    return Array.from({ length: n + 1 }, (_, i) => polyPoint(flat, i / n));
+  }
   const straight = Math.hypot(r.control.x - (r.start.x + r.end.x) / 2, r.control.y - (r.start.y + r.end.y) / 2) < 1;
   if (straight) return bowed(r.start, r.end, bow);
   const approx =
@@ -269,7 +275,7 @@ export function drawSketchyCurve(
   ends: { startCapped: boolean; endCapped: boolean } = { startCapped: false, endCapped: true },
   look: ElementLook = "sketchy",
 ) {
-  const key = `${r.start.x}|${r.start.y}|${r.control.x}|${r.control.y}|${r.end.x}|${r.end.y}|${seed}|${strokeWidth}|${ends.startCapped}|${ends.endCapped}`;
+  const key = `${r.start.x}|${r.start.y}|${r.control.x}|${r.control.y}|${r.end.x}|${r.end.y}|${seed}|${strokeWidth}|${ends.startCapped}|${ends.endCapped}|${r.points ? r.points.map((p) => `${p.x},${p.y}`).join(";") : ""}`;
   let hit = curveCache.get(owner);
   if (!hit || hit.key !== key) {
     const rand = rng(seed);

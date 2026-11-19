@@ -1,3 +1,4 @@
+import { cleanLegs, shiftLegs } from "@/engine/geometry/elbowRoute";
 import { elementKind } from "@/engine/types";
 
 export function cloneElements(snaps: any[], dx: number, dy: number, keepOutsideLinks: boolean): any[] {
@@ -18,6 +19,7 @@ export function cloneElements(snaps: any[], dx: number, dy: number, keepOutsideL
           ...c,
           start: { x: s.start.x + dx, y: s.start.y + dy },
           end: { x: s.end.x + dx, y: s.end.y + dy },
+          ...(cleanLegs(s.legs) ? { legs: shiftLegs(cleanLegs(s.legs)!, dx, dy) } : {}),
           startBinding: startId ? { ...s.startBinding, elementId: startId } : null,
           endBinding: endId ? { ...s.endBinding, elementId: endId } : null,
         };

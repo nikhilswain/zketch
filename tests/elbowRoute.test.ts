@@ -75,3 +75,41 @@ describe("stored legs", () => {
     expect(cleanLegs({ first: "v", at: [3, 4] })).toEqual({ first: "v", at: [3, 4] });
   });
 });
+
+import { curveLength, isElbow, resolveArrow } from "@/engine/geometry/arrow";
+
+describe("resolveArrow with an elbow route", () => {
+  const measure = () => 0;
+  const shape = (id: string, x: number, y: number) => ({ id, kind: "shape", shapeType: "rectangle", x, y, width: 100, height: 60, rotation: 0, strokeWidth: 2 }) as any;
+  const lookup = new Map([["a", shape("a", 0, 0)], ["b", shape("b", 300, 200)]]);
+  const base = { id: "e", kind: "arrow", start: { x: 0, y: 0 }, end: { x: 0, y: 0 }, bend: 0, startHead: "none", endHead: "arrow", strokeColor: "#000", strokeWidth: 4, route: "elbow" } as any;
+
+  it("routes between two attached boxes at right angles", () => {
+    const r = resolveArrow({ ...base, startBinding: { elementId: "a" }, endBinding: { elementId: "b" } }, lookup, measure);
+    expect(isElbow(r)).toBe(true);
+    expect(r.points!.every((p, i, all) => i === 0 || p.x === all[i - 1].x || p.y === all[i - 1].y)).toBe(true);
+    expect(r.autoRouted).toBe(true);
+    expect(curveLength(r)).toBeGreaterThan(0);
+  });
+  it("honours a pinned side", () => {
+    const r = resolveArrow({ ...base, startBinding: { elementId: "a" }, endBinding: { elementId: "b", anchor: { x: 0.5, y: 1 } } }, lookup, measure);
+    const last = r.points![r.points!.length - 1];
+    const before = r.points![r.points!.length - 2];
+    expect(last.x).toBeCloseTo(350);
+    expect(last.y).toBeCloseTo(268);
+    expect(before.x).toBeCloseTo(350);
+    expect(before.y).toBeGreaterThan(last.y);
+  });
+  it("uses valid stored legs and ignores garbage or stale ones", () => {
+    const ends = { startBinding: { elementId: "a" }, endBinding: { elementId: "b" } };
+    const auto = resolveArrow({ ...base, ...ends }, lookup, measure);
+    const kept = resolveArrow({ ...base, ...ends, legs: { first: "h", at: [150] } }, lookup, measure);
+    expect(kept.autoRouted).toBe(false);
+    expect(kept.points![1].x).toBe(150);
+    for (const legs of [{ first: "h", at: [NaN] }, { first: "h", at: [50] }, "nope"]) {
+      const r = resolveArrow({ ...base, ...ends, legs: legs as any }, lookup, measure);
+      expect(r.autoRouted).toBe(true);
+      expect(r.points).toEqual(auto.points);
+    }
+  });
+});

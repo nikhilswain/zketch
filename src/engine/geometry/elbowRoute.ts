@@ -193,6 +193,17 @@ export function legsValid(start: RouteEnd, end: RouteEnd, legs: ArrowLegs, min =
   return true;
 }
 
+export function shiftLegs(legs: ArrowLegs, dx: number, dy: number): ArrowLegs {
+  return { first: legs.first, at: legs.at.map((v, i) => v + (legAxis(legs, i + 1) === "h" ? dy : dx)) };
+}
+
+export function scaleLegs(legs: ArrowLegs, origin: Vec, sx: number, sy: number): ArrowLegs {
+  return {
+    first: legs.first,
+    at: legs.at.map((v, i) => (legAxis(legs, i + 1) === "h" ? origin.y + (v - origin.y) * sy : origin.x + (v - origin.x) * sx)),
+  };
+}
+
 export function cleanLegs(value: unknown): ArrowLegs | null {
   const v = value as ArrowLegs | null | undefined;
   if (!v || typeof v !== "object") return null;

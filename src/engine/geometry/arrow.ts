@@ -1,7 +1,9 @@
 import type { ArrowElementLike, ArrowHead, ElementLike } from "../types";
-import { bindableBox, boxCenter, isBindable, outlinePoint, type Vec } from "./outline";
+import { bindableBox, boxBounds, boxCenter, isBindable, outlinePoint, type Vec } from "./outline";
 import type { Measure } from "./textLayout";
-import { anchorPoint, validAnchor } from "./anchor";
+import { anchorPoint, anchorSide, SIDE_ANCHORS, sideOfVector, validAnchor, worldSide, type Side } from "./anchor";
+import { ELBOW_RADIUS } from "./elbowPath";
+import { cleanLegs, legsValid, pointsOf, routeElbow, type RouteEnd } from "./elbowRoute";
 import { flattenElbow, polyAngle, polyLength, polyPoint, polySlice } from "./elbowPath";
 
 export interface ResolvedArrow {
@@ -64,6 +66,35 @@ export function resolveArrow(a: ArrowElementLike, lookup: Lookup | undefined, me
   const eAnchor = eb && validAnchor(a.endBinding?.anchor) ? a.endBinding!.anchor! : null;
   const sRaw = sb ? (sAnchor ? anchorPoint(sb, sAnchor, 0, measure) : boxCenter(bindableBox(sb, measure))) : a.start;
   const eRaw = eb ? (eAnchor ? anchorPoint(eb, eAnchor, 0, measure) : boxCenter(bindableBox(eb, measure))) : a.end;
+  if (a.route === "elbow") {
+    const SIDES: Side[] = ["top", "right", "bottom", "left"];
+    const endOf = (el: typeof sb, anchor: Vec | null, raw: Vec, otherRaw: Vec, free: Vec): RouteEnd => {
+      if (!el) return { point: free, dir: null, box: null };
+      const rotation = bindableBox(el, measure).rotation;
+      const box = boxBounds(bindableBox(el, measure));
+      if (anchor) return { point: anchorPoint(el, anchor, gap, measure), dir: worldSide(rotation, anchorSide(anchor)), box };
+      const dir = sideOfVector(otherRaw.x - raw.x, otherRaw.y - raw.y);
+      const local = SIDES.find((side) => worldSide(rotation, side) === dir) ?? dir;
+      return { point: anchorPoint(el, SIDE_ANCHORS[local], gap, measure), dir, box };
+    };
+    const startEnd = endOf(sb, sAnchor, sRaw, eRaw, a.start);
+    const endEnd = endOf(eb, eAnchor, eRaw, sRaw, a.end);
+    const legs = cleanLegs(a.legs);
+    const stored = !!legs && legsValid(startEnd, endEnd, legs);
+    const points = stored ? pointsOf(startEnd.point, endEnd.point, legs!) : routeElbow(startEnd, endEnd);
+    const label = elbowLabelPoint({ points } as ResolvedArrow);
+    return {
+      start: startEnd.point,
+      end: endEnd.point,
+      mid: label,
+      control: label,
+      rawStart: sRaw,
+      rawEnd: eRaw,
+      points,
+      radius: ELBOW_RADIUS,
+      autoRouted: !stored,
+    };
+  }
   const curved = Math.abs(a.bend) > 1e-4;
   const mid = midFromBend(sRaw, eRaw, a.bend);
   const s = sb ? (sAnchor ? anchorPoint(sb, sAnchor, gap, measure) : outlinePoint(sb, curved ? mid : eRaw, gap, measure)) : sRaw;
@@ -73,6 +104,19 @@ export function resolveArrow(a: ArrowElementLike, lookup: Lookup | undefined, me
     return { start: s, end: e, mid: m, control: m, rawStart: sRaw, rawEnd: eRaw };
   }
   return { start: s, end: e, mid, control: controlFromMid(s, e, mid), rawStart: sRaw, rawEnd: eRaw };
+}
+
+export function elbowLabelPoint(r: ResolvedArrow): Vec {
+  const pts = r.points ?? [r.start, r.end];
+  let total = 0;
+  for (let i = 1; i < pts.length; i++) total += Math.abs(pts[i].x - pts[i - 1].x) + Math.abs(pts[i].y - pts[i - 1].y);
+  let left = total / 2;
+  for (let i = 1; i < pts.length; i++) {
+    const seg = Math.abs(pts[i].x - pts[i - 1].x) + Math.abs(pts[i].y - pts[i - 1].y);
+    if (seg > 0 && left <= seg) return { x: (pts[i].x + pts[i - 1].x) / 2, y: (pts[i].y + pts[i - 1].y) / 2 };
+    left -= seg;
+  }
+  return pts[0];
 }
 
 export function curvePoint(r: ResolvedArrow, t: number): Vec {

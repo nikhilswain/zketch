@@ -2,7 +2,7 @@ import type { Vec } from "./outline";
 
 export const ELBOW_RADIUS = 12;
 
-const CORNER_STEPS = 6;
+const CORNER_STEPS = 8;
 
 const same = (a: Vec, b: Vec) => a.x === b.x && a.y === b.y;
 

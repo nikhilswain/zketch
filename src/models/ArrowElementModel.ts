@@ -1,5 +1,7 @@
 import { types, type Instance, type SnapshotIn } from "mobx-state-tree";
 import { ELEMENT_LOOKS, newSeed, type ElementLook } from "./ShapeLayerModel";
+import { cleanLegs, shiftLegs } from "@/engine/geometry/elbowRoute";
+import type { ArrowLegs, ArrowRoute } from "@/engine/types";
 
 export type ArrowHead = "none" | "arrow" | "triangle" | "dot";
 export type ArrowEnd = "start" | "end";
@@ -17,6 +19,8 @@ export const ArrowElement = types
     bend: types.optional(types.number, 0),
     startBinding: types.optional(types.maybeNull(types.frozen<ArrowBinding>()), null),
     endBinding: types.optional(types.maybeNull(types.frozen<ArrowBinding>()), null),
+    route: types.optional(types.enumeration("ArrowRoute", ["straight", "elbow"]), "straight"),
+    legs: types.optional(types.maybeNull(types.frozen<ArrowLegs>()), null),
     startHead: types.optional(types.enumeration("ArrowHead", [...HEADS]), "none"),
     endHead: types.optional(types.enumeration("ArrowHead", [...HEADS]), "arrow"),
     strokeColor: types.optional(types.string, "#000000"),
@@ -43,9 +47,20 @@ export const ArrowElement = types
       if (which === "start") self.startBinding = value;
       else self.endBinding = value;
     },
+    setRoute(route: ArrowRoute) {
+      if (self.route === route) return;
+      self.route = route;
+      if (route === "elbow") self.bend = 0;
+      else self.legs = null;
+    },
+    setLegs(legs: ArrowLegs | null) {
+      self.legs = cleanLegs(legs);
+    },
     move(dx: number, dy: number) {
       self.start = { x: self.start.x + dx, y: self.start.y + dy };
       self.end = { x: self.end.x + dx, y: self.end.y + dy };
+      const legs = cleanLegs(self.legs);
+      if (legs) self.legs = shiftLegs(legs, dx, dy);
     },
     setHeads(startHead: ArrowHead, endHead: ArrowHead) {
       self.startHead = startHead;
@@ -79,6 +94,7 @@ export function createArrowElement(
     strokeWidth?: number;
     opacity?: number;
     look?: ElementLook;
+    route?: ArrowRoute;
   },
 ): SnapshotIn<typeof ArrowElement> {
   return {
@@ -87,6 +103,8 @@ export function createArrowElement(
     start: { x: start.x, y: start.y },
     end: { x: end.x, y: end.y },
     bend: 0,
+    route: options?.route ?? "straight",
+    legs: null,
     startBinding: options?.startBinding ?? null,
     endBinding: options?.endBinding ?? null,
     startHead: options?.startHead ?? "none",

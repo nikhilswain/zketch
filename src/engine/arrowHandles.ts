@@ -1,5 +1,5 @@
 import type { PanZoom } from "./types";
-import type { ResolvedArrow } from "./geometry/arrow";
+import { elbowSamples, type ResolvedArrow } from "./geometry/arrow";
 import type { Vec } from "./geometry/outline";
 import { overlayAccent } from "./render/overlayColor";
 
@@ -38,7 +38,8 @@ export function renderArrowHandles(ctx: CanvasRenderingContext2D, r: ResolvedArr
   ctx.setLineDash([4, 3]);
   ctx.beginPath();
   ctx.moveTo(s.x, s.y);
-  ctx.quadraticCurveTo(c.x, c.y, e.x, e.y);
+  if (r.points) for (const p of elbowSamples(r).map(toScreen)) ctx.lineTo(p.x, p.y);
+  else ctx.quadraticCurveTo(c.x, c.y, e.x, e.y);
   ctx.stroke();
   ctx.setLineDash([]);
   for (const p of [s, e]) {
